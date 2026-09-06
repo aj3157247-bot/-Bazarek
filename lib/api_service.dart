@@ -1,39 +1,44 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'product_model.dart';
 
 class ApiService {
-  // آدرس سرور بک‌اند (برای تست محلی یا آدرس سرور ابری)
-  static const String baseUrl = 'http://10.0.2.2:5000/api';
+  static const String baseUrl = 'https://bazarek.onrender.com/api';
 
   // دریافت لیست محصولات
-  static Future<List<Product>> getProducts() async {
+  static Future<List<dynamic>> getProducts() async {
     final response = await http.get(Uri.parse('$baseUrl/products'));
-
     if (response.statusCode == 200) {
-      List jsonResponse = json.decode(response.body);
-      return jsonResponse.map((data) => Product.fromJson(data)).toList();
+      return jsonDecode(response.body);
     } else {
       throw Exception('خطا در دریافت لیست محصولات');
     }
   }
 
-  // تولید متن آگهی هوشمند با Gemini
-  static Future<String> generateAd(String name, String description) async {
+  // ثبت محصول جدید
+  static Future<bool> addProduct(Map<String, dynamic> productData) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/products'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(productData),
+    );
+    return response.statusCode == 201;
+  }
+
+  // تولید متن آگهی با جمینای
+  static Future<String> generateAd(String productName, String description) async {
     final response = await http.post(
       Uri.parse('$baseUrl/generate-ad'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'productName': name,
+      body: jsonEncode({
+        'productName': productName,
         'description': description,
       }),
     );
-
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      return data['adText'] ?? '';
+      final data = jsonDecode(response.body);
+      return data['adText'];
     } else {
-      throw Exception('خطا در ساخت آگهی');
+      throw Exception('خطا در تولید متن آگهی');
     }
   }
 }
