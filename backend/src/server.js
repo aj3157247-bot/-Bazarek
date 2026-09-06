@@ -1,218 +1,157 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { requireUser, getSupabaseAdmin } = require('./middlewares/auth');
+const requireAdmin = require('./middlewares/adminAuth');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
-const SUPABASE_KEY = (process.env.SUPABASE_KEY || '').trim();
-const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('Missing SUPABASE_URL or SUPABASE_KEY. Copy backend/.env.example to backend/.env.');
-  process.exit(1);
-}
-
-const supabaseAdminClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const supabaseAuth = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
-function jsonError(res, status, message) {
-  return res.status(status).json({ error: message });
-}
-
-function bearerToken(req) {
-  const header = req.headers.authorization || '';
-  if (!header.startsWith('Bearer ')) return null;
-  return header.slice(7).trim() || null;
-}
-
-function userClient(token) {
-  return createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-}
-
-async function requireUser(req, res, next) {
-  try {
-    const token = bearerToken(req);
-    if (!token) return jsonError(res, 401, 'لطفاً وارد حساب فروشنده شوید.');
-
-    const { data, error } = await supabaseAdminClient.auth.getUser(token);
-    if (error || !data.user) return jsonError(res, 401, 'نشست شما معتبر نیست. دوباره وارد شوید.');
-
-    req.accessToken = token;
-    req.user = data.user;
-    req.supabase = userClient(token);
-    next();
-  } catch (error) {
-    console.error('Auth middleware:', error);
-    return jsonError(res, 401, 'احراز هویت انجام نشد.');
+function requireConfig(res) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    res.status(503).json({ error: 'اتصال Supabase روی سرور تنظیم نشده است.' });
+    return false;
   }
+  return true;
 }
 
-app.get('/', (req, res) => {
-  res.json({ name: 'Bazarek API', status: 'ok', version: '2.0.0' });
-});
+app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.0.0' }));
+app.get('/api/health', (_, res) => res.json({ ok: true }));
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Supabase Auth: passwords never reach or get stored by this server.
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    const password = String(req.body.password || '');
-    const fullName = String(req.body.fullName || '').trim();
-    const shopName = String(req.body.shopName || '').trim();
-
-    if (!email || !password || !fullName || !shopName) {
-      return jsonError(res, 400, 'نام، نام دکان، ایمیل و رمز عبور الزامی است.');
-    }
-    if (password.length < 8) return jsonError(res, 400, 'رمز عبور باید حداقل ۸ کاراکتر باشد.');
-
-    const { data, error } = await supabaseAdminClient.auth.signUp({
-      email,
+    if (!requireConfig(res)) return;
+    const { email, password, full_name = '', shop_name = '', phone = '' } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'ایمیل و رمز عبور الزامی است.' });
+    if (password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
+    const { data, error } = await supabaseAuth.auth.signUp({
+      email: email.trim().toLowerCase(),
       password,
-      options: { data: { full_name: fullName, shop_name: shopName } },
+      options: { data: { full_name: full_name.trim(), shop_name: shop_name.trim(), phone: phone.trim() } }
     });
-    if (error) return jsonError(res, 400, error.message);
-
-    return res.status(201).json({
-      user: data.user,
-      session: data.session,
-      requiresEmailConfirmation: !data.session,
-      message: data.session ? 'ثبت‌نام با موفقیت انجام شد.' : 'حساب ساخته شد. ایمیل خود را تأیید کنید و سپس وارد شوید.',
-    });
-  } catch (error) {
-    console.error('Signup:', error);
-    return jsonError(res, 500, 'ثبت‌نام انجام نشد.');
-  }
+    if (error) return res.status(400).json({ error: error.message });
+    if (!data.session) return res.json({ requiresEmailConfirmation: true, message: 'حساب ساخته شد. اگر تأیید ایمیل فعال باشد، ایمیل تأیید را باز کنید.' });
+    res.status(201).json({ token: data.session.access_token, user: data.user });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    const password = String(req.body.password || '');
-    if (!email || !password) return jsonError(res, 400, 'ایمیل و رمز عبور الزامی است.');
-
-    const { data, error } = await supabaseAdminClient.auth.signInWithPassword({ email, password });
-    if (error || !data.session) return jsonError(res, 401, error?.message || 'ایمیل یا رمز عبور نادرست است.');
-
-    return res.json({ user: data.user, session: data.session });
-  } catch (error) {
-    console.error('Login:', error);
-    return jsonError(res, 500, 'ورود انجام نشد.');
-  }
+    if (!requireConfig(res)) return;
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'ایمیل و رمز عبور الزامی است.' });
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error || !data.session) return res.status(401).json({ error: 'ایمیل یا رمز عبور اشتباه است.' });
+    res.json({ token: data.session.access_token, user: data.user });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ورود.' }); }
 });
 
-app.get('/api/auth/me', requireUser, async (req, res) => {
-  const { data, error } = await req.supabase
-    .from('vendors')
-    .select('id, full_name, shop_name, phone, city, plan, created_at')
-    .eq('id', req.user.id)
-    .maybeSingle();
-
-  if (error) return jsonError(res, 500, error.message);
-  res.json({ user: req.user, vendor: data });
-});
-
-app.post('/api/auth/logout', requireUser, async (req, res) => {
-  // Sign-out is primarily handled locally by the mobile app. This endpoint is kept
-  // for clients that want an explicit server-side sign-out request.
-  const { error } = await supabaseAdminClient.auth.admin.signOut(req.accessToken);
-  if (error && !/not found|invalid/i.test(error.message)) {
-    return jsonError(res, 400, error.message);
-  }
-  res.json({ ok: true });
-});
-
-app.get('/api/dashboard', requireUser, async (req, res) => {
+app.get('/api/me', requireUser, async (req, res) => {
   try {
-    const [{ count: productCount, error: productError }, { data: products, error: productsError }] = await Promise.all([
-      req.supabase.from('products').select('id', { count: 'exact', head: true }),
-      req.supabase.from('products').select('id, title, price, stock, created_at').order('created_at', { ascending: false }).limit(5),
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('profiles').select('*').eq('id', req.user.id).single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: 'خطا در دریافت پروفایل.' }); }
+});
+
+app.patch('/api/me', requireUser, async (req, res) => {
+  try {
+    const { full_name, shop_name, phone, city } = req.body || {};
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('profiles').update({ full_name, shop_name, phone, city, updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
+});
+
+app.post('/api/admin/login', (req, res) => {
+  const { email, password } = req.body || {};
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET) return res.status(503).json({ error: 'تنظیمات امن پنل مدیریت روی سرور کامل نیست.' });
+  if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'ایمیل یا رمز عبور ادمین اشتباه است.' });
+  const token = jwt.sign({ role: 'admin', email }, process.env.ADMIN_SESSION_SECRET, { expiresIn: '8h' });
+  res.json({ token });
+});
+
+app.get('/api/admin/stats', requireAdmin, async (_, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const [{ count: users }, { count: products }] = await Promise.all([
+      db.from('profiles').select('*', { count: 'exact', head: true }),
+      db.from('products').select('*', { count: 'exact', head: true })
     ]);
-    if (productError) throw productError;
-    if (productsError) throw productsError;
-
-    const { data: orders, error: orderError } = await req.supabase
-      .from('orders')
-      .select('id, total_amount, status, created_at')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (orderError) throw orderError;
-
-    const totalSales = (orders || [])
-      .filter((o) => o.status !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
-    const pendingOrders = (orders || []).filter((o) => o.status === 'pending').length;
-
-    res.json({
-      productCount: productCount || 0,
-      orderCount: orders?.length || 0,
-      pendingOrders,
-      totalSales,
-      recentProducts: products || [],
-    });
-  } catch (error) {
-    console.error('Dashboard:', error);
-    return jsonError(res, 500, 'دریافت داشبورد انجام نشد.');
-  }
+    res.json({ users: users || 0, products: products || 0 });
+  } catch (e) { res.status(500).json({ error: 'خطا در دریافت آمار.' }); }
 });
 
 app.get('/api/products', requireUser, async (req, res) => {
   try {
-    const { data, error } = await req.supabase.from('products').select('*').order('created_at', { ascending: false });
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('products').select('*').eq('vendor_id', req.user.id).order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
-  } catch (error) {
-    return jsonError(res, 500, error.message);
-  }
+  } catch (e) { res.status(500).json({ error: 'خطا در دریافت محصولات.' }); }
 });
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const title = String(req.body.title || '').trim();
-    const price = Number(req.body.price);
-    const description = String(req.body.description || '').trim();
-    const stock = Number.isFinite(Number(req.body.stock)) ? Number(req.body.stock) : 0;
-    if (!title || !Number.isFinite(price) || price < 0) return jsonError(res, 400, 'نام محصول و قیمت معتبر الزامی است.');
-
-    const { data, error } = await req.supabase
-      .from('products')
-      .insert([{ title, price, description, stock, vendor_id: req.user.id }])
-      .select()
-      .single();
+    const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0 } = req.body || {};
+    if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
+    const db = getSupabaseAdmin();
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
-    res.status(201).json({ message: 'محصول با موفقیت ثبت شد.', data });
-  } catch (error) {
-    return jsonError(res, 500, error.message);
-  }
+    res.status(201).json(data);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ثبت محصول.' }); }
+});
+
+app.patch('/api/products/:id', requireUser, async (req, res) => {
+  try {
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock'];
+    const payload = {};
+    for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
+    if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
+    if (payload.cost_price !== undefined) payload.cost_price = Math.max(0, Number(payload.cost_price) || 0);
+    if (payload.stock !== undefined) payload.stock = Math.max(0, Math.trunc(Number(payload.stock) || 0));
+    payload.updated_at = new Date().toISOString();
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('products').update(payload).eq('id', req.params.id).eq('vendor_id', req.user.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: 'خطا در ویرایش محصول.' }); }
+});
+
+app.delete('/api/products/:id', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { error } = await db.from('products').delete().eq('id', req.params.id).eq('vendor_id', req.user.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'خطا در حذف محصول.' }); }
 });
 
 app.post('/api/generate-ad', requireUser, async (req, res) => {
   try {
-    if (!genAI) return jsonError(res, 503, 'سرویس هوش مصنوعی هنوز تنظیم نشده است.');
-    const productName = String(req.body.productName || '').trim();
-    const description = String(req.body.description || '').trim();
-    if (!productName) return jsonError(res, 400, 'نام محصول الزامی است.');
-
+    if (!genAI) return res.status(503).json({ error: 'سرویس هوش مصنوعی روی سرور تنظیم نشده است.' });
+    const { productName, description, language = 'fa' } = req.body || {};
+    if (!productName) return res.status(400).json({ error: 'نام محصول الزامی است.' });
+    const languageName = language === 'ps' ? 'پشتو افغانستان' : language === 'en' ? 'English' : 'دری افغانستان';
     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
-    const prompt = `برای یک فروشنده در افغانستان یک متن تبلیغاتی کوتاه و حرفه‌ای به دری افغانستان بنویس.\nنام محصول: ${productName}\nتوضیحات: ${description || 'بدون توضیح'}\nاز ادعاهای غیرواقعی خودداری کن و در پایان یک دعوت کوتاه به تماس/سفارش بنویس.`;
+    const prompt = `برای یک فروشنده در افغانستان یک آگهی کوتاه، واقعی و جذاب به ${languageName} بنویس. نام محصول: ${productName}. توضیحات: ${description || 'بدون توضیح'}. ادعای دروغ و اغراق نکن.`;
     const result = await model.generateContent(prompt);
-    const adText = result.response.text();
-    res.json({ adText });
-  } catch (error) {
-    console.error('Gemini:', error);
-    return jsonError(res, 500, 'خطا در تولید متن آگهی.');
-  }
+    res.json({ adText: result.response.text() });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تولید آگهی.' }); }
 });
 
-const PORT = Number(process.env.PORT || 5000);
-app.listen(PORT, () => console.log(`Bazarek API running on port ${PORT}`));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Bazarek backend running on ${PORT}`));
