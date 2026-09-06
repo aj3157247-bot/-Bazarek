@@ -23,16 +23,18 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Install Dependencies
-        working-directory: mobile_app
-        run: flutter pub get
-
-      - name: Build APK
-        working-directory: mobile_app
-        run: flutter build apk --release
+      - name: Locate Flutter Project & Build APK
+        run: |
+          FLUTTER_DIR=$(dirname $(find . -maxdepth 3 -name "pubspec.yaml" | head -n 1))
+          echo "Found Flutter project in: $FLUTTER_DIR"
+          cd $FLUTTER_DIR
+          flutter pub get
+          flutter build apk --release
+          mkdir -p $GITHUB_WORKSPACE/output
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/output/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: mobile_app/build/app/outputs/flutter-apk/app-release.apk
+          path: output/app-release.apk
