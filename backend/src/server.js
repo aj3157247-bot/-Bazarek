@@ -8,21 +8,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// آدرس و کلید اختصاصی پروژه شما در Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xenljmaprmggejadadbo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_DFyKCc9_Pv5SoJiSiouWxg_FycPk7M3';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// تنظیمات هوش مصنوعی Gemini
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// مسیر اول: تست سلامت سرور
 app.get('/', (req, res) => {
     res.json({ message: 'Smart Sales Assistant Backend is Running!' });
 });
 
-// مسیر دوم: دریافت لیست تمام محصولات از دیتابیس Supabase
 app.get('/api/products', async (req, res) => {
     try {
         const { data, error } = await supabase.from('products').select('*');
@@ -33,7 +29,6 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// مسیر سوم: افزودن محصول جدید به دیتابیس
 app.post('/api/products', async (req, res) => {
     try {
         const { title, price, description, vendor_id } = req.body;
@@ -48,7 +43,6 @@ app.post('/api/products', async (req, res) => {
     }
 });
 
-// مسیر چهارم: تولید متن آگهی هوشمند با Gemini
 app.post('/api/generate-ad', async (req, res) => {
     try {
         const { productName, description } = req.body;
@@ -72,7 +66,6 @@ app.post('/api/generate-ad', async (req, res) => {
     }
 });
 
-// اجرای سرور روی پورت مشخص‌شده
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
