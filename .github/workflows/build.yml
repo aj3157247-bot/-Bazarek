@@ -26,6 +26,19 @@ jobs:
       - name: Repair Flutter Project Structure
         run: flutter create . --platforms=android
 
+      - name: Ensure Android Internet Permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          perm = '<uses-permission android:name="android.permission.INTERNET"/>'
+          if perm not in s:
+              s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                            '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\\n    ' + perm)
+              p.write_text(s)
+          print("Android INTERNET permission verified.")
+
       - name: Install Dependencies
         run: flutter pub get
 
