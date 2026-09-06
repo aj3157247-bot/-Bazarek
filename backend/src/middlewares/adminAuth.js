@@ -1,15 +1,16 @@
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-const ADMIN_PASS = process.env.ADMIN_PASS || '';
+const jwt = require('jsonwebtoken');
 
-function verifyAdmin(req, res, next) {
-  const email = String(req.headers['x-admin-email'] || '').trim().toLowerCase();
-  const password = String(req.headers['x-admin-password'] || '');
-
-  if (ADMIN_EMAIL && ADMIN_PASS && email === ADMIN_EMAIL && password === ADMIN_PASS) {
-    return next();
+function requireAdmin(req, res, next) {
+  try {
+    const auth = req.headers.authorization || '';
+    if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'نشست مدیریت پیدا نشد.' });
+    const payload = jwt.verify(auth.slice(7), process.env.ADMIN_SESSION_SECRET);
+    if (payload.role !== 'admin') return res.status(403).json({ error: 'دسترسی غیرمجاز.' });
+    req.admin = payload;
+    next();
+  } catch (_) {
+    return res.status(401).json({ error: 'نشست مدیریت نامعتبر یا منقضی شده است.' });
   }
-
-  return res.status(403).json({ error: 'دسترسی غیرمجاز.' });
 }
 
-module.exports = verifyAdmin;
+module.exports = requireAdmin;
