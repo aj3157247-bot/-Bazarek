@@ -15,6 +15,25 @@ async function requireUser(req, res, next) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) return res.status(401).json({ error: 'نشست شما منقضی شده است.' });
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_blocked,blocked_until,block_reason')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    const blockedUntil = profile?.blocked_until ? new Date(profile.blocked_until) : null;
+    const blocked = profile?.is_blocked === true && (!blockedUntil || blockedUntil > new Date());
+    if (blocked) {
+      const untilText = blockedUntil ? ` تا ${blockedUntil.toLocaleString('fa-IR')}` : '';
+      return res.status(403).json({ error: `حساب شما توسط مدیریت مسدود شده است${untilText}.${profile?.block_reason ? ` دلیل: ${profile.block_reason}` : ''}` });
+    }
+
+    // Automatically clear an expired temporary block.
+    if (profile?.is_blocked === true && blockedUntil && blockedUntil <= new Date()) {
+      await supabase.from('profiles').update({ is_blocked: false, blocked_until: null, block_reason: null }).eq('id', data.user.id);
+    }
+
     req.user = data.user;
     next();
   } catch (e) {
