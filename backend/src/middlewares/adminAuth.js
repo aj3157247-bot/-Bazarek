@@ -1,14 +1,15 @@
-const ADMIN_EMAIL = "abdullahjafari712@gmail.com";
-const ADMIN_PASS = "05050505";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+const ADMIN_PASS = process.env.ADMIN_PASS || '';
 
 function verifyAdmin(req, res, next) {
-  const { email, password } = req.headers;
+  const email = String(req.headers['x-admin-email'] || '').trim().toLowerCase();
+  const password = String(req.headers['x-admin-password'] || '');
 
-  if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
+  if (ADMIN_EMAIL && ADMIN_PASS && email === ADMIN_EMAIL && password === ADMIN_PASS) {
     return next();
   }
 
-  return res.status(403).json({ error: "دسترسی غیرمجاز! فقط ادمین کل اجازه ورود دارد." });
+  return res.status(403).json({ error: 'دسترسی غیرمجاز.' });
 }
 
 module.exports = verifyAdmin;
