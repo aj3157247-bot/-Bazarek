@@ -26,6 +26,17 @@ jobs:
       - name: Repair Flutter Project Structure
         run: flutter create . --platforms=android
 
+      - name: Ensure Android Internet Permission
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i '/<manifest[^>]*>/a\    <uses-permission android:name="android.permission.INTERNET"/>' "$MANIFEST"
+          fi
+
+          echo "=== Android Manifest ==="
+          cat "$MANIFEST"
+
       - name: Install Dependencies
         run: flutter pub get
 
