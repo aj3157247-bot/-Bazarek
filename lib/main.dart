@@ -51,10 +51,283 @@ class RegisterScreen extends StatefulWidget { const RegisterScreen({super.key});
 class _RegisterScreenState extends State<RegisterScreen>{final name=TextEditingController(),shop=TextEditingController(),phone=TextEditingController(),email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _register()async{setState(()=>loading=true);try{final d=await ApiService.register(email:email.text.trim(),password:password.text,fullName:name.text,shopName:shop.text,phone:phone.text);if(d['token']!=null){final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',d['token']);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}else if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(d['message']??'ایمیل خود را بررسی کنید.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext context)=>AuthScaffold(title:'ساخت حساب',children:[TextField(controller:name,decoration:const InputDecoration(labelText:'نام شما',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:shop,decoration:const InputDecoration(labelText:'نام دکان / کسب‌وکار',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تماس',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور (حداقل ۸ کاراکتر)',border:OutlineInputBorder())),const SizedBox(height:18),FilledButton(onPressed:loading?null:_register,child:loading?const CircularProgressIndicator():const Text('ساخت حساب'))]);}
 
 class DashboardScreen extends StatefulWidget { const DashboardScreen({super.key}); @override State<DashboardScreen> createState()=>_DashboardScreenState(); }
-class _DashboardScreenState extends State<DashboardScreen>{List<Map<String,dynamic>> products=[];Map<String,dynamic>? profile;bool loading=true;@override void initState(){super.initState();_load();}Future<void> _load()async{try{final r=await Future.wait([ApiService.getProducts(),ApiService.getProfile()]);if(mounted)setState((){products=r[0] as List<Map<String,dynamic>>;profile=r[1] as Map<String,dynamic>;loading=false;});}catch(e){if(mounted){setState(()=>loading=false);_msg(e);}}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));Future<void> _add()async{final result=await showModalBottomSheet<Map<String,dynamic>>(context:context,isScrollControlled:true,builder:(_)=>const AddProductSheet());if(result==null)return;try{await ApiService.addProduct(result);await _load();}catch(e){_msg(e);}}Future<void> _delete(String id)async{try{await ApiService.deleteProduct(id);await _load();}catch(e){_msg(e);}}Future<void> _logout()async{final p=await SharedPreferences.getInstance();await p.remove('bazarek_token');ApiService.setToken(null);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}@override Widget build(BuildContext context){final shop=(profile?['shop_name']??'').toString();return Scaffold(appBar:AppBar(title:Text(shop.isEmpty?'حساب من':shop),actions:[IconButton(onPressed:_logout,icon:const Icon(Icons.logout))]),floatingActionButton:FloatingActionButton.extended(onPressed:_add,icon:const Icon(Icons.add),label:const Text('ثبت آگهی')),body:RefreshIndicator(onRefresh:_load,child:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[Text('سلام ${profile?['full_name']??''} 👋',style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:16),Row(children:[_stat('آگهی‌های من',products.length.toString(),Icons.campaign_outlined),const SizedBox(width:10),_stat('موجودی',products.fold<int>(0,(s,p)=>s+((p['stock'] as num?)??0).toInt()).toString(),Icons.inventory_2_outlined)]),const SizedBox(height:20),...products.map((p)=>Card(child:ListTile(title:Text(p['title']??''),subtitle:Text('${p['price']??0} افغانی • موجودی: ${p['stock']??0}'),trailing:IconButton(onPressed:()=>_delete(p['id'].toString()),icon:const Icon(Icons.delete_outline)))))]));}Widget _stat(String t,String v,IconData i)=>Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[Icon(i),const SizedBox(width:8),Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(t),Text(v,style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])]))));}
+class _DashboardScreenState extends State<DashboardScreen> {
+  List<Map<String, dynamic>> products = [];
+  Map<String, dynamic>? profile;
+  bool loading = true;
 
-class AddProductSheet extends StatefulWidget{const AddProductSheet({super.key});@override State<AddProductSheet> createState()=>_AddProductSheetState();}
-class _AddProductSheetState extends State<AddProductSheet>{final title=TextEditingController(),category=TextEditingController(),price=TextEditingController(),cost=TextEditingController(),stock=TextEditingController(text:'0'),desc=TextEditingController();@override Widget build(BuildContext context)=>Padding(padding:EdgeInsets.only(left:20,right:20,top:20,bottom:MediaQuery.of(context).viewInsets.bottom+20),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Text('ثبت آگهی',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:14),TextField(controller:title,decoration:const InputDecoration(labelText:'عنوان آگهی',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:category,decoration:const InputDecoration(labelText:'دسته‌بندی',hintText:'مثلاً موبایل',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:price,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'قیمت (افغانی)',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:stock,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'تعداد',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:desc,maxLines:4,decoration:const InputDecoration(labelText:'توضیحات',border:OutlineInputBorder())),const SizedBox(height:16),FilledButton(onPressed:(){if(title.text.trim().isEmpty)return;Navigator.pop(context,{'title':title.text.trim(),'category':category.text.trim(),'price':double.tryParse(price.text)??0,'cost_price':double.tryParse(cost.text)??0,'stock':int.tryParse(stock.text)??0,'description':desc.text.trim(),'image_url':''});},child:const Text('انتشار آگهی'))]));}
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await Future.wait([
+        ApiService.getProducts(),
+        ApiService.getProfile(),
+      ]);
+      if (mounted) {
+        setState(() {
+          products = r[0] as List<Map<String, dynamic>>;
+          profile = r[1] as Map<String, dynamic>;
+          loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => loading = false);
+        _msg(e);
+      }
+    }
+  }
+
+  void _msg(Object e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+    );
+  }
+
+  Future<void> _add() async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const AddProductSheet(),
+    );
+    if (result == null) return;
+    try {
+      await ApiService.addProduct(result);
+      await _load();
+    } catch (e) {
+      _msg(e);
+    }
+  }
+
+  Future<void> _delete(String id) async {
+    try {
+      await ApiService.deleteProduct(id);
+      await _load();
+    } catch (e) {
+      _msg(e);
+    }
+  }
+
+  Future<void> _logout() async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove('bazarek_token');
+    ApiService.setToken(null);
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (_) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shop = (profile?['shop_name'] ?? '').toString();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(shop.isEmpty ? 'حساب من' : shop),
+        actions: [
+          IconButton(onPressed: _logout, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _add,
+        icon: const Icon(Icons.add),
+        label: const Text('ثبت آگهی'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(
+                    'سلام ${profile?['full_name'] ?? ''} 👋',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _stat(
+                        'آگهی‌های من',
+                        products.length.toString(),
+                        Icons.campaign_outlined,
+                      ),
+                      const SizedBox(width: 10),
+                      _stat(
+                        'موجودی',
+                        products
+                            .fold<int>(
+                              0,
+                              (s, p) => s + ((p['stock'] as num?) ?? 0).toInt(),
+                            )
+                            .toString(),
+                        Icons.inventory_2_outlined,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  ...products.map(
+                    (p) => Card(
+                      child: ListTile(
+                        title: Text(p['title'] ?? ''),
+                        subtitle: Text(
+                          '${p['price'] ?? 0} افغانی • موجودی: ${p['stock'] ?? 0}',
+                        ),
+                        trailing: IconButton(
+                          onPressed: () => _delete(p['id'].toString()),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _stat(String t, String v, IconData i) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(i),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t),
+                  Text(
+                    v,
+                    style: const TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
+
+class AddProductSheet extends StatefulWidget {
+  const AddProductSheet({super.key});
+
+  @override
+  State<AddProductSheet> createState() => _AddProductSheetState();
+}
+
+class _AddProductSheetState extends State<AddProductSheet> {
+  final title = TextEditingController();
+  final category = TextEditingController();
+  final price = TextEditingController();
+  final cost = TextEditingController();
+  final stock = TextEditingController(text: '0');
+  final desc = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'ثبت آگهی',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: title,
+              decoration: const InputDecoration(
+                labelText: 'عنوان آگهی',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: category,
+              decoration: const InputDecoration(
+                labelText: 'دسته‌بندی',
+                hintText: 'مثلاً موبایل',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: price,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'قیمت (افغانی)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: stock,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'تعداد',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: desc,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'توضیحات',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                if (title.text.trim().isEmpty) return;
+                Navigator.pop(
+                  context,
+                  {
+                    'title': title.text.trim(),
+                    'category': category.text.trim(),
+                    'price': double.tryParse(price.text) ?? 0,
+                    'cost_price': double.tryParse(cost.text) ?? 0,
+                    'stock': int.tryParse(stock.text) ?? 0,
+                    'description': desc.text.trim(),
+                    'image_url': '',
+                  },
+                );
+              },
+              child: const Text('انتشار آگهی'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 class AuthScaffold extends StatelessWidget{final String title;final List<Widget> children;const AuthScaffold({super.key,required this.title,required this.children});@override Widget build(BuildContext context)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:520),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Icon(Icons.storefront_rounded,size:64),const SizedBox(height:12),Text(title,textAlign:TextAlign.center,style:const TextStyle(fontSize:25,fontWeight:FontWeight.bold)),const SizedBox(height:24),...children]))))));}
