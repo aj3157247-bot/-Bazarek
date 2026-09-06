@@ -78,9 +78,51 @@ app.patch('/api/me', requireUser, async (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body || {};
   if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET) return res.status(503).json({ error: 'تنظیمات امن پنل مدیریت روی سرور کامل نیست.' });
-  if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'ایمیل یا رمز عبور ادمین اشتباه است.' });
+  if (String(email).trim().toLowerCase() !== String(process.env.ADMIN_EMAIL).trim().toLowerCase() || password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'ایمیل یا رمز عبور ادمین اشتباه است.' });
   const token = jwt.sign({ role: 'admin', email }, process.env.ADMIN_SESSION_SECRET, { expiresIn: '8h' });
   res.json({ token });
+});
+
+app.get('/api/admin/products', requireAdmin, async (_, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,image_url,is_active,created_at,updated_at').order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
+});
+
+app.patch('/api/admin/products/:id/status', requireAdmin, async (req, res) => {
+  try {
+    const isActive = Boolean(req.body?.is_active);
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('products').update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تغییر وضعیت آگهی.' }); }
+});
+
+app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { error } = await db.from('products').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در حذف آگهی.' }); }
+});
+
+app.get('/api/listings', async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    let query = db.from('products').select('id,title,description,price,stock,category,image_url,created_at,vendor_id').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
+    const q = String(req.query.q || '').trim();
+    const category = String(req.query.category || '').trim();
+    if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+    if (category) query = query.eq('category', category);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
 
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
