@@ -110,6 +110,74 @@ app.patch('/api/me', requireUser, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
 });
 
+
+
+app.post('/api/conversations', requireUser, async (req, res) => {
+  try {
+    const listingId = String(req.body?.listing_id || '').trim();
+    if (!listingId) return res.status(400).json({ error: 'آگهی مشخص نیست.' });
+    const db = getSupabaseAdmin();
+    const { data: listing, error: listingError } = await db.from('products').select('id,title,vendor_id,is_active,allow_chat').eq('id', listingId).single();
+    if (listingError || !listing) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (listing.is_active === false) return res.status(400).json({ error: 'این آگهی دیگر فعال نیست.' });
+    if (listing.allow_chat === false) return res.status(403).json({ error: 'فروشنده چت را برای این آگهی فعال نکرده است.' });
+    if (listing.vendor_id === req.user.id) return res.status(400).json({ error: 'شما فروشنده این آگهی هستید.' });
+    const { data: existing } = await db.from('conversations').select('*').eq('listing_id', listingId).eq('buyer_id', req.user.id).eq('seller_id', listing.vendor_id).maybeSingle();
+    if (existing) return res.json(existing);
+    const { data, error } = await db.from('conversations').insert([{ listing_id: listingId, buyer_id: req.user.id, seller_id: listing.vendor_id }]).select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در شروع گفتگو.' }); }
+});
+
+app.get('/api/conversations', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { data: rows, error } = await db.from('conversations').select('id,listing_id,buyer_id,seller_id,last_message_at,created_at').or(`buyer_id.eq.${req.user.id},seller_id.eq.${req.user.id}`).order('last_message_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+    if (error) throw error;
+    const list = rows || [];
+    const listingIds=[...new Set(list.map(x=>x.listing_id).filter(Boolean))];
+    const userIds=[...new Set(list.flatMap(x=>[x.buyer_id,x.seller_id]).filter(Boolean))];
+    const [{data:listings},{data:profiles}] = await Promise.all([
+      listingIds.length ? db.from('products').select('id,title,image_url').in('id',listingIds) : Promise.resolve({data:[]}),
+      userIds.length ? db.from('profiles').select('id,full_name,shop_name').in('id',userIds) : Promise.resolve({data:[]})
+    ]);
+    const lm=Object.fromEntries((listings||[]).map(x=>[x.id,x]));
+    const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
+    const result=list.map(x=>({ ...x, listing_title: lm[x.listing_id]?.title || 'آگهی', listing_image_url: lm[x.listing_id]?.image_url || '', other_user_id: x.buyer_id===req.user.id?x.seller_id:x.buyer_id, other_user_name: (pm[x.buyer_id===req.user.id?x.seller_id:x.buyer_id]?.shop_name || pm[x.buyer_id===req.user.id?x.seller_id:x.buyer_id]?.full_name || 'کاربر بازارک') }));
+    res.json(result);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت گفتگوها.' }); }
+});
+
+app.get('/api/conversations/:id/messages', requireUser, async (req, res) => {
+  try {
+    const db=getSupabaseAdmin();
+    const {data:conv,error:ce}=await db.from('conversations').select('id,buyer_id,seller_id,listing_id').eq('id',req.params.id).single();
+    if(ce||!conv) return res.status(404).json({error:'گفتگو پیدا نشد.'});
+    if(conv.buyer_id!==req.user.id&&conv.seller_id!==req.user.id) return res.status(403).json({error:'دسترسی به این گفتگو مجاز نیست.'});
+    const {data,error}=await db.from('messages').select('id,conversation_id,sender_id,message,created_at,is_read').eq('conversation_id',req.params.id).order('created_at',{ascending:true});
+    if(error)throw error;
+    await db.from('messages').update({is_read:true}).eq('conversation_id',req.params.id).neq('sender_id',req.user.id).eq('is_read',false);
+    res.json(data||[]);
+  }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پیام‌ها.'});}
+});
+
+app.post('/api/conversations/:id/messages', requireUser, async (req, res) => {
+  try {
+    const message=String(req.body?.message||'').trim();
+    if(!message)return res.status(400).json({error:'متن پیام خالی است.'});
+    if(message.length>2000)return res.status(400).json({error:'پیام بیش از حد طولانی است.'});
+    const db=getSupabaseAdmin();
+    const {data:conv,error:ce}=await db.from('conversations').select('id,buyer_id,seller_id').eq('id',req.params.id).single();
+    if(ce||!conv)return res.status(404).json({error:'گفتگو پیدا نشد.'});
+    if(conv.buyer_id!==req.user.id&&conv.seller_id!==req.user.id)return res.status(403).json({error:'دسترسی به این گفتگو مجاز نیست.'});
+    const {data,error}=await db.from('messages').insert([{conversation_id:req.params.id,sender_id:req.user.id,message}]).select().single();
+    if(error)throw error;
+    await db.from('conversations').update({last_message_at:new Date().toISOString()}).eq('id',req.params.id);
+    res.status(201).json(data);
+  }catch(e){console.error(e);res.status(500).json({error:'خطا در ارسال پیام.'});}
+});
+
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body || {};
   if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET) return res.status(503).json({ error: 'تنظیمات امن پنل مدیریت روی سرور کامل نیست.' });
@@ -195,14 +263,18 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until').eq('is_active', true).order('is_pinned', { ascending: false }).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,allow_chat,show_phone').eq('is_active', true).order('is_pinned', { ascending: false }).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
     if (category) query = query.eq('category', category);
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data || []);
+    const rows = data || [];
+    const vendorIds = [...new Set(rows.map(x => x.vendor_id).filter(Boolean))];
+    const { data: profiles } = vendorIds.length ? await db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : { data: [] };
+    const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
+    res.json(rows.map(x => ({ ...x, seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک', seller_phone: x.show_phone ? (pm[x.vendor_id]?.phone || '') : '' })));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
 
@@ -228,10 +300,10 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0 } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0, allow_chat = true, show_phone = false } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -240,7 +312,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock', 'allow_chat', 'show_phone'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
