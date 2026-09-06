@@ -1,106 +1,79 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
-const { createClient } = require('@supabase/supabase-supabase-js');
+const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const verifyAdmin = require('./middlewares/adminAuth');
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
-
 app.use(cors());
 app.use(express.json());
 
-// 1. تنظیمات دیتابیس Supabase
-const supabase = createClient(
-  process.env.SUPABASE_URL || "YOUR_SUPABASE_URL",
-  process.env.SUPABASE_KEY || "YOUR_SUPABASE_KEY"
-);
+// آدرس و کلید اختصاصی پروژه شما در Supabase
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xenljmaprmggejadadbo.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_DFyKCc9_Pv5SoJiSiouWxg_FycPk7M3';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 2. تنظیمات Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "YOUR_GEMINI_KEY");
+// تنظیمات هوش مصنوعی Gemini
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-/* ==================== 📸 بخش اول: پردازش تصویر و ساخت آگهی ==================== */
-app.post('/api/ai/scan-product', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "لطفاً تصویر کالا را آپلود کنید." });
-
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const imagePart = {
-      inlineData: {
-        data: req.file.buffer.toString("base64"),
-        mimeType: req.file.mimetype
-      },
-    };
-
-    const prompt = `این تصویر یک محصول است. مشخصات زیر را به زبان دری استخراج کن و دقیقاً در قالب JSON برگردان:
-    {
-      "title": "عنوان جذاب محصول به دری",
-      "category": "دسته بندی کالا",
-      "suggested_price": "قیمت تخمینی به افغانی (فقط عدد)",
-      "description": "توضیحات کامل و جذاب برای فروش در اینستاگرام"
-    }`;
-
-    const result = await model.generateContent([prompt, imagePart]);
-    const responseText = result.response.text().replace(/```json|```/g, '').trim();
-    const productData = JSON.parse(responseText);
-
-    res.json({ success: true, data: productData });
-  } catch (error) {
-    res.status(500).json({ error: "خطا در پردازش تصویر با هوش مصنوعی" });
-  }
+// مسیر اول: تست سلامت سرور
+app.get('/', (req, res) => {
+    res.json({ message: 'Smart Sales Assistant Backend is Running!' });
 });
 
-/* ==================== 🤖 بخش دوم: چت‌بات هوشمند فروشنده ==================== */
-app.post('/api/ai/vendor-chat', async (req, res) => {
-  try {
-    const { vendorId, userQuestion } = req.body;
-
-    // دریافت لیست محصولات فروشنده از دیتابیس
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('title, price, description')
-      .eq('vendor_id', vendorId);
-
-    if (error) throw error;
-
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const contextPrompt = `شما دستیار فروشگاه هستید. بر اساس لیست زیر پاسخ خریدار را به زبان دری و لحن محترمانه بدهید:
-    لیست محصولات فروشگاه: ${JSON.stringify(products)}
-    سوال خریدار: ${userQuestion}`;
-
-    const result = await model.generateContent(contextPrompt);
-    res.json({ success: true, reply: result.response.text() });
-  } catch (error) {
-    res.status(500).json({ error: "خطا در پاسخگویی دستیار" });
-  }
+// مسیر دوم: دریافت لیست تمام محصولات از دیتابیس Supabase
+app.get('/api/products', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('products').select('*');
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-/* ==================== 🗄️ بخش سوم: مدیریت محصولات (دیتابیس) ==================== */
-app.post('/api/products/add', async (req, res) => {
-  const { vendorId, title, price, description } = req.body;
-
-  const { data, error } = await supabase
-    .from('products')
-    .insert([{ vendor_id: vendorId, title, price, description }]);
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true, message: "محصول با موفقیت ثبت شد", data });
+// مسیر سوم: افزودن محصول جدید به دیتابیس
+app.post('/api/products', async (req, res) => {
+    try {
+        const { title, price, description, vendor_id } = req.body;
+        const { data, error } = await supabase
+            .from('products')
+            .insert([{ title, price, description, vendor_id }]);
+            
+        if (error) throw error;
+        res.status(201).json({ message: 'محصول با موفقیت ثبت شد', data });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-/* ==================== 👑 بخش پنل ادمین ==================== */
-app.get('/api/admin/dashboard', verifyAdmin, async (req, res) => {
-  const { count: userCount } = await supabase.from('users').select('*', { count: 'exact' });
-  const { count: productCount } = await supabase.from('products').select('*', { count: 'exact' });
+// مسیر چهارم: تولید متن آگهی هوشمند با Gemini
+app.post('/api/generate-ad', async (req, res) => {
+    try {
+        const { productName, description } = req.body;
 
-  res.json({
-    totalUsers: userCount || 0,
-    totalProducts: productCount || 0,
-    systemStatus: "فعال",
-    admin: "abdullahjafari712@gmail.com"
-  });
+        if (!GEMINI_API_KEY) {
+            return res.status(400).json({ error: 'کلید GEMINI_API_KEY مقداردهی نشده است.' });
+        }
+
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const prompt = `یک متن تبلیغاتی جذاب به زبان فارسی برای این محصول بساز:
+        نام محصول: ${productName}
+        توضیحات: ${description || 'بدون توضیح'}`;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+
+        res.json({ adText: responseText });
+    } catch (error) {
+        console.error('خطای Gemini:', error);
+        res.status(500).json({ error: 'خطا در تولید متن آگهی' });
+    }
 });
 
+// اجرای سرور روی پورت مشخص‌شده
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`سرور کامل اجرا شد روی پورت ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
