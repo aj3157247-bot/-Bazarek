@@ -23,6 +23,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Repair Flutter Project Structure
+        run: flutter create . --platforms=android
+
       - name: Install Dependencies
         run: flutter pub get
 
