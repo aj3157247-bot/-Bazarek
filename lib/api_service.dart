@@ -12,6 +12,45 @@ class ApiService {
 
   static void setToken(String? token) => _token = token;
 
+  static Future<String> adminLogin(String email, String password) async {
+    final r = await http.post(Uri.parse('$baseUrl/admin/login'), headers: _headers(), body: jsonEncode({'email': email, 'password': password}));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'ورود مدیریت ناموفق بود.');
+    return data['token'].toString();
+  }
+
+  static Future<Map<String, dynamic>> adminStats(String token) async {
+    final r = await http.get(Uri.parse('$baseUrl/admin/stats'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'});
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'خطا در دریافت آمار مدیریت.');
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<List<Map<String, dynamic>>> adminProducts(String token) async {
+    final r = await http.get(Uri.parse('$baseUrl/admin/products'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'});
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'خطا در دریافت آگهی‌ها.');
+    return List<Map<String, dynamic>>.from(data.map((e) => Map<String, dynamic>.from(e)));
+  }
+
+  static Future<void> adminSetProductStatus(String token, String id, bool active) async {
+    final r = await http.patch(Uri.parse('$baseUrl/admin/products/$id/status'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'}, body: jsonEncode({'is_active': active}));
+    if (r.statusCode != 200) throw Exception(jsonDecode(r.body)['error'] ?? 'خطا در تغییر وضعیت آگهی.');
+  }
+
+  static Future<void> adminDeleteProduct(String token, String id) async {
+    final r = await http.delete(Uri.parse('$baseUrl/admin/products/$id'), headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'});
+    if (r.statusCode != 200) throw Exception(jsonDecode(r.body)['error'] ?? 'خطا در حذف آگهی.');
+  }
+
+  static Future<List<Map<String, dynamic>>> getListings({String q = '', String category = ''}) async {
+    final uri = Uri.parse('$baseUrl/listings').replace(queryParameters: {if (q.trim().isNotEmpty) 'q': q.trim(), if (category.trim().isNotEmpty) 'category': category.trim()});
+    final r = await http.get(uri, headers: _headers());
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'خطا در دریافت آگهی‌ها.');
+    return List<Map<String, dynamic>>.from(data.map((e) => Map<String, dynamic>.from(e)));
+  }
+
   static Future<String> login(String email, String password) async {
     final r = await http.post(Uri.parse('$baseUrl/auth/login'), headers: _headers(), body: jsonEncode({'email': email, 'password': password}));
     final data = jsonDecode(r.body);
