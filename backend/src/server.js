@@ -55,11 +55,11 @@ app.post('/api/auth/register', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
 });
 
-app.post('/api/upload-images', requireUser, upload.array('images', 3), async (req, res) => {
+app.post('/api/upload-images', requireUser, upload.array('images', 6), async (req, res) => {
   try {
     const files = Array.isArray(req.files) ? req.files : [];
     if (!files.length) return res.status(400).json({ error: 'حداقل یک عکس انتخاب کنید.' });
-    if (files.length > 3) return res.status(400).json({ error: 'حداکثر ۳ عکس مجاز است.' });
+    if (files.length > 6) return res.status(400).json({ error: 'حداکثر ۶ عکس مجاز است.' });
     if (files.some(f => !f.mimetype.startsWith('image/'))) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
     const db = getSupabaseAdmin();
     const buckets = await db.storage.listBuckets();
