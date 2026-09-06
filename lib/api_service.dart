@@ -10,6 +10,7 @@ class ApiService {
     if (auth && _token != null) 'Authorization': 'Bearer $_token',
   };
   static void setToken(String? token) => _token = token;
+  static String? get currentUserId { try { if (_token == null) return null; final parts=_token!.split('.'); if(parts.length<2)return null; final payload=utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))); final d=jsonDecode(payload); return d['sub']?.toString(); } catch (_) { return null; } }
 
   static Future<String> adminLogin(String email, String password) async {
     final r = await http.post(Uri.parse('$baseUrl/admin/login'), headers: _headers(), body: jsonEncode({'email': email, 'password': password}));
@@ -35,5 +36,23 @@ class ApiService {
   static Future<Map<String,dynamic>> addProduct(Map<String,dynamic> product) async { final r=await http.post(Uri.parse('$baseUrl/products'),headers:_headers(auth:true),body:jsonEncode(product)); final d=jsonDecode(r.body); if(r.statusCode!=201)throw Exception(d['error']??'خطا در ثبت آگهی.'); return Map<String,dynamic>.from(d); }
   static Future<List<String>> uploadImages(List<Uint8List> images,List<String> names) async { if(images.length!=names.length)throw Exception('اطلاعات عکس کامل نیست.'); final req=http.MultipartRequest('POST',Uri.parse('$baseUrl/upload-images')); if(_token!=null)req.headers['Authorization']='Bearer $_token'; for(var i=0;i<images.length;i++){req.files.add(http.MultipartFile.fromBytes('images',images[i],filename:names[i]));} final response=await req.send(); final body=await response.stream.bytesToString(); final d=jsonDecode(body); if(response.statusCode!=201)throw Exception(d['error']??'خطا در آپلود عکس‌ها.'); return List<String>.from(d['urls']??[]); }
   static Future<void> deleteProduct(String id) async { final r=await http.delete(Uri.parse('$baseUrl/products/$id'),headers:_headers(auth:true)); if(r.statusCode!=200)throw Exception(jsonDecode(r.body)['error']??'خطا در حذف آگهی.'); }
+
+  static Future<Map<String,dynamic>> startConversation(String listingId) async {
+    final r=await http.post(Uri.parse('$baseUrl/conversations'),headers:_headers(auth:true),body:jsonEncode({'listing_id':listingId}));
+    final d=jsonDecode(r.body); if(r.statusCode!=200&&r.statusCode!=201)throw Exception(d['error']??'خطا در شروع گفتگو.'); return Map<String,dynamic>.from(d);
+  }
+  static Future<List<Map<String,dynamic>>> getConversations() async {
+    final r=await http.get(Uri.parse('$baseUrl/conversations'),headers:_headers(auth:true)); final d=jsonDecode(r.body);
+    if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت گفتگوها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e)));
+  }
+  static Future<List<Map<String,dynamic>>> getMessages(String conversationId) async {
+    final r=await http.get(Uri.parse('$baseUrl/conversations/$conversationId/messages'),headers:_headers(auth:true)); final d=jsonDecode(r.body);
+    if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت پیام‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e)));
+  }
+  static Future<Map<String,dynamic>> sendMessage(String conversationId,String message) async {
+    final r=await http.post(Uri.parse('$baseUrl/conversations/$conversationId/messages'),headers:_headers(auth:true),body:jsonEncode({'message':message})); final d=jsonDecode(r.body);
+    if(r.statusCode!=201)throw Exception(d['error']??'خطا در ارسال پیام.'); return Map<String,dynamic>.from(d);
+  }
+
   static Future<String> generateAd(String productName,String description,{String language='fa'}) async { final r=await http.post(Uri.parse('$baseUrl/generate-ad'),headers:_headers(auth:true),body:jsonEncode({'productName':productName,'description':description,'language':language})); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'خطا در تولید آگهی.'); return d['adText']; }
 }
