@@ -8,9 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// استفاده از مقدار مستقیم به عنوان fallback جهت جلوگیری از کرش
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xenljmaprmggejadadbo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_DFyKCc9_Pv5SoJiSiouWxg_FycPk7M3';
+// مقداردهی هاردکدشده جهت جلوگیری قطعی از خطای Invalid supabaseUrl
+const rawUrl = process.env.SUPABASE_URL || 'https://xenljmaprmggejadadbo.supabase.co';
+const SUPABASE_URL = rawUrl.replace(/[\[\]]/g, '').trim();
+const SUPABASE_KEY = (process.env.SUPABASE_KEY || 'sb_publishable_DFyKCc9_Pv5SoJiSiouWxg_FycPk7M3').replace(/[\[\]]/g, '').trim();
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
