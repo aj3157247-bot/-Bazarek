@@ -34,24 +34,11 @@ class _HomeScreenState extends State<HomeScreen>{
   void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
   Future<void> _openLogin()async{await Navigator.push(context,MaterialPageRoute(builder:(_)=>const LoginScreen()));if(mounted)_load();}
   Future<void> _openAccount()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
-  Future<void> _openMessages() async {
-    final p=await SharedPreferences.getInstance();
-    if(p.getString('bazarek_token')==null){await _openLogin();return;}
-    if(!mounted)return;
-    Navigator.push(context,MaterialPageRoute(builder:(_)=>const ConversationsScreen()));
-  }
-  Future<void> _openChat(Map<String,dynamic> listing) async {
-    final p=await SharedPreferences.getInstance();
-    if(p.getString('bazarek_token')==null){await _openLogin();return;}
-    try {
-      final conv=await ApiService.startConversation(listing['id'].toString());
-      if(!mounted)return;
-      Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:conv,listingTitle:(listing['title']??'آگهی').toString())));
-    } catch(e){if(mounted)_msg(e);}
-  }
+  Future<void> _openMessages()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const ConversationsScreen()));}
+  Future<void> _openChat(Map<String,dynamic> listing)async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}try{final conv=await ApiService.startConversation(listing['id'].toString());if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:conv,listingTitle:(listing['title']??'آگهی').toString())));}catch(e){if(mounted)_msg(e);}}
   Future<void> _post()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('بازارک',style:TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:()=>_openMessages(),tooltip:'پیام‌ها',icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:'حساب من',icon:const Icon(Icons.person_outline))]),
+    appBar:AppBar(title:const Text('بازارک',style:TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:_openMessages,tooltip:'پیام‌ها',icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:'حساب من',icon:const Icon(Icons.person_outline))]),
     floatingActionButton:FloatingActionButton.extended(onPressed:_post,icon:const Icon(Icons.add),label:const Text('ثبت آگهی')),
     body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,100),children:[
       Text('بازار افغانستان، ساده و حرفه‌ای',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),
@@ -64,9 +51,10 @@ class _HomeScreenState extends State<HomeScreen>{
     Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[const Text('قیمت',style:TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
     if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('دسته‌بندی: ${p['category']}')),
     const SizedBox(height:12),
-    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text((p['seller_name']??'فروشنده بازارک').toString()),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('شماره تماس: ${p['seller_phone']}'):const Text('فروشنده در بازارک')),),
+    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text((p['seller_name']??'فروشنده بازارک').toString()),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('شماره تماس: ${p['seller_phone']}'):const Text('فروشنده در بازارک'))),
     const SizedBox(height:12),const Text('توضیحات',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text((p['description']??'توضیحی ثبت نشده است.').toString(),style:const TextStyle(height:1.6)),
-    const SizedBox(height:18),SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>_openChat(p),icon:const Icon(Icons.chat_bubble_outline),label:const Text('چت با فروشنده')))
+    if(p['allow_chat']!=false) const SizedBox(height:18),
+    if(p['allow_chat']!=false) SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>_openChat(p),icon:const Icon(Icons.chat_bubble_outline),label:const Text('چت با فروشنده')))
   ]))));
 }
 
@@ -117,32 +105,6 @@ class ImageGallery extends StatelessWidget {
   }
 }
 class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(product['is_pinned']==true)const Icon(Icons.push_pin,size:17),if(product['is_featured']==true)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text((product['title']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text((product['category']??'عمومی').toString()),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
-
-class AuthScaffold extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-  const AuthScaffold({super.key, required this.title, required this.children});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginScreenState(); }
 class _LoginScreenState extends State<LoginScreen>{final email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.login(email.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',t);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));@override Widget build(BuildContext context)=>AuthScaffold(title:'ورود به بازارک',children:[TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',prefixIcon:Icon(Icons.email_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:const Text('حساب ندارید؟ ثبت‌نام کنید')),const Divider(height:28),TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('ورود مدیریت'))]);}
@@ -320,107 +282,112 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
-  @override
-  State<ConversationsScreen> createState() => _ConversationsScreenState();
+  @override State<ConversationsScreen> createState()=>_ConversationsScreenState();
 }
 
-class _ConversationsScreenState extends State<ConversationsScreen> {
-  bool loading = true;
-  List<Map<String, dynamic>> items = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
+class _ConversationsScreenState extends State<ConversationsScreen>{
+  bool loading=true;
+  List<Map<String,dynamic>> items=[];
+  @override void initState(){super.initState();_load();}
   Future<void> _load() async {
-    setState(() => loading = true);
-    try {
-      items = await ApiService.getConversations();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => loading = false);
-    }
+    if(mounted)setState(()=>loading=true);
+    try{items=await ApiService.getConversations();}
+    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    finally{if(mounted)setState(()=>loading=false);}
   }
-
-  @override
-  Widget build(BuildContext context) {
-    Widget body;
-    if (loading) {
-      body = const Center(child: CircularProgressIndicator());
-    } else if (items.isEmpty) {
-      body = const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 52),
-            SizedBox(height: 10),
-            Text('هنوز گفتگویی ندارید.'),
-            SizedBox(height: 6),
-            Text('از داخل یک آگهی، «چت با فروشنده» را بزنید.'),
-          ],
-        ),
-      );
-    } else {
-      body = ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (context, index) {
-          final c = items[index];
-          final title = (c['listing_title'] ?? 'آگهی').toString();
-          return Card(
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text((c['other_user_name'] ?? 'کاربر بازارک').toString()),
-              trailing: const Icon(Icons.chevron_left),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      conversation: c,
-                      listingTitle: title,
-                    ),
-                  ),
-                ).then((_) => _load());
-              },
-            ),
-          );
-        },
-      );
-    }
-
+  @override Widget build(BuildContext context){
     return Scaffold(
-      appBar: AppBar(title: const Text('پیام‌ها')),
-      body: RefreshIndicator(onRefresh: _load, child: body),
+      appBar:AppBar(title:const Text('پیام‌ها')),
+      body:RefreshIndicator(
+        onRefresh:_load,
+        child:loading
+          ? const Center(child:CircularProgressIndicator())
+          : items.isEmpty
+            ? ListView(children:[SizedBox(height:220),Icon(Icons.chat_bubble_outline,size:52),const SizedBox(height:10),const Center(child:Text('هنوز گفتگویی ندارید.')),const SizedBox(height:6),const Center(child:Text('از داخل یک آگهی، «چت با فروشنده» را بزنید.'))])
+            : ListView.separated(
+                padding:const EdgeInsets.all(12),
+                itemCount:items.length,
+                itemBuilder:(_,i){
+                  final c=items[i];
+                  return Card(child:ListTile(
+                    leading:const CircleAvatar(child:Icon(Icons.person_outline)),
+                    title:Text((c['listing_title']??'آگهی').toString(),maxLines:1,overflow:TextOverflow.ellipsis),
+                    subtitle:Text((c['other_user_name']??'کاربر بازارک').toString()),
+                    trailing:const Icon(Icons.chevron_left),
+                    onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:c,listingTitle:(c['listing_title']??'آگهی').toString()))).then((_)=>_load()),
+                  ));
+                },
+                separatorBuilder:(_,__)=>const SizedBox(height:6),
+              ),
+      ),
     );
   }
 }
 
 class ChatScreen extends StatefulWidget {
-  final Map<String,dynamic> conversation; final String listingTitle;
+  final Map<String,dynamic> conversation;
+  final String listingTitle;
   const ChatScreen({super.key,required this.conversation,required this.listingTitle});
   @override State<ChatScreen> createState()=>_ChatScreenState();
 }
+
 class _ChatScreenState extends State<ChatScreen>{
   Timer? refreshTimer;
-  final controller=TextEditingController(); final scroll=ScrollController(); List<Map<String,dynamic>> messages=[]; bool loading=true; bool sending=false;
+  final controller=TextEditingController();
+  final scroll=ScrollController();
+  List<Map<String,dynamic>> messages=[];
+  bool loading=true;
+  bool sending=false;
   String get id=>widget.conversation['id'].toString();
-  @override void initState(){super.initState();_load(); refreshTimer=Timer.periodic(const Duration(seconds:4),(_)=>_load(silent:true));}
+  @override void initState(){super.initState();_load();refreshTimer=Timer.periodic(const Duration(seconds:4),(_)=>_load(silent:true));}
   @override void dispose(){refreshTimer?.cancel();controller.dispose();scroll.dispose();super.dispose();}
-  Future<void> _load({bool silent=false}) async { try{final x=await ApiService.getMessages(id);if(mounted)setState(()=>messages=x);WidgetsBinding.instance.addPostFrameCallback((_) {if(scroll.hasClients)scroll.jumpTo(scroll.position.maxScrollExtent);});}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);} }
-  Future<void> _send() async {final text=controller.text.trim();if(text.isEmpty||sending)return;setState(()=>sending=true);try{final m=await ApiService.sendMessage(id,text);controller.clear();setState(()=>messages.add(m));WidgetsBinding.instance.addPostFrameCallback((_) {if(scroll.hasClients)scroll.animateTo(scroll.position.maxScrollExtent,duration:const Duration(milliseconds:200),curve:Curves.easeOut);});}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>sending=false);}}
-  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(widget.listingTitle,maxLines:1,overflow:TextOverflow.ellipsis)),body:Column(children:[Expanded(child:loading?const Center(child:CircularProgressIndicator()):messages.isEmpty?const Center(child:Text('اولین پیام را شما بفرستید.')):ListView.builder(controller:scroll,padding:const EdgeInsets.all(12),itemCount:messages.length,itemBuilder:(_,i){final m=messages[i];return _Bubble(message:m,mine: m['sender_id']?.toString()==ApiService.currentUserId);}),),SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(10,6,10,10),child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:[Expanded(child:TextField(controller:controller,maxLines:4,minLines:1,textInputAction:TextInputAction.newline,decoration:InputDecoration(hintText:'پیام خود را بنویسید…',border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)),contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:10)))),const SizedBox(width:8),IconButton.filled(onPressed:sending?null:_send,icon:sending?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send))])))]));
+  Future<void> _load({bool silent=false}) async {
+    try{
+      final x=await ApiService.getMessages(id);
+      if(mounted)setState(()=>messages=x);
+      WidgetsBinding.instance.addPostFrameCallback((_) {if(scroll.hasClients)scroll.jumpTo(scroll.position.maxScrollExtent);});
+    }catch(e){if(!silent&&mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    finally{if(mounted)setState(()=>loading=false);}
+  }
+  Future<void> _send() async {
+    final text=controller.text.trim();
+    if(text.isEmpty||sending)return;
+    setState(()=>sending=true);
+    try{
+      final m=await ApiService.sendMessage(id,text);
+      controller.clear();
+      setState(()=>messages.add(m));
+      WidgetsBinding.instance.addPostFrameCallback((_) {if(scroll.hasClients)scroll.animateTo(scroll.position.maxScrollExtent,duration:const Duration(milliseconds:200),curve:Curves.easeOut);});
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    finally{if(mounted)setState(()=>sending=false);}
+  }
+  @override Widget build(BuildContext context){
+    return Scaffold(
+      appBar:AppBar(title:Text(widget.listingTitle,maxLines:1,overflow:TextOverflow.ellipsis)),
+      body:Column(children:[
+        Expanded(child:loading
+          ? const Center(child:CircularProgressIndicator())
+          : messages.isEmpty
+            ? const Center(child:Text('اولین پیام را شما بفرستید.'))
+            : ListView.builder(controller:scroll,padding:const EdgeInsets.all(12),itemCount:messages.length,itemBuilder:(_,i){final m=messages[i];return _Bubble(message:m,mine:m['sender_id']?.toString()==ApiService.currentUserId);})),
+        SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(10,6,10,10),child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
+          Expanded(child:TextField(controller:controller,maxLines:4,minLines:1,textInputAction:TextInputAction.newline,decoration:InputDecoration(hintText:'پیام خود را بنویسید…',border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)),contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:10)))),
+          const SizedBox(width:8),
+          IconButton.filled(onPressed:sending?null:_send,icon:sending?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send)),
+        ]))),
+      ]),
+    );
+  }
 }
-class _Bubble extends StatelessWidget{final Map<String,dynamic> message;final bool mine;const _Bubble({required this.message,required this.mine});@override Widget build(BuildContext context){return Align(alignment:mine?Alignment.centerRight:Alignment.centerLeft,child:Container(margin:const EdgeInsets.only(bottom:8),padding:const EdgeInsets.symmetric(horizontal:14,vertical:10),constraints:BoxConstraints(maxWidth:MediaQuery.of(context).size.width*.78),decoration:BoxDecoration(color:mine?Theme.of(context).colorScheme.primaryContainer:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(16)),child:Text((message['message']??'').toString(),style:const TextStyle(fontSize:15,height:1.4))));}}
+
+class _Bubble extends StatelessWidget{
+  final Map<String,dynamic> message;
+  final bool mine;
+  const _Bubble({required this.message,required this.mine});
+  @override Widget build(BuildContext context){
+    return Align(alignment:mine?Alignment.centerRight:Alignment.centerLeft,child:Container(margin:const EdgeInsets.only(bottom:8),padding:const EdgeInsets.symmetric(horizontal:14,vertical:10),constraints:BoxConstraints(maxWidth:MediaQuery.of(context).size.width*.78),decoration:BoxDecoration(color:mine?Theme.of(context).colorScheme.primaryContainer:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(16)),child:Text((message['message']??'').toString(),style:const TextStyle(fontSize:15,height:1.4))));
+  }
+}
 
 class AddProductSheet extends StatefulWidget{const AddProductSheet({super.key});@override State<AddProductSheet> createState()=>_AddProductSheetState();}
 class _AddProductSheetState extends State<AddProductSheet> {
@@ -562,19 +529,11 @@ class _AddProductSheetState extends State<AddProductSheet> {
               decoration: const InputDecoration(labelText: 'تعداد', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('راه‌های ارتباط با خریدار', style: TextStyle(fontWeight: FontWeight.bold)),
-                    SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('فعال بودن چت با خریدار'), subtitle: const Text('خریداران می‌توانند از داخل آگهی به شما پیام بدهند.'), value: allowChat, onChanged: (v)=>setState(()=>allowChat=v)),
-                    SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), subtitle: const Text('شماره ثبت‌شده در پروفایل شما برای خریدار نمایش داده می‌شود.'), value: showPhone, onChanged: (v)=>setState(()=>showPhone=v)),
-                  ],
-                ),
-              ),
-            ),
+            Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              const Text('راه‌های ارتباط با خریدار',style:TextStyle(fontWeight:FontWeight.bold)),
+              SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('فعال بودن چت با خریدار'),subtitle:const Text('خریداران می‌توانند از داخل آگهی به شما پیام بدهند.'),value:allowChat,onChanged:(v)=>setState(()=>allowChat=v)),
+              SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('نمایش شماره تماس'),subtitle:const Text('شماره ثبت‌شده در پروفایل شما برای خریدار نمایش داده می‌شود.'),value:showPhone,onChanged:(v)=>setState(()=>showPhone=v)),
+            ]))),
             const SizedBox(height: 10),
             TextField(
               controller: desc,
