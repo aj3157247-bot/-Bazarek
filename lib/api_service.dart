@@ -1,115 +1,63 @@
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://bazarek.onrender.com/api',
-  );
-  static const _storage = FlutterSecureStorage();
-  static const _tokenKey = 'bazarek_access_token';
-  static const _refreshKey = 'bazarek_refresh_token';
+  static const String baseUrl = 'https://bazarek.onrender.com/api';
+  static String? _token;
 
-  static Future<Map<String, dynamic>> _request(
-    String method,
-    String path, {
-    Map<String, dynamic>? body,
-    bool auth = true,
-  }) async {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (auth) {
-      final token = await _storage.read(key: _tokenKey);
-      if (token != null && token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
-    }
+  static Map<String, String> _headers({bool auth = false}) => {
+    'Content-Type': 'application/json',
+    if (auth && _token != null) 'Authorization': 'Bearer $_token',
+  };
 
-    final uri = Uri.parse('$baseUrl$path');
-    late http.Response response;
-    if (method == 'GET') {
-      response = await http.get(uri, headers: headers);
-    } else if (method == 'POST') {
-      response = await http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
-    } else {
-      throw Exception('Unsupported HTTP method');
-    }
+  static void setToken(String? token) => _token = token;
 
-    Map<String, dynamic> data = {};
-    if (response.body.isNotEmpty) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) data = decoded;
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(data['error']?.toString() ?? 'خطا در ارتباط با سرور');
-    }
-    return data;
+  static Future<String> login(String email, String password) async {
+    final r = await http.post(Uri.parse('$baseUrl/auth/login'), headers: _headers(), body: jsonEncode({'email': email, 'password': password}));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'ورود ناموفق بود.');
+    _token = data['token'];
+    return _token!;
   }
 
-  static Future<void> _saveSession(Map<String, dynamic>? session) async {
-    if (session == null) return;
-    final access = session['access_token']?.toString();
-    final refresh = session['refresh_token']?.toString();
-    if (access != null && access.isNotEmpty) await _storage.write(key: _tokenKey, value: access);
-    if (refresh != null && refresh.isNotEmpty) await _storage.write(key: _refreshKey, value: refresh);
+  static Future<Map<String, dynamic>> register({required String email, required String password, String fullName = '', String shopName = '', String phone = ''}) async {
+    final r = await http.post(Uri.parse('$baseUrl/auth/register'), headers: _headers(), body: jsonEncode({'email': email, 'password': password, 'full_name': fullName, 'shop_name': shopName, 'phone': phone}));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 201 && r.statusCode != 200) throw Exception(data['error'] ?? 'ثبت‌نام ناموفق بود.');
+    if (data['token'] != null) _token = data['token'];
+    return Map<String, dynamic>.from(data);
   }
 
-  static Future<bool> hasSession() async => (await _storage.read(key: _tokenKey))?.isNotEmpty ?? false;
-
-  static Future<Map<String, dynamic>> signUp({
-    required String fullName,
-    required String shopName,
-    required String email,
-    required String password,
-  }) async {
-    final data = await _request('POST', '/auth/signup', auth: false, body: {
-      'fullName': fullName,
-      'shopName': shopName,
-      'email': email,
-      'password': password,
-    });
-    await _saveSession(data['session']);
-    return data;
+  static Future<Map<String, dynamic>> getProfile() async {
+    final r = await http.get(Uri.parse('$baseUrl/me'), headers: _headers(auth: true));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'خطا در دریافت پروفایل.');
+    return Map<String, dynamic>.from(data);
   }
 
-  static Future<void> login(String email, String password) async {
-    final data = await _request('POST', '/auth/login', auth: false, body: {
-      'email': email,
-      'password': password,
-    });
-    await _saveSession(data['session']);
+  static Future<List<Map<String, dynamic>>> getProducts() async {
+    final r = await http.get(Uri.parse('$baseUrl/products'), headers: _headers(auth: true));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'خطا در دریافت محصولات.');
+    return List<Map<String, dynamic>>.from(data.map((e) => Map<String, dynamic>.from(e)));
   }
 
-  static Future<void> logout() async {
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _refreshKey);
+  static Future<Map<String, dynamic>> addProduct(Map<String, dynamic> product) async {
+    final r = await http.post(Uri.parse('$baseUrl/products'), headers: _headers(auth: true), body: jsonEncode(product));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 201) throw Exception(data['error'] ?? 'خطا در ثبت محصول.');
+    return Map<String, dynamic>.from(data);
   }
 
-  static Future<Map<String, dynamic>> me() => _request('GET', '/auth/me');
-
-  static Future<Map<String, dynamic>> getDashboard() => _request('GET', '/dashboard');
-
-  static Future<List<dynamic>> getProducts() async {
-    final token = await _storage.read(key: _tokenKey);
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (token != null && token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
-    final response = await http.get(Uri.parse('$baseUrl/products'), headers: headers);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : {};
-      throw Exception(decoded is Map ? (decoded['error'] ?? 'خطا در دریافت محصولات') : 'خطا در دریافت محصولات');
-    }
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
+  static Future<void> deleteProduct(String id) async {
+    final r = await http.delete(Uri.parse('$baseUrl/products/$id'), headers: _headers(auth: true));
+    if (r.statusCode != 200) throw Exception(jsonDecode(r.body)['error'] ?? 'خطا در حذف محصول.');
   }
 
-  static Future<bool> addProduct(Map<String, dynamic> productData) async {
-    await _request('POST', '/products', body: productData);
-    return true;
-  }
-
-  static Future<String> generateAd(String productName, String description) async {
-    final data = await _request('POST', '/generate-ad', body: {
-      'productName': productName,
-      'description': description,
-    });
-    return data['adText']?.toString() ?? '';
+  static Future<String> generateAd(String productName, String description, {String language = 'fa'}) async {
+    final r = await http.post(Uri.parse('$baseUrl/generate-ad'), headers: _headers(auth: true), body: jsonEncode({'productName': productName, 'description': description, 'language': language}));
+    final data = jsonDecode(r.body);
+    if (r.statusCode != 200) throw Exception(data['error'] ?? 'خطا در تولید آگهی.');
+    return data['adText'];
   }
 }

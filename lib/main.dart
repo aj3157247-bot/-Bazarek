@@ -1,118 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
 void main() => runApp(const BazarekApp());
 
 class BazarekApp extends StatelessWidget {
   const BazarekApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'بازارک - دستیار فروش هوشمند',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal, fontFamily: 'Roboto'),
-      home: const EntryScreen(),
-    );
-  }
-}
-
-class EntryScreen extends StatefulWidget {
-  const EntryScreen({super.key});
-  @override State<EntryScreen> createState() => _EntryScreenState();
-}
-
-class _EntryScreenState extends State<EntryScreen> {
-  bool loading = true;
-  @override
-  void initState() { super.initState(); _check(); }
-  Future<void> _check() async {
-    if (await ApiService.hasSession()) {
-      try { await ApiService.me(); if (mounted) _go(const DashboardScreen()); }
-      catch (_) { await ApiService.logout(); }
-    }
-    if (mounted) setState(() => loading = false);
-  }
-  void _go(Widget page) => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => page));
-  @override Widget build(BuildContext context) => loading
-      ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-      : AuthScreen(onLoggedIn: () => _go(const DashboardScreen()));
-}
-
-class AuthScreen extends StatefulWidget {
-  final VoidCallback onLoggedIn;
-  const AuthScreen({super.key, required this.onLoggedIn});
-  @override State<AuthScreen> createState() => _AuthScreenState();
-}
-
-class _AuthScreenState extends State<AuthScreen> {
-  bool register = false, loading = false, obscure = true;
-  final name = TextEditingController(), shop = TextEditingController(), email = TextEditingController(), password = TextEditingController();
-
-  Future<void> submit() async {
-    if (email.text.trim().isEmpty || password.text.isEmpty || (register && (name.text.trim().isEmpty || shop.text.trim().isEmpty))) {
-      _msg('لطفاً همه معلومات ضروری را وارد کنید.'); return;
-    }
-    setState(() => loading = true);
-    try {
-      if (register) {
-        final data = await ApiService.signUp(fullName: name.text.trim(), shopName: shop.text.trim(), email: email.text.trim(), password: password.text);
-        if (data['requiresEmailConfirmation'] == true) {
-          _msg('حساب ساخته شد. ایمیل خود را تأیید کنید و سپس وارد شوید.');
-          setState(() => register = false);
-        } else { widget.onLoggedIn(); }
-      } else { await ApiService.login(email.text.trim(), password.text); widget.onLoggedIn(); }
-    } catch (e) { _msg(e.toString().replaceFirst('Exception: ', '')); }
-    finally { if (mounted) setState(() => loading = false); }
-  }
-  void _msg(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-
-  @override Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(child: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Icon(Icons.storefront, size: 72), SizedBox(height: 12),
-        Text('بازارک', textAlign: TextAlign.center, style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold)),
-        Text('دستیار فروش هوشمند افغانستان', textAlign: TextAlign.center), SizedBox(height: 28),
-        if (register) ...[
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'نام شما', border: OutlineInputBorder())), SizedBox(height: 12),
-          TextField(controller: shop, decoration: const InputDecoration(labelText: 'نام دکان / کسب‌وکار', border: OutlineInputBorder())), SizedBox(height: 12),
-        ],
-        TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'ایمیل', border: OutlineInputBorder())), SizedBox(height: 12),
-        TextField(controller: password, obscureText: obscure, decoration: InputDecoration(labelText: 'رمز عبور', border: const OutlineInputBorder(), suffixIcon: IconButton(onPressed: () => setState(() => obscure = !obscure), icon: Icon(obscure ? Icons.visibility : Icons.visibility_off)))),
-        SizedBox(height: 18),
-        FilledButton(onPressed: loading ? null : submit, child: Padding(padding: const EdgeInsets.all(13), child: loading ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator()) : Text(register ? 'ساخت حساب فروشنده' : 'ورود به بازارک'))),
-        TextButton(onPressed: loading ? null : () => setState(() => register = !register), child: Text(register ? 'قبلاً حساب دارم؛ ورود' : 'حساب فروشنده ندارم؛ ثبت‌نام')),
-      ]),
-    )))),
+  @override Widget build(BuildContext context) => MaterialApp(
+    title: 'بازارک', debugShowCheckedModeBanner: false, locale: const Locale('fa'),
+    theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal, fontFamily: 'Roboto'),
+    home: const StartupScreen(),
   );
 }
 
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
-  @override State<DashboardScreen> createState() => _DashboardScreenState();
+class StartupScreen extends StatefulWidget { const StartupScreen({super.key}); @override State<StartupScreen> createState()=>_StartupScreenState(); }
+class _StartupScreenState extends State<StartupScreen> {
+  @override void initState(){ super.initState(); _start(); }
+  Future<void> _start() async { final p=await SharedPreferences.getInstance(); final t=p.getString('bazarek_token'); if(t!=null && t.isNotEmpty){ ApiService.setToken(t); try{ await ApiService.getProfile(); if(mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder:(_)=>const DashboardScreen())); return; }catch(_){ await p.remove('bazarek_token'); }} if(mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder:(_)=>const LoginScreen())); }
+  @override Widget build(BuildContext context)=>const Scaffold(body:Center(child:CircularProgressIndicator()));
 }
-class _DashboardScreenState extends State<DashboardScreen> {
-  Map<String, dynamic> data = {}; Map<String, dynamic> vendor = {}; bool loading = true;
-  @override void initState() { super.initState(); load(); }
-  Future<void> load() async {
-    try { final results = await Future.wait([ApiService.getDashboard(), ApiService.me()]); if (mounted) setState(() { data = results[0]; vendor = (results[1] as Map<String, dynamic>)['vendor'] ?? {}; loading = false; }); }
-    catch (e) { if (mounted) { setState(() => loading = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); } }
-  }
-  Future<void> logout() async { await ApiService.logout(); if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const EntryScreen()), (_) => false); }
-  @override Widget build(BuildContext context) {
-    final shop = vendor['shop_name']?.toString() ?? 'دکان شما';
-    return Scaffold(appBar: AppBar(title: Text(shop), actions: [IconButton(onPressed: logout, icon: const Icon(Icons.logout))]), body: loading ? const Center(child: CircularProgressIndicator()) : RefreshIndicator(onRefresh: load, child: ListView(padding: const EdgeInsets.all(16), children: [
-      Text('سلام ${vendor['full_name'] ?? ''} 👋', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)), const SizedBox(height: 6), const Text('امروز دکانت را هوشمندتر مدیریت کن.'), const SizedBox(height: 20),
-      Row(children: [_stat('محصولات', '${data['productCount'] ?? 0}', Icons.inventory_2), const SizedBox(width: 10), _stat('سفارش‌ها', '${data['orderCount'] ?? 0}', Icons.shopping_bag)]), const SizedBox(height: 10),
-      Row(children: [_stat('در انتظار', '${data['pendingOrders'] ?? 0}', Icons.pending_actions), const SizedBox(width: 10), _stat('فروش', '${data['totalSales'] ?? 0} افغانی', Icons.payments)]), const SizedBox(height: 24),
-      _action('افزودن محصول', Icons.add_box, () => _addProduct()), _action('تولید آگهی با هوش مصنوعی', Icons.auto_awesome, () => _generateAd()),
-      const SizedBox(height: 18), const Text('آخرین محصولات', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
-      ...((data['recentProducts'] as List? ?? []).map((p) => Card(child: ListTile(leading: const Icon(Icons.inventory), title: Text('${p['title']}'), subtitle: Text('موجودی: ${p['stock']}'), trailing: Text('${p['price']} افغانی'))))),
-    ])));
-  }
-  Widget _stat(String title, String value, IconData icon) => Expanded(child: Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [Icon(icon, size: 28), const SizedBox(height: 7), Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), textAlign: TextAlign.center), Text(title)]))));
-  Widget _action(String title, IconData icon, VoidCallback tap) => Card(child: ListTile(leading: Icon(icon), title: Text(title), trailing: const Icon(Icons.chevron_left), onTap: tap));
-  Future<void> _addProduct() async { final n = TextEditingController(), p = TextEditingController(), d = TextEditingController(), s = TextEditingController(text: '0'); final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('محصول جدید'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: n, decoration: const InputDecoration(labelText: 'نام محصول')), TextField(controller: p, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'قیمت (افغانی)')), TextField(controller: s, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'موجودی')), TextField(controller: d, decoration: const InputDecoration(labelText: 'توضیحات'))]), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('لغو')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ثبت'))])); if (ok == true) { try { await ApiService.addProduct({'title': n.text, 'price': double.tryParse(p.text) ?? 0, 'stock': int.tryParse(s.text) ?? 0, 'description': d.text}); await load(); } catch (e) { _show(e); } } }
-  Future<void> _generateAd() async { final n = TextEditingController(), d = TextEditingController(); final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('تولید آگهی هوشمند'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: n, decoration: const InputDecoration(labelText: 'نام محصول')), TextField(controller: d, decoration: const InputDecoration(labelText: 'توضیحات'))]), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('لغو')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('تولید'))])); if (ok == true) { showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator())); try { final ad = await ApiService.generateAd(n.text, d.text); if (mounted) { Navigator.pop(context); showDialog(context: context, builder: (_) => AlertDialog(title: const Text('آگهی آماده شد'), content: SingleChildScrollView(child: SelectableText(ad)), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('بستن'))])); } } catch (e) { if (mounted) Navigator.pop(context); _show(e); } } }
-  void _show(Object e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+
+class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginScreenState(); }
+class _LoginScreenState extends State<LoginScreen>{
+ final email=TextEditingController(), password=TextEditingController(); bool loading=false;
+ Future<void> _login() async { if(email.text.trim().isEmpty||password.text.isEmpty)return; setState(()=>loading=true); try{final t=await ApiService.login(email.text.trim(),password.text); final p=await SharedPreferences.getInstance(); await p.setString('bazarek_token',t); if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}
+ void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
+ @override Widget build(BuildContext context)=>AuthScaffold(title:'ورود به بازارک',children:[TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',prefixIcon:Icon(Icons.email_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:const Text('حساب ندارید؟ ثبت‌نام کنید'))]);
+}
+
+class RegisterScreen extends StatefulWidget { const RegisterScreen({super.key}); @override State<RegisterScreen> createState()=>_RegisterScreenState(); }
+class _RegisterScreenState extends State<RegisterScreen>{
+ final name=TextEditingController(),shop=TextEditingController(),phone=TextEditingController(),email=TextEditingController(),password=TextEditingController(); bool loading=false;
+ Future<void> _register() async {setState(()=>loading=true);try{final d=await ApiService.register(email:email.text.trim(),password:password.text,fullName:name.text,shopName:shop.text,phone:phone.text);if(d['token']!=null){final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',d['token']);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()),(_)=>false);}else{if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(d['message']??'ایمیل خود را بررسی کنید.')));}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}
+ @override Widget build(BuildContext context)=>AuthScaffold(title:'ساخت حساب فروشنده',children:[TextField(controller:name,decoration:const InputDecoration(labelText:'نام شما',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:shop,decoration:const InputDecoration(labelText:'نام دکان / کسب‌وکار',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تماس',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور (حداقل ۸ کاراکتر)',border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_register,child:loading?const CircularProgressIndicator():const Text('ساخت حساب')))]);
+}
+
+class AuthScaffold extends StatelessWidget { final String title; final List<Widget> children; const AuthScaffold({super.key,required this.title,required this.children}); @override Widget build(BuildContext context)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:520),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Icon(Icons.storefront_rounded,size:64),const SizedBox(height:12),Text(title,textAlign:TextAlign.center,style:const TextStyle(fontSize:25,fontWeight:FontWeight.bold)),const SizedBox(height:28),...children])))))); }
+
+class DashboardScreen extends StatefulWidget { const DashboardScreen({super.key}); @override State<DashboardScreen> createState()=>_DashboardScreenState(); }
+class _DashboardScreenState extends State<DashboardScreen>{
+ List<Map<String,dynamic>> products=[]; Map<String,dynamic>? profile; bool loading=true;
+ @override void initState(){super.initState();_load();}
+ Future<void> _load()async{try{final r=await Future.wait([ApiService.getProducts(),ApiService.getProfile()]);if(mounted)setState((){products=r[0] as List<Map<String,dynamic>>;profile=r[1] as Map<String,dynamic>;loading=false;});}catch(e){if(mounted){setState(()=>loading=false);_msg(e);}}}
+ void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
+ Future<void> _add()async{final result=await showModalBottomSheet<Map<String,dynamic>>(context:context,isScrollControlled:true,builder:(_)=>const AddProductSheet());if(result==null)return;try{await ApiService.addProduct(result);await _load();}catch(e){_msg(e);}}
+ Future<void> _delete(String id)async{try{await ApiService.deleteProduct(id);await _load();}catch(e){_msg(e);}}
+ Future<void> _logout()async{final p=await SharedPreferences.getInstance();await p.remove('bazarek_token');ApiService.setToken(null);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const LoginScreen()),(_)=>false);}
+ @override Widget build(BuildContext context){final shop=(profile?['shop_name']??'').toString();return Scaffold(appBar:AppBar(title:Text(shop.isEmpty?'بازارک':shop),actions:[IconButton(onPressed:_logout,tooltip:'خروج',icon:const Icon(Icons.logout))]),floatingActionButton:FloatingActionButton.extended(onPressed:_add,icon:const Icon(Icons.add),label:const Text('محصول جدید')),body:RefreshIndicator(onRefresh:_load,child:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[Text('سلام ${profile?['full_name']??''} 👋',style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:18),Row(children:[_stat('محصولات',products.length.toString(),Icons.inventory_2_outlined),const SizedBox(width:10),_stat('موجودی',products.fold<int>(0,(s,p)=>s+(p['stock'] as num? ?? 0).toInt()).toString(),Icons.warehouse_outlined)]),const SizedBox(height:24),const Text('محصولات من',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const SizedBox(height:10),if(products.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.add_business_outlined,size:44),SizedBox(height:8),Text('هنوز محصولی ثبت نکرده‌اید.'),Text('با دکمه «محصول جدید» اولین محصول را اضافه کنید.')]))),...products.map((p)=>Card(child:ListTile(title:Text(p['title']??''),subtitle:Text('${p['price']??0} افغانی • موجودی: ${p['stock']??0}'),trailing:PopupMenuButton<String>(onSelected:(v){if(v=='delete')_delete(p['id'].toString());},itemBuilder:(_)=>const[PopupMenuItem(value:'delete',child:Text('حذف'))]))))])));}
+ Widget _stat(String t,String v,IconData i)=>Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Row(children:[Icon(i,size:30),const SizedBox(width:10),Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(t),Text(v,style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold))])]))));
+}
+
+class AddProductSheet extends StatefulWidget { const AddProductSheet({super.key}); @override State<AddProductSheet> createState()=>_AddProductSheetState(); }
+class _AddProductSheetState extends State<AddProductSheet>{final title=TextEditingController(),category=TextEditingController(),price=TextEditingController(),cost=TextEditingController(),stock=TextEditingController(text:'0'),desc=TextEditingController();@override Widget build(BuildContext context)=>Padding(padding:EdgeInsets.only(left:20,right:20,top:20,bottom:MediaQuery.of(context).viewInsets.bottom+20),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Text('افزودن محصول',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:16),TextField(controller:title,decoration:const InputDecoration(labelText:'نام محصول',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:category,decoration:const InputDecoration(labelText:'دسته‌بندی',border:OutlineInputBorder())),const SizedBox(height:10),Row(children:[Expanded(child:TextField(controller:price,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'قیمت فروش',border:OutlineInputBorder()))),const SizedBox(width:10),Expanded(child:TextField(controller:cost,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'قیمت خرید',border:OutlineInputBorder()))) ]),const SizedBox(height:10),TextField(controller:stock,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'موجودی',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:desc,maxLines:3,decoration:const InputDecoration(labelText:'توضیحات',border:OutlineInputBorder())),const SizedBox(height:16),FilledButton(onPressed:(){if(title.text.trim().isEmpty)return;Navigator.pop(context,{'title':title.text.trim(),'category':category.text.trim(),'price':double.tryParse(price.text)||0,'cost_price':double.tryParse(cost.text)||0,'stock':int.tryParse(stock.text)||0,'description':desc.text.trim(),'image_url':''});},child:const Text('ذخیره محصول'))])));}
 }
