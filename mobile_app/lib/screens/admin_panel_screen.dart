@@ -1,94 +1,36 @@
 import 'package:flutter/material.dart';
 
-class AdminPanelScreen extends StatefulWidget {
-  @override
-  _AdminPanelScreenState createState() => _AdminPanelScreenState();
-}
-
-class _AdminPanelScreenState extends State<AdminPanelScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool isLoggedIn = false;
-
-  void login() {
-    if (_emailController.text == "abdullahjafari712@gmail.com" &&
-        _passwordController.text == "05050505") {
-      setState(() {
-        isLoggedIn = true;
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("اطلاعات ورود ادمین اشتباه است!")),
-      );
-    }
-  }
+/// Admin authentication must be moved to a server-side protected endpoint.
+/// Credentials are intentionally not embedded in the APK.
+class AdminPanelScreen extends StatelessWidget {
+  const AdminPanelScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("پنل مدیریت سیستم")),
-      body: !isLoggedIn
-          ? Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextField(
-                    controller: _emailController,
-                    decoration: InputDecoration(labelText: "ایمیل ادمین"),
-                  ),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: InputDecoration(labelText: "رمز عبور"),
-                  ),
-                  SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: login,
-                    child: Text("ورود به پنل ادمین"),
-                  )
-                ],
+      appBar: AppBar(title: const Text('پنل مدیریت بازارک')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.lock_outline, size: 64),
+              SizedBox(height: 16),
+              Text(
+                'پنل مدیریت در نسخه امن بعدی فعال می‌شود.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-            )
-          : ListView(
-              padding: EdgeInsets.all(16.0),
-              children: [
-                Card(
-                  child: ListTile(
-                    title: Text("تعداد کاربران کل"),
-                    trailing: Text("1,250", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                Card(
-                  child: ListTile(
-                    title: Text("درآمد این ماه (افغانی)"),
-                    trailing: Text("102,000 AFN", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                Card(
-                  child: ListTile(
-                    title: Text("مصرف کل AI"),
-                    trailing: Text("8,450 درخواست"),
-                  ),
-                ),
-                Divider(),
-                ListTile(
-                  leading: Icon(Icons.price_change),
-                  title: Text("تنظیم قیمت پلن‌ها"),
-                  onTap: () {},
-                ),
-                ListTile(
-                  leading: Icon(Icons.block),
-                  title: Text("مسدودسازی کاربر"),
-                  onTap: () {},
-                ),
-                ListTile(
-                  leading: Icon(Icons.notification_important),
-                  title: Text("ارسال اعلان عمومی به فروشندگان"),
-                  onTap: () {},
-                ),
-              ],
-            ),
+              SizedBox(height: 8),
+              Text(
+                'اطلاعات ورود مدیر عمداً داخل برنامه ذخیره نشده است.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
