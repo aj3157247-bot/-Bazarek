@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   static dynamic _json(http.Response r) {
@@ -48,14 +49,64 @@ class ApiService {
   static Future<Map<String,dynamic>> getProfile() async { final r=await http.get(Uri.parse('$baseUrl/me'),headers:_headers(auth:true)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت پروفایل.'); return Map<String,dynamic>.from(d); }
   static Future<List<Map<String,dynamic>>> getProducts() async { final r=await http.get(Uri.parse('$baseUrl/products'),headers:_headers(auth:true)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت محصولات.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
   static Future<Map<String,dynamic>> addProduct(Map<String,dynamic> product) async { final r=await http.post(Uri.parse('$baseUrl/products'),headers:_headers(auth:true),body:jsonEncode(product)); final d=jsonDecode(r.body); if(r.statusCode!=201)throw Exception(d['error']??'خطا در ثبت آگهی.'); return Map<String,dynamic>.from(d); }
-  static Future<List<String>> uploadImages(List<Uint8List> images,List<String> names) async { if(images.length!=names.length)throw Exception('اطلاعات عکس کامل نیست.'); final req=http.MultipartRequest('POST',Uri.parse('$baseUrl/upload-images')); if(_token!=null)req.headers['Authorization']='Bearer $_token'; for(var i=0;i<images.length;i++){req.files.add(http.MultipartFile.fromBytes('images',images[i],filename:names[i]));} final response=await req.send(); final body=await response.stream.bytesToString();
+  static Future<List<String>> uploadImages(List<Uint8List> images,List<String> names) async {
+    if(images.length!=names.length)throw Exception('اطلاعات عکس کامل نیست.');
+    if(images.isEmpty)throw Exception('حداقل یک عکس انتخاب کنید.');
+
+    Future<http.StreamedResponse> send() async {
+      final req=http.MultipartRequest('POST',Uri.parse('$baseUrl/upload-images'));
+      req.headers['Accept']='application/json';
+      if(_token!=null&&_token!.isNotEmpty)req.headers['Authorization']='Bearer $_token';
+      String mimeFor(String name) {
+        final ext = name.toLowerCase().split('.').last;
+        switch (ext) {
+          case 'png': return 'image/png';
+          case 'webp': return 'image/webp';
+          case 'gif': return 'image/gif';
+          case 'heic': return 'image/heic';
+          case 'heif': return 'image/heif';
+          case 'jpg':
+          case 'jpeg':
+          default: return 'image/jpeg';
+        }
+      }
+      for(var i=0;i<images.length;i++){
+        final mime = mimeFor(names[i]);
+        final parts = mime.split('/');
+        req.files.add(http.MultipartFile.fromBytes(
+          'images',
+          images[i],
+          filename: names[i],
+          contentType: MediaType(parts[0], parts[1]),
+        ));
+      }
+      return req.send().timeout(const Duration(seconds:90));
+    }
+
+    var response=await send();
+    var body=await response.stream.bytesToString();
+
+    // If the access token expired, refresh it once and retry the multipart upload.
+    if(response.statusCode==401 && _refreshToken!=null && _refreshToken!.isNotEmpty){
+      final refreshed=await refreshSession(_refreshToken!);
+      if(refreshed){
+        response=await send();
+        body=await response.stream.bytesToString();
+      }
+    }
+
     dynamic d;
     try { d=jsonDecode(body); } catch (_) {
-      final preview=body.length>180?body.substring(0,180):body;
+      final preview=body.length>220?body.substring(0,220):body;
       throw Exception('پاسخ نامعتبر از سرور (${response.statusCode}): $preview');
     }
-    if(response.statusCode!=201)throw Exception(d is Map ? (d['error']??'خطا در آپلود عکس‌ها.') : 'خطا در آپلود عکس‌ها.');
-    return List<String>.from(d is Map ? (d['urls']??[]) : []); }
+    if(response.statusCode!=201){
+      throw Exception(d is Map ? (d['error']??'خطا در آپلود عکس‌ها.') : 'خطا در آپلود عکس‌ها.');
+    }
+    final urls=d is Map ? d['urls'] : null;
+    if(urls is! List || urls.isEmpty)throw Exception('سرور عکس‌ها را آپلود نکرد.');
+    return List<String>.from(urls.map((x)=>x.toString()));
+  }
   static Future<void> incrementListingView(String id) async { try { await http.post(Uri.parse('$baseUrl/listings/$id/view')); } catch (_) {} }
   static Future<bool> toggleFavorite(String id) async { final r=await http.post(Uri.parse('$baseUrl/favorites/$id'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200&&r.statusCode!=201)throw Exception(d['error']??'خطا در علاقه‌مندی.'); return d['favorite']==true; }
   static Future<List<Map<String,dynamic>>> getFavorites() async { final r=await http.get(Uri.parse('$baseUrl/favorites'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت علاقه‌مندی‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
