@@ -12,8 +12,9 @@ const requireAdmin = require('./middlewares/adminAuth');
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 6 } });
 const IMAGE_BUCKET = 'listing-images';
+const AVATAR_BUCKET = 'profile-avatars';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -112,6 +113,26 @@ app.patch('/api/me', requireUser, async (req, res) => {
 
 
 
+app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'تصویر پروفایل انتخاب نشده است.' });
+    if (!req.file.mimetype.startsWith('image/')) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
+    const db=getSupabaseAdmin();
+    const buckets=await db.storage.listBuckets();
+    if(!buckets.data?.some(b=>b.name===AVATAR_BUCKET)){
+      const {error}=await db.storage.createBucket(AVATAR_BUCKET,{public:true,fileSizeLimit:'10MB',allowedMimeTypes:['image/jpeg','image/png','image/webp']});
+      if(error && !String(error.message||'').toLowerCase().includes('already')) throw error;
+    }
+    const ext=(req.file.originalname.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+    const path=`${req.user.id}/avatar.${ext}`;
+    const {error}=await db.storage.from(AVATAR_BUCKET).upload(path,req.file.buffer,{contentType:req.file.mimetype,upsert:true});
+    if(error)throw error;
+    const {data}=db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    await db.from('profiles').update({avatar_url:data.publicUrl,updated_at:new Date().toISOString()}).eq('id',req.user.id);
+    res.status(201).json({url:data.publicUrl});
+  } catch(e){console.error(e);res.status(500).json({error:'خطا در آپلود تصویر پروفایل.'});}
+});
+
 app.post('/api/conversations', requireUser, async (req, res) => {
   try {
     const listingId = String(req.body?.listing_id || '').trim();
@@ -176,6 +197,14 @@ app.post('/api/conversations/:id/messages', requireUser, async (req, res) => {
     await db.from('conversations').update({last_message_at:new Date().toISOString()}).eq('id',req.params.id);
     res.status(201).json(data);
   }catch(e){console.error(e);res.status(500).json({error:'خطا در ارسال پیام.'});}
+});
+
+app.get('/api/me/warnings', requireUser, async (req,res)=>{
+  try{const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').select('id,message,created_at,is_read').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(50);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت هشدارها.'});}
+});
+
+app.post('/api/reports', requireUser, async (req,res)=>{
+  try{const listingId=String(req.body?.listing_id||'').trim();const reason=String(req.body?.reason||'').trim().slice(0,500);if(!listingId||!reason)return res.status(400).json({error:'آگهی و دلیل گزارش الزامی است.'});const db=getSupabaseAdmin();const {data:listing}=await db.from('products').select('id').eq('id',listingId).maybeSingle();if(!listing)return res.status(404).json({error:'آگهی پیدا نشد.'});const {data,error}=await db.from('reports').insert([{listing_id:listingId,reporter_id:req.user.id,reason}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت گزارش.'});}
 });
 
 app.post('/api/admin/login', (req, res) => {
@@ -278,6 +307,11 @@ app.get('/api/listings', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
 
+app.post('/api/admin/users/:id/warnings', requireAdmin, async (req,res)=>{try{const message=String(req.body?.message||'').trim().slice(0,1000);if(!message)return res.status(400).json({error:'متن هشدار الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').insert([{user_id:req.params.id,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت هشدار.'});}});
+app.get('/api/admin/warnings', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').select('*').order('created_at',{ascending:false}).limit(200);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت هشدارها.'});}});
+app.get('/api/admin/reports', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('reports').select('*').order('created_at',{ascending:false}).limit(200);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت گزارش‌ها.'});}});
+app.patch('/api/admin/reports/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'reviewed');if(!['open','reviewed','dismissed'].includes(status))return res.status(400).json({error:'وضعیت گزارش نامعتبر است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('reports').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;res.json(data);}catch(e){res.status(500).json({error:'خطا در تغییر گزارش.'});}});
+
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
@@ -289,6 +323,19 @@ app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   } catch (e) { res.status(500).json({ error: 'خطا در دریافت آمار.' }); }
 });
 
+
+app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
+app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();await db.rpc('bazarek_grant_welcome_credit',{p_user_id:req.user.id,p_amount:100});const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
+app.get('/api/promotions/orders', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_orders').select('*,promotion_packages(title),products(title)').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت سفارش‌ها.'});}});
+app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='wallet',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
+let status='pending';if(payment_method==='wallet'){try{await db.rpc('bazarek_wallet_debit',{p_user_id:req.user.id,p_amount:pkg.price_afn,p_description:`خرید ${pkg.title}`,p_reference:package_id});status='paid';}catch(e){return res.status(400).json({error:'موجودی کیف پول کافی نیست.'});}}
+const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.user.id,listing_id,package_id,amount_afn:pkg.price_afn,payment_method,payment_reference:String(payment_reference).slice(0,200),status}]).select().single();if(error)throw error;
+if(status==='paid'){const now=Date.now();const {error:ue}=await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',listing_id);if(ue)throw ue;}res.status(201).json(order);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت سفارش ارتقای آگهی.'});}});
+app.get('/api/subscriptions', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('seller_subscriptions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(20);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت اشتراک‌ها.'});}});
+app.post('/api/subscriptions', requireUser, async (req,res)=>{try{const plans={basic:{price:500,days:30},pro:{price:900,days:30},business:{price:1500,days:30}};const plan=String(req.body?.plan||'');if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});const p=plans[plan];const db=getSupabaseAdmin();try{await db.rpc('bazarek_wallet_debit',{p_user_id:req.user.id,p_amount:p.price,p_description:`اشتراک ${plan}`,p_reference:plan});}catch(e){return res.status(400).json({error:'موجودی کیف پول کافی نیست.'});}const now=new Date();const end=new Date(now.getTime()+p.days*86400000);const {data,error}=await db.from('seller_subscriptions').insert([{user_id:req.user.id,plan,price_afn:p.price,starts_at:now.toISOString(),ends_at:end.toISOString(),status:'active'}]).select().single();if(error)throw error;await db.from('profiles').update({plan}).eq('id',req.user.id);res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در فعال‌سازی اشتراک.'});}});
+app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const [{data:orders,error:oe},{data:tx,error:te},{data:subs,error:se}]=await Promise.all([db.from('promotion_orders').select('id,user_id,listing_id,package_id,amount_afn,payment_method,status,created_at').order('created_at',{ascending:false}).limit(300),db.from('wallet_transactions').select('id,user_id,type,amount_afn,description,reference_id,created_at').order('created_at',{ascending:false}).limit(300),db.from('seller_subscriptions').select('*').order('created_at',{ascending:false}).limit(100)]);if(oe)throw oe;if(te)throw te;if(se)throw se;const paid=(orders||[]).filter(x=>x.status==='paid').reduce((a,x)=>a+Number(x.amount_afn||0),0);res.json({revenue_afn:paid,orders:orders||[],transactions:tx||[],subscriptions:subs||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آمار درآمد.'});}});
+app.post('/api/admin/wallets/:id/credit', requireAdmin, async (req,res)=>{try{const amount=Math.trunc(Number(req.body?.amount_afn||0));if(amount<=0)return res.status(400).json({error:'مبلغ نامعتبر است.'});const db=getSupabaseAdmin();const balance=await db.rpc('bazarek_wallet_credit',{p_user_id:req.params.id,p_amount:amount,p_type:'credit',p_description:String(req.body?.description||'شارژ کیف پول توسط مدیریت').slice(0,200),p_reference:'admin'});res.status(201).json({balance_afn:balance.data});}catch(e){console.error(e);res.status(500).json({error:'خطا در شارژ کیف پول.'});}});
+app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
 app.get('/api/products', requireUser, async (req, res) => {
   try {
     const db = getSupabaseAdmin();
@@ -346,6 +393,16 @@ app.post('/api/generate-ad', requireUser, async (req, res) => {
     const result = await model.generateContent(prompt);
     res.json({ adText: result.response.text() });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تولید آگهی.' }); }
+});
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled API error:', err);
+  if (err instanceof multer.MulterError) {
+    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'حجم هر عکس بیش از ۱۰ مگابایت است.' : 'خطا در ارسال فایل.';
+    return res.status(400).json({ error: msg });
+  }
+  if (!res.headersSent) return res.status(500).json({ error: 'خطای داخلی سرور.' });
+  next(err);
 });
 
 const PORT = process.env.PORT || 5000;
