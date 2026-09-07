@@ -50,6 +50,11 @@ class ApiService {
     }
     if(response.statusCode!=201)throw Exception(d is Map ? (d['error']??'خطا در آپلود عکس‌ها.') : 'خطا در آپلود عکس‌ها.');
     return List<String>.from(d is Map ? (d['urls']??[]) : []); }
+  static Future<void> incrementListingView(String id) async { try { await http.post(Uri.parse('$baseUrl/listings/$id/view')); } catch (_) {} }
+  static Future<bool> toggleFavorite(String id) async { final r=await http.post(Uri.parse('$baseUrl/favorites/$id'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200&&r.statusCode!=201)throw Exception(d['error']??'خطا در علاقه‌مندی.'); return d['favorite']==true; }
+  static Future<List<Map<String,dynamic>>> getFavorites() async { final r=await http.get(Uri.parse('$baseUrl/favorites'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت علاقه‌مندی‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
+  static Future<String> getServerVersion() async { final r=await http.get(Uri.parse('$baseUrl/version')); final d=_json(r); if(r.statusCode!=200)throw Exception('سرور بازارک به‌روز نیست.'); return (d['version']??'').toString(); }
+
   static Future<void> deleteProduct(String id) async { final r=await http.delete(Uri.parse('$baseUrl/products/$id'),headers:_headers(auth:true)); if(r.statusCode!=200)throw Exception(_json(r)['error']??'خطا در حذف آگهی.'); }
 
   static Future<Map<String,dynamic>> startConversation(String listingId) async {

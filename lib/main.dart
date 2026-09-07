@@ -56,19 +56,23 @@ class _HomeScreenState extends State<HomeScreen>{
     try{await ApiService.reportListing(p['id'].toString(),reason);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('گزارش شما ثبت شد و توسط مدیریت بررسی می‌شود.')));}catch(e){if(mounted)_msg(e);}
   }
 
-  void _details(Map<String,dynamic> p)=>showModalBottomSheet(context:context,isScrollControlled:true,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(20,20,20,32),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+  void _details(Map<String,dynamic> p){ ApiService.incrementListingView(p['id'].toString()); showModalBottomSheet(context:context,isScrollControlled:true,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(20,20,20,32),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     ImageGallery(images:_imageUrls(p['image_url']),height:230),const SizedBox(height:14),Text(p['title']??'',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
     Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[const Text('قیمت',style:TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
     if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('دسته‌بندی: ${p['category']}')),
+    if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 محل: ${p['location_text']}')),
+    if(p['is_negotiable']==true)const Padding(padding:EdgeInsets.only(top:8),child:Text('🤝 قیمت قابل مذاکره است.')),
+    Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} بازدید')),
     const SizedBox(height:12),
     Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text((p['seller_name']??'فروشنده بازارک').toString()),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('شماره تماس: ${p['seller_phone']}'):const Text('فروشنده در بازارک'))),
     const SizedBox(height:12),const Text('توضیحات',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text((p['description']??'توضیحی ثبت نشده است.').toString(),style:const TextStyle(height:1.6)),
     if(p['allow_chat']!=false) const SizedBox(height:18),
     if(p['allow_chat']!=false) SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>_openChat(p),icon:const Icon(Icons.chat_bubble_outline),label:const Text('چت با فروشنده'))),
     const SizedBox(height:8),
+    OutlinedButton.icon(onPressed:() async { final prefs=await SharedPreferences.getInstance(); if(prefs.getString('bazarek_token')==null){await _openLogin();return;} try{final fav=await ApiService.toggleFavorite(p['id'].toString()); if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(fav?'به علاقه‌مندی‌ها اضافه شد ❤️':'از علاقه‌مندی‌ها حذف شد.')));}catch(e){if(mounted)_msg(e);} },icon:const Icon(Icons.favorite_border),label:const Text('افزودن به علاقه‌مندی‌ها')),
+    const SizedBox(height:8),
     OutlinedButton.icon(onPressed:()=>_report(p),icon:const Icon(Icons.flag_outlined),label:const Text('گزارش این آگهی')),
-  ]))));
-}
+  ])))); }
 
 List<String> _imageUrls(dynamic raw){
   final s=(raw??'').toString().trim(); if(s.isEmpty)return [];
@@ -596,6 +600,8 @@ class _Bubble extends StatelessWidget{
 
 class AddProductSheet extends StatefulWidget{const AddProductSheet({super.key});@override State<AddProductSheet> createState()=>_AddProductSheetState();}
 class _AddProductSheetState extends State<AddProductSheet> {
+  final contactPhone = TextEditingController();
+  final locationText = TextEditingController();
   final title = TextEditingController();
   final price = TextEditingController();
   final stock = TextEditingController(text: '1');
@@ -607,7 +613,11 @@ class _AddProductSheetState extends State<AddProductSheet> {
   bool uploading = false;
   bool allowChat = true;
   bool showPhone = false;
+  bool isNegotiable = false;
   final picker = ImagePicker();
+  @override void initState(){super.initState();_prefillPhone();}
+  Future<void> _prefillPhone() async { try { final p=await ApiService.getProfile(); if(mounted && contactPhone.text.isEmpty) setState(()=>contactPhone.text=(p['phone']??'').toString()); } catch (_) {} }
+
   final cats = ['موبایل', 'موتر', 'املاک', 'لوازم برقی', 'خانه', 'لباس', 'خدمات', 'کار', 'حیوانات', 'سایر'];
 
   Future<void> _pickImages() async {
@@ -734,10 +744,15 @@ class _AddProductSheetState extends State<AddProductSheet> {
               decoration: const InputDecoration(labelText: 'تعداد', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 10),
+            TextField(controller:contactPhone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تماس آگهی',hintText:'07XXXXXXXX',prefixIcon:Icon(Icons.phone_outlined),border:OutlineInputBorder())),
+            const SizedBox(height:10),
+            TextField(controller:locationText,decoration:const InputDecoration(labelText:'محل آگهی',hintText:'مثلاً کابل، کارته چهار',prefixIcon:Icon(Icons.location_on_outlined),border:OutlineInputBorder())),
+            const SizedBox(height:10),
             Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
               const Text('راه‌های ارتباط با خریدار',style:TextStyle(fontWeight:FontWeight.bold)),
               SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('فعال بودن چت با خریدار'),subtitle:const Text('خریداران می‌توانند از داخل آگهی به شما پیام بدهند.'),value:allowChat,onChanged:(v)=>setState(()=>allowChat=v)),
-              SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('نمایش شماره تماس'),subtitle:const Text('شماره ثبت‌شده در پروفایل شما برای خریدار نمایش داده می‌شود.'),value:showPhone,onChanged:(v)=>setState(()=>showPhone=v)),
+              SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('نمایش شماره تماس'),subtitle:const Text('شماره واردشده در همین آگهی برای خریدار نمایش داده می‌شود.'),value:showPhone,onChanged:(v)=>setState(()=>showPhone=v)),
+              SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('قابل مذاکره'),subtitle:const Text('قیمت قابل مذاکره است.'),value:isNegotiable,onChanged:(v)=>setState(()=>isNegotiable=v)),
             ]))),
             const SizedBox(height: 10),
             TextField(
@@ -773,6 +788,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
                         'image_url': jsonEncode(imageUrls),
                         'allow_chat': allowChat,
                         'show_phone': showPhone,
+                        'contact_phone': contactPhone.text.trim(),
+                        'location_text': locationText.text.trim(),
+                        'is_negotiable': isNegotiable,
                       });
                     },
               icon: const Icon(Icons.publish),
