@@ -201,8 +201,138 @@ class _ProfileScreenState extends State<ProfileScreen>{
   @override void initState(){super.initState();_load();}
   Future<void> _load()async{try{final r=await Future.wait([ApiService.getProfile(),ApiService.getMyWarnings()]);final p=r[0] as Map<String,dynamic>;if(mounted)setState((){profile=p;warnings=r[1] as List<Map<String,dynamic>>;name.text=(p['full_name']??'').toString();shop.text=(p['shop_name']??'').toString();phone.text=(p['phone']??'').toString();city.text=(p['city']??'').toString();loading=false;});}catch(e){if(mounted){setState(()=>loading=false);ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}}}
   Future<void> _save()async{setState(()=>saving=true);try{await ApiService.updateProfile(fullName:name.text.trim(),shopName:shop.text.trim(),phone:phone.text.trim(),city:city.text.trim());if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('پروفایل ذخیره شد.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>saving=false);}}
-  Future<void> _avatar()async{try{final x=await picker.pickImage(source:ImageSource.gallery,imageQuality:80,maxWidth:1200);if(x==null)return;final b=await x.readAsBytes();setState(()=>avatarBytes=b);setState(()=>uploading=true);final url=await ApiService.uploadAvatar(b,x.name);setState(()=>profile={...profile,'avatar_url':url,'avatar_url':url});if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تصویر پروفایل به‌روزرسانی شد.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>uploading=false);}}
-  @override Widget build(BuildContext context){if(loading)return const Scaffold(body:Center(child:CircularProgressIndicator()));final avatar=(profile['avatar_url']??'').toString();return Scaffold(appBar:AppBar(title:const Text('پروفایل من')),body:ListView(padding:const EdgeInsets.all(18),children:[Center(child:Stack(alignment:Alignment.bottomRight,children:[CircleAvatar(radius:58,backgroundImage:avatarBytes!=null?MemoryImage(avatarBytes!):avatar.isNotEmpty?NetworkImage(avatar):null,child:avatarBytes==null&&avatar.isEmpty?const Icon(Icons.person,size:58):null),FloatingActionButton.small(onPressed:uploading?null:_avatar,child:uploading?const SizedBox(width:18,height:18,child:CircularProgressIndicator()):const Icon(Icons.camera_alt))])),const SizedBox(height:22),TextField(controller:name,decoration:const InputDecoration(labelText:'نام و نام خانوادگی',prefixIcon:Icon(Icons.person_outline),border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:shop,decoration:const InputDecoration(labelText:'نام دکان / کسب‌وکار',prefixIcon:Icon(Icons.store_outlined),border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تلفن',prefixIcon:Icon(Icons.phone_outlined),hintText:'07XXXXXXXX',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:city,decoration:const InputDecoration(labelText:'شهر / ولایت',prefixIcon:Icon(Icons.location_on_outlined),border:OutlineInputBorder())),const SizedBox(height:16),FilledButton.icon(onPressed:saving?null:_save,icon:const Icon(Icons.save_outlined),label:Text(saving?'در حال ذخیره…':'ذخیره پروفایل')),const SizedBox(height:24),if(warnings.isNotEmpty)Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Text('هشدارهای مدیریت',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const SizedBox(height:8),...warnings.map((w)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.warning_amber_rounded),title:Text((w['message']??'').toString()),subtitle:Text((w['created_at']??'').toString())))]))),const SizedBox(height:16),Card(child:const Padding(padding:EdgeInsets.all(14),child:Text('نکته امنیتی: شماره تلفن شما فقط در آگهی‌هایی نمایش داده می‌شود که گزینه «نمایش شماره تماس» را فعال کرده باشید.')))]);}
+  Future<void> _avatar()async{try{final x=await picker.pickImage(source:ImageSource.gallery,imageQuality:80,maxWidth:1200);if(x==null)return;final b=await x.readAsBytes();setState(()=>avatarBytes=b);setState(()=>uploading=true);final url=await ApiService.uploadAvatar(b,x.name);setState(()=>profile={...profile,'avatar_url':url});if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تصویر پروفایل به‌روزرسانی شد.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>uploading=false);}}
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final avatar = (profile['avatar_url'] ?? '').toString();
+    ImageProvider<Object>? avatarImage;
+    if (avatarBytes != null) {
+      avatarImage = MemoryImage(avatarBytes!);
+    } else if (avatar.isNotEmpty) {
+      avatarImage = NetworkImage(avatar);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('پروفایل من')),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          Center(
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                CircleAvatar(
+                  radius: 58,
+                  backgroundImage: avatarImage,
+                  child: avatarImage == null
+                      ? const Icon(Icons.person, size: 58)
+                      : null,
+                ),
+                FloatingActionButton.small(
+                  onPressed: uploading ? null : _avatar,
+                  child: uploading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(),
+                        )
+                      : const Icon(Icons.camera_alt),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          TextField(
+            controller: name,
+            decoration: const InputDecoration(
+              labelText: 'نام و نام خانوادگی',
+              prefixIcon: Icon(Icons.person_outline),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: shop,
+            decoration: const InputDecoration(
+              labelText: 'نام دکان / کسب‌وکار',
+              prefixIcon: Icon(Icons.store_outlined),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: phone,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'شماره تلفن',
+              prefixIcon: Icon(Icons.phone_outlined),
+              hintText: '07XXXXXXXX',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: city,
+            decoration: const InputDecoration(
+              labelText: 'شهر / ولایت',
+              prefixIcon: Icon(Icons.location_on_outlined),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: saving ? null : _save,
+            icon: const Icon(Icons.save_outlined),
+            label: Text(saving ? 'در حال ذخیره…' : 'ذخیره پروفایل'),
+          ),
+          const SizedBox(height: 24),
+          if (warnings.isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'هشدارهای مدیریت',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...warnings.map(
+                      (w) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.warning_amber_rounded),
+                        title: Text((w['message'] ?? '').toString()),
+                        subtitle: Text((w['created_at'] ?? '').toString()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 16),
+          Card(
+            child: const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'نکته امنیتی: شماره تلفن شما فقط در آگهی‌هایی نمایش داده می‌شود که گزینه «نمایش شماره تماس» را فعال کرده باشید.',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 }
 
 class DashboardScreen extends StatefulWidget { const DashboardScreen({super.key}); @override State<DashboardScreen> createState()=>_DashboardScreenState(); }
