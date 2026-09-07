@@ -30,8 +30,9 @@ function requireConfig(res) {
   return true;
 }
 
-app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.0.0' }));
-app.get('/api/health', (_, res) => res.json({ ok: true }));
+app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.1.0' }));
+app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.1.0' }));
+app.get('/api/version', (_, res) => res.json({ version: '2.1.0', features: ['warnings','reports','image-upload','wallet','promotions','favorites','listing-views','contact-phone'] }));
 
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -65,8 +66,11 @@ app.post('/api/upload-images', requireUser, upload.array('images', 6), async (re
     const db = getSupabaseAdmin();
     const buckets = await db.storage.listBuckets();
     if (!buckets.data?.some(b => b.name === IMAGE_BUCKET)) {
-      const { error: bucketError } = await db.storage.createBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '5MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif'] });
+      const { error: bucketError } = await db.storage.createBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif'] });
       if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
+    } else {
+      const { error: bucketUpdateError } = await db.storage.updateBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif'] });
+      if (bucketUpdateError) console.warn('Could not update image bucket settings:', bucketUpdateError.message);
     }
     const urls = [];
     for (const file of files) {
@@ -292,7 +296,7 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,allow_chat,show_phone').eq('is_active', true).order('is_pinned', { ascending: false }).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,allow_chat,show_phone,contact_phone,location_text,is_negotiable,views_count').eq('is_active', true).order('is_pinned', { ascending: false }).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
@@ -303,9 +307,13 @@ app.get('/api/listings', async (req, res) => {
     const vendorIds = [...new Set(rows.map(x => x.vendor_id).filter(Boolean))];
     const { data: profiles } = vendorIds.length ? await db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : { data: [] };
     const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
-    res.json(rows.map(x => ({ ...x, seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک', seller_phone: x.show_phone ? (pm[x.vendor_id]?.phone || '') : '' })));
+    res.json(rows.map(x => ({ ...x, seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' })));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
+
+app.post('/api/listings/:id/view', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.rpc('bazarek_increment_listing_view',{p_listing_id:req.params.id});if(error)throw error;res.json({views_count:Number(data||0)});}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت بازدید.'});}});
+app.get('/api/favorites', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('favorites').select('listing_id,created_at,products(id,title,price,image_url,category,is_featured,is_pinned)').eq('user_id',req.user.id).order('created_at',{ascending:false});if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت علاقه‌مندی‌ها.'});}});
+app.post('/api/favorites/:id', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data:existing}=await db.from('favorites').select('listing_id').eq('user_id',req.user.id).eq('listing_id',req.params.id).maybeSingle();if(existing){await db.from('favorites').delete().eq('user_id',req.user.id).eq('listing_id',req.params.id);return res.json({favorite:false});}const {error}=await db.from('favorites').insert([{user_id:req.user.id,listing_id:req.params.id}]);if(error)throw error;res.status(201).json({favorite:true});}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر علاقه‌مندی.'});}});
 
 app.post('/api/admin/users/:id/warnings', requireAdmin, async (req,res)=>{try{const message=String(req.body?.message||'').trim().slice(0,1000);if(!message)return res.status(400).json({error:'متن هشدار الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').insert([{user_id:req.params.id,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت هشدار.'});}});
 app.get('/api/admin/warnings', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').select('*').order('created_at',{ascending:false}).limit(200);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت هشدارها.'});}});
@@ -347,10 +355,10 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0, allow_chat = true, show_phone = false } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', is_negotiable = false } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -359,7 +367,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock', 'allow_chat', 'show_phone'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'is_negotiable'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
