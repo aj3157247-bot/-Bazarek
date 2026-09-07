@@ -73,7 +73,6 @@ class _HomeScreenState extends State<HomeScreen>{
     const SizedBox(height:8),
     OutlinedButton.icon(onPressed:()=>_report(p),icon:const Icon(Icons.flag_outlined),label:const Text('گزارش این آگهی')),
   ])))); }
-}
 
 List<String> _imageUrls(dynamic raw){
   final s=(raw??'').toString().trim(); if(s.isEmpty)return [];
