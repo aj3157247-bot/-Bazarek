@@ -53,7 +53,7 @@ app.post('/api/auth/register', async (req, res) => {
     await db.from('profiles').upsert({ id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), phone: phone.trim() }, { onConflict: 'id' });
     const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email: normalizedEmail, password });
     if (loginError || !signedIn.session) return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
-    res.status(201).json({ token: signedIn.session.access_token, user });
+    res.status(201).json({ token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token, user });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
 });
 
@@ -66,10 +66,10 @@ app.post('/api/upload-images', requireUser, upload.array('images', 6), async (re
     const db = getSupabaseAdmin();
     const buckets = await db.storage.listBuckets();
     if (!buckets.data?.some(b => b.name === IMAGE_BUCKET)) {
-      const { error: bucketError } = await db.storage.createBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif'] });
+      const { error: bucketError } = await db.storage.createBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif'] });
       if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
     } else {
-      const { error: bucketUpdateError } = await db.storage.updateBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif'] });
+      const { error: bucketUpdateError } = await db.storage.updateBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif'] });
       if (bucketUpdateError) console.warn('Could not update image bucket settings:', bucketUpdateError.message);
     }
     const urls = [];
@@ -82,7 +82,11 @@ app.post('/api/upload-images', requireUser, upload.array('images', 6), async (re
       urls.push(data.publicUrl);
     }
     res.status(201).json({ urls });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در آپلود عکس‌ها.' }); }
+  } catch (e) {
+    console.error('Listing image upload error:', e);
+    const detail = String(e?.message || '').trim();
+    res.status(500).json({ error: detail ? `خطا در آپلود عکس‌ها: ${detail}` : 'خطا در آپلود عکس‌ها.' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -94,6 +98,20 @@ app.post('/api/auth/login', async (req, res) => {
     if (error || !data.session) return res.status(401).json({ error: 'ایمیل یا رمز عبور اشتباه است.' });
     res.json({ token: data.session.access_token, user: data.user });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ورود.' }); }
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    if (!requireConfig(res)) return;
+    const refreshToken = String(req.body?.refresh_token || '').trim();
+    if (!refreshToken) return res.status(400).json({ error: 'توکن تمدید ارسال نشده است.' });
+    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data.session) return res.status(401).json({ error: 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.' });
+    res.json({ token: data.session.access_token, refresh_token: data.session.refresh_token, user: data.user });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در تمدید نشست.' });
+  }
 });
 
 app.get('/api/me', requireUser, async (req, res) => {
