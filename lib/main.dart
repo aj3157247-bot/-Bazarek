@@ -21,7 +21,33 @@ class BazarekApp extends StatelessWidget {
 class StartupScreen extends StatefulWidget { const StartupScreen({super.key}); @override State<StartupScreen> createState()=>_StartupScreenState(); }
 class _StartupScreenState extends State<StartupScreen> {
   @override void initState(){super.initState();_start();}
-  Future<void> _start() async { final p=await SharedPreferences.getInstance(); final t=p.getString('bazarek_token'); if(t!=null&&t.isNotEmpty){ApiService.setToken(t);try{await ApiService.getProfile();if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const HomeScreen()));return;}catch(_){await p.remove('bazarek_token');ApiService.setToken(null);}}if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const HomeScreen())); }
+  Future<void> _start() async {
+    final p = await SharedPreferences.getInstance();
+    final token = p.getString('bazarek_token');
+    final refresh = p.getString('bazarek_refresh_token');
+    if (token != null && token.isNotEmpty) {
+      ApiService.setToken(token);
+      ApiService.setRefreshToken(refresh);
+      try {
+        await ApiService.getProfile();
+        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        return;
+      } catch (_) {
+        // Access tokens expire. Try the saved refresh token before asking the user to log in again.
+        if (refresh != null && refresh.isNotEmpty && await ApiService.refreshSession(refresh)) {
+          await p.setString('bazarek_token', ApiService.currentToken!);
+          final newRefresh = ApiService.refreshToken;
+          if (newRefresh != null && newRefresh.isNotEmpty) await p.setString('bazarek_refresh_token', newRefresh);
+          if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+          return;
+        }
+        await p.remove('bazarek_token');
+        await p.remove('bazarek_refresh_token');
+        ApiService.clearSession();
+      }
+    }
+    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+  }
   @override Widget build(BuildContext context)=>const Scaffold(body:Center(child:CircularProgressIndicator()));
 }
 
@@ -73,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen>{
     const SizedBox(height:8),
     OutlinedButton.icon(onPressed:()=>_report(p),icon:const Icon(Icons.flag_outlined),label:const Text('گزارش این آگهی')),
   ])))); }
+}
 
 List<String> _imageUrls(dynamic raw){
   final s=(raw??'').toString().trim(); if(s.isEmpty)return [];
@@ -149,7 +176,7 @@ class AuthScaffold extends StatelessWidget {
 }
 
 class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginScreenState(); }
-class _LoginScreenState extends State<LoginScreen>{final email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.login(email.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',t);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));@override Widget build(BuildContext context)=>AuthScaffold(title:'ورود به بازارک',children:[TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',prefixIcon:Icon(Icons.email_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:const Text('حساب ندارید؟ ثبت‌نام کنید')),const Divider(height:28),TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('ورود مدیریت'))]);}
+class _LoginScreenState extends State<LoginScreen>{final email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.login(email.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',t);final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));@override Widget build(BuildContext context)=>AuthScaffold(title:'ورود به بازارک',children:[TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',prefixIcon:Icon(Icons.email_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:const Text('حساب ندارید؟ ثبت‌نام کنید')),const Divider(height:28),TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('ورود مدیریت'))]);}
 
 class AdminLoginScreen extends StatefulWidget{const AdminLoginScreen({super.key});@override State<AdminLoginScreen> createState()=>_AdminLoginScreenState();}
 class _AdminLoginScreenState extends State<AdminLoginScreen>{final email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.adminLogin(email.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_admin_token',t);if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>AdminDashboardScreen(token:t)));}catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext context)=>AuthScaffold(title:'پنل مدیریت بازارک',children:[const Text('این بخش فقط برای مدیر سیستم است.',textAlign:TextAlign.center),const SizedBox(height:20),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل مدیر',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور مدیر',border:OutlineInputBorder())),const SizedBox(height:18),SizedBox(height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود امن به مدیریت')))]);}
@@ -180,7 +207,7 @@ class AdminMonetizationScreen extends StatefulWidget { final String token; const
 class _AdminMonetizationScreenState extends State<AdminMonetizationScreen>{Map<String,dynamic> data={};bool loading=true;@override void initState(){super.initState();_load();}Future<void> _load()async{try{final d=await ApiService.adminMonetization(widget.token);if(mounted)setState(()=>data=d);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}Future<void> _status(String id,String status)async{try{await ApiService.adminSetPromotionOrder(widget.token,id,status);await _load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}}@override Widget build(BuildContext context){final orders=List<Map<String,dynamic>>.from((data['orders']??[]).map((e)=>Map<String,dynamic>.from(e)));return Scaffold(appBar:AppBar(title:const Text('درآمد بازارک'),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[Card(child:ListTile(leading:const Icon(Icons.payments),title:const Text('درآمد ثبت‌شده'),trailing:Text('${data['revenue_afn']??0} AFN',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)))),const SizedBox(height:16),const Text('سفارش‌های تبلیغاتی',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),...orders.map((o)=>Card(child:ListTile(title:Text('${o['amount_afn']} AFN • ${o['package_id']}'),subtitle:Text('${o['payment_method']} • ${o['status']}'),trailing:o['status']=='pending'?PopupMenuButton<String>(onSelected:(v)=>_status(o['id'].toString(),v),itemBuilder:(_)=>const[PopupMenuItem(value:'paid',child:Text('تأیید پرداخت')),PopupMenuItem(value:'rejected',child:Text('رد پرداخت'))]):const Icon(Icons.check_circle_outline))))]));}}
 
 class RegisterScreen extends StatefulWidget { const RegisterScreen({super.key}); @override State<RegisterScreen> createState()=>_RegisterScreenState(); }
-class _RegisterScreenState extends State<RegisterScreen>{final name=TextEditingController(),shop=TextEditingController(),phone=TextEditingController(),email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _register()async{if(password.text.length<8){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('رمز عبور باید حداقل ۸ کاراکتر باشد.')));return;}setState(()=>loading=true);try{final d=await ApiService.register(email:email.text.trim(),password:password.text,fullName:name.text,shopName:shop.text,phone:phone.text);final token=d['token'];if(token!=null){final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',token.toString());if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}else{throw Exception('حساب ساخته نشد. لطفاً دوباره تلاش کنید.');}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext context)=>AuthScaffold(title:'ساخت حساب',children:[TextField(controller:name,decoration:const InputDecoration(labelText:'نام شما',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:shop,decoration:const InputDecoration(labelText:'نام دکان / کسب‌وکار',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تماس',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور (حداقل ۸ کاراکتر)',border:OutlineInputBorder())),const SizedBox(height:18),SizedBox(height:52,child:FilledButton(onPressed:loading?null:_register,child:loading?const CircularProgressIndicator():const Text('ساخت حساب و ورود')))]);}
+class _RegisterScreenState extends State<RegisterScreen>{final name=TextEditingController(),shop=TextEditingController(),phone=TextEditingController(),email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _register()async{if(password.text.length<8){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('رمز عبور باید حداقل ۸ کاراکتر باشد.')));return;}setState(()=>loading=true);try{final d=await ApiService.register(email:email.text.trim(),password:password.text,fullName:name.text,shopName:shop.text,phone:phone.text);final token=d['token'];if(token!=null){final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',token.toString());final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}else{throw Exception('حساب ساخته نشد. لطفاً دوباره تلاش کنید.');}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext context)=>AuthScaffold(title:'ساخت حساب',children:[TextField(controller:name,decoration:const InputDecoration(labelText:'نام شما',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:shop,decoration:const InputDecoration(labelText:'نام دکان / کسب‌وکار',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تماس',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور (حداقل ۸ کاراکتر)',border:OutlineInputBorder())),const SizedBox(height:18),SizedBox(height:52,child:FilledButton(onPressed:loading?null:_register,child:loading?const CircularProgressIndicator():const Text('ساخت حساب و ورود')))]);}
 
 
 class MonetizationScreen extends StatefulWidget { const MonetizationScreen({super.key}); @override State<MonetizationScreen> createState()=>_MonetizationScreenState(); }
@@ -295,6 +322,23 @@ class _ProfileScreenState extends State<ProfileScreen>{
             icon: const Icon(Icons.save_outlined),
             label: Text(saving ? 'در حال ذخیره…' : 'ذخیره پروفایل'),
           ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final p = await SharedPreferences.getInstance();
+              await p.remove('bazarek_token');
+              await p.remove('bazarek_refresh_token');
+              ApiService.clearSession();
+              if (!mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+                (_) => false,
+              );
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('خروج از حساب'),
+          ),
           const SizedBox(height: 24),
           if (warnings.isNotEmpty)
             Card(
@@ -400,7 +444,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _logout() async {
     final p = await SharedPreferences.getInstance();
     await p.remove('bazarek_token');
-    ApiService.setToken(null);
+    await p.remove('bazarek_refresh_token');
+    ApiService.clearSession();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -641,14 +686,28 @@ class _AddProductSheetState extends State<AddProductSheet> {
     }
   }
 
+  void _removeImage(int index) {
+    if (index < 0 || index >= imageBytes.length) return;
+    setState(() {
+      imageBytes.removeAt(index);
+      imageNames.removeAt(index);
+      // The uploaded URL list no longer matches the selected files, so force a re-upload.
+      imageUrls = [];
+    });
+  }
+
   Future<void> _uploadImages() async {
     if (imageBytes.isEmpty) return;
     setState(() => uploading = true);
     try {
-      imageUrls = await ApiService.uploadImages(imageBytes, imageNames);
-      if (mounted) setState(() {});
+      final urls = await ApiService.uploadImages(imageBytes, imageNames);
+      if (!mounted) return;
+      setState(() => imageUrls = urls);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${urls.length} عکس با موفقیت آپلود شد.')),
+      );
     } catch (e) {
-      _msg(e);
+      if (mounted) _msg(e);
     } finally {
       if (mounted) setState(() => uploading = false);
     }
@@ -673,7 +732,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
           children: [
             const Text('ثبت آگهی', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('حداکثر ۶ عکس می‌توانید برای هر آگهی اضافه کنید.'),
+            const Text('حداکثر ۶ عکس می‌توانید برای هر آگهی اضافه کنید. برای حذف هر عکس، روی × گوشه آن بزنید.'),
             const SizedBox(height: 14),
             InkWell(
               onTap: _pickImages,
@@ -701,9 +760,32 @@ class _AddProductSheetState extends State<AddProductSheet> {
                           crossAxisSpacing: 8,
                           mainAxisSpacing: 8,
                         ),
-                        itemBuilder: (_, i) => ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.memory(imageBytes[i], fit: BoxFit.cover),
+                        itemBuilder: (_, i) => Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.memory(imageBytes[i], fit: BoxFit.cover),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: Material(
+                                color: Colors.black54,
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: uploading ? null : () => _removeImage(i),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(Icons.close, color: Colors.white, size: 18),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
               ),

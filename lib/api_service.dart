@@ -13,11 +13,15 @@ class ApiService {
   static Future<http.Response> _send(http.Response r) async => r;
   static const String baseUrl = 'https://bazarek.onrender.com/api';
   static String? _token;
+  static String? _refreshToken;
   static Map<String, String> _headers({bool auth = false}) => {
     'Content-Type': 'application/json',
     if (auth && _token != null) 'Authorization': 'Bearer $_token',
   };
   static void setToken(String? token) => _token = token;
+  static void setRefreshToken(String? token) => _refreshToken = token;
+  static String? get currentToken => _token;
+  static String? get refreshToken => _refreshToken;
   static String? get currentUserId { try { if (_token == null) return null; final parts=_token!.split('.'); if(parts.length<2)return null; final payload=utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))); final d=jsonDecode(payload); return d['sub']?.toString(); } catch (_) { return null; } }
 
   static Future<String> adminLogin(String email, String password) async {
@@ -37,8 +41,10 @@ class ApiService {
   static Future<void> adminBlockUser(String token,String id,{required bool blocked,int durationDays=0,String reason=''}) async { final r=await http.patch(Uri.parse('$baseUrl/admin/users/$id/block'),headers:_adminHeaders(token),body:jsonEncode({'blocked':blocked,'duration_days':durationDays,'reason':reason})); if(r.statusCode!=200)throw Exception(_json(r)['error']??'خطا در تغییر وضعیت کاربر.'); }
 
   static Future<List<Map<String,dynamic>>> getListings({String q='',String category=''}) async { final uri=Uri.parse('$baseUrl/listings').replace(queryParameters:{if(q.trim().isNotEmpty)'q':q.trim(),if(category.trim().isNotEmpty)'category':category.trim()}); final r=await http.get(uri,headers:_headers()); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت آگهی‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
-  static Future<String> login(String email,String password) async { final r=await http.post(Uri.parse('$baseUrl/auth/login'),headers:_headers(),body:jsonEncode({'email':email,'password':password})); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'ورود ناموفق بود.'); _token=d['token']; return _token!; }
-  static Future<Map<String,dynamic>> register({required String email,required String password,String fullName='',String shopName='',String phone=''}) async { final r=await http.post(Uri.parse('$baseUrl/auth/register'),headers:_headers(),body:jsonEncode({'email':email,'password':password,'full_name':fullName,'shop_name':shopName,'phone':phone})); final d=jsonDecode(r.body); if(r.statusCode!=201&&r.statusCode!=200)throw Exception(d['error']??'ثبت‌نام ناموفق بود.'); if(d['token']!=null)_token=d['token']; return Map<String,dynamic>.from(d); }
+  static Future<String> login(String email,String password) async { final r=await http.post(Uri.parse('$baseUrl/auth/login'),headers:_headers(),body:jsonEncode({'email':email,'password':password})); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'ورود ناموفق بود.'); _token=d['token']?.toString(); _refreshToken=d['refresh_token']?.toString(); if(_token==null||_token!.isEmpty)throw Exception('ورود ناموفق بود.'); return _token!; }
+  static Future<Map<String,dynamic>> register({required String email,required String password,String fullName='',String shopName='',String phone=''}) async { final r=await http.post(Uri.parse('$baseUrl/auth/register'),headers:_headers(),body:jsonEncode({'email':email,'password':password,'full_name':fullName,'shop_name':shopName,'phone':phone})); final d=jsonDecode(r.body); if(r.statusCode!=201&&r.statusCode!=200)throw Exception(d['error']??'ثبت‌نام ناموفق بود.'); if(d['token']!=null)_token=d['token'].toString(); if(d['refresh_token']!=null)_refreshToken=d['refresh_token'].toString(); return Map<String,dynamic>.from(d); }
+  static Future<bool> refreshSession(String refreshToken) async { try { final r=await http.post(Uri.parse('$baseUrl/auth/refresh'),headers:_headers(),body:jsonEncode({'refresh_token':refreshToken})); final d=_json(r); if(r.statusCode!=200||d is! Map||d['token']==null)return false; _token=d['token'].toString(); _refreshToken=(d['refresh_token']??refreshToken).toString(); return true; } catch (_) { return false; } }
+  static void clearSession(){_token=null;_refreshToken=null;}
   static Future<Map<String,dynamic>> getProfile() async { final r=await http.get(Uri.parse('$baseUrl/me'),headers:_headers(auth:true)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت پروفایل.'); return Map<String,dynamic>.from(d); }
   static Future<List<Map<String,dynamic>>> getProducts() async { final r=await http.get(Uri.parse('$baseUrl/products'),headers:_headers(auth:true)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت محصولات.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
   static Future<Map<String,dynamic>> addProduct(Map<String,dynamic> product) async { final r=await http.post(Uri.parse('$baseUrl/products'),headers:_headers(auth:true),body:jsonEncode(product)); final d=jsonDecode(r.body); if(r.statusCode!=201)throw Exception(d['error']??'خطا در ثبت آگهی.'); return Map<String,dynamic>.from(d); }
