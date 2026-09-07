@@ -30,9 +30,9 @@ function requireConfig(res) {
   return true;
 }
 
-app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.1.0' }));
-app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.1.0' }));
-app.get('/api/version', (_, res) => res.json({ version: '2.1.0', features: ['warnings','reports','image-upload','wallet','promotions','favorites','listing-views','contact-phone'] }));
+app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
+app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
+app.get('/api/version', (_, res) => res.json({ version: '2.2.0', features: ['warnings','reports','image-upload','wallet','promotions','favorites','listing-views','contact-phone'] }));
 
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -331,7 +331,12 @@ app.get('/api/listings', async (req, res) => {
     if (category) query = query.eq('category', category);
     const { data, error } = await query;
     if (error) throw error;
-    const rows = data || [];
+    const now = Date.now();
+    const rows = (data || []).map(x => ({
+      ...x,
+      is_featured: x.is_featured === true && (!x.featured_until || new Date(x.featured_until).getTime() > now),
+      is_pinned: x.is_pinned === true && (!x.pinned_until || new Date(x.pinned_until).getTime() > now),
+    })).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || Number(b.is_featured) - Number(a.is_featured) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const vendorIds = [...new Set(rows.map(x => x.vendor_id).filter(Boolean))];
     const { data: profiles } = vendorIds.length ? await db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : { data: [] };
     const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
@@ -360,13 +365,27 @@ app.get('/api/admin/stats', requireAdmin, async (_, res) => {
 });
 
 
+app.get('/api/payment-info', requireUser, async (_,res)=>{
+  res.json({
+    methods: ['wallet','bank_transfer'],
+    bank: {
+      name: process.env.PAYMENT_BANK_NAME || 'حساب بانکی بازارک',
+      account_name: process.env.PAYMENT_ACCOUNT_NAME || '',
+      account_number: process.env.PAYMENT_ACCOUNT_NUMBER || '',
+      branch: process.env.PAYMENT_BANK_BRANCH || '',
+      swift_code: process.env.PAYMENT_SWIFT_CODE || ''
+    }
+  });
+});
+
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
 app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();await db.rpc('bazarek_grant_welcome_credit',{p_user_id:req.user.id,p_amount:100});const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
 app.get('/api/promotions/orders', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_orders').select('*,promotion_packages(title),products(title)').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت سفارش‌ها.'});}});
-app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='wallet',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
-let status='pending';if(payment_method==='wallet'){try{await db.rpc('bazarek_wallet_debit',{p_user_id:req.user.id,p_amount:pkg.price_afn,p_description:`خرید ${pkg.title}`,p_reference:package_id});status='paid';}catch(e){return res.status(400).json({error:'موجودی کیف پول کافی نیست.'});}}
-const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.user.id,listing_id,package_id,amount_afn:pkg.price_afn,payment_method,payment_reference:String(payment_reference).slice(0,200),status}]).select().single();if(error)throw error;
-if(status==='paid'){const now=Date.now();const {error:ue}=await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',listing_id);if(ue)throw ue;}res.status(201).json(order);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت سفارش ارتقای آگهی.'});}});
+app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='bank_transfer',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});if(Number(pkg.price_afn||0)<=0)return res.status(400).json({error:'این بسته تبلیغاتی قیمت معتبر ندارد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
+if(!['manual','bank_transfer'].includes(payment_method))return res.status(400).json({error:'برای فعال‌سازی تبلیغ باید مبلغ را به حساب بازارک انتقال دهید و منتظر تأیید مدیریت بمانید.'});
+const reference=String(payment_reference||'').trim();if(!reference)return res.status(400).json({error:'شماره پیگیری/رسید انتقال بانکی را وارد کنید.'});
+const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.user.id,listing_id,package_id,amount_afn:pkg.price_afn,payment_method:'manual',payment_reference:reference.slice(0,200),status:'pending'}]).select().single();if(error)throw error;
+res.status(201).json(order);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت سفارش ارتقای آگهی.'});}});
 app.get('/api/subscriptions', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('seller_subscriptions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(20);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت اشتراک‌ها.'});}});
 app.post('/api/subscriptions', requireUser, async (req,res)=>{try{const plans={basic:{price:500,days:30},pro:{price:900,days:30},business:{price:1500,days:30}};const plan=String(req.body?.plan||'');if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});const p=plans[plan];const db=getSupabaseAdmin();try{await db.rpc('bazarek_wallet_debit',{p_user_id:req.user.id,p_amount:p.price,p_description:`اشتراک ${plan}`,p_reference:plan});}catch(e){return res.status(400).json({error:'موجودی کیف پول کافی نیست.'});}const now=new Date();const end=new Date(now.getTime()+p.days*86400000);const {data,error}=await db.from('seller_subscriptions').insert([{user_id:req.user.id,plan,price_afn:p.price,starts_at:now.toISOString(),ends_at:end.toISOString(),status:'active'}]).select().single();if(error)throw error;await db.from('profiles').update({plan}).eq('id',req.user.id);res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در فعال‌سازی اشتراک.'});}});
 app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const [{data:orders,error:oe},{data:tx,error:te},{data:subs,error:se}]=await Promise.all([db.from('promotion_orders').select('id,user_id,listing_id,package_id,amount_afn,payment_method,status,created_at').order('created_at',{ascending:false}).limit(300),db.from('wallet_transactions').select('id,user_id,type,amount_afn,description,reference_id,created_at').order('created_at',{ascending:false}).limit(300),db.from('seller_subscriptions').select('*').order('created_at',{ascending:false}).limit(100)]);if(oe)throw oe;if(te)throw te;if(se)throw se;const paid=(orders||[]).filter(x=>x.status==='paid').reduce((a,x)=>a+Number(x.amount_afn||0),0);res.json({revenue_afn:paid,orders:orders||[],transactions:tx||[],subscriptions:subs||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آمار درآمد.'});}});
