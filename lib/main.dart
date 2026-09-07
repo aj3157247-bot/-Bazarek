@@ -357,6 +357,17 @@ class _ProfileScreenState extends State<ProfileScreen>{
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+              );
+            },
+            icon: const Icon(Icons.admin_panel_settings_outlined),
+            label: const Text('ورود به پنل مدیریت بازارک'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
             onPressed: () async {
               final p = await SharedPreferences.getInstance();
               await p.remove('bazarek_token');
