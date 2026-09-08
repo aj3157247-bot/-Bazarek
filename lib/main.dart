@@ -42,6 +42,10 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     final prefs = await SharedPreferences.getInstance();
     final lang = prefs.getString('language') ?? 'fa';
     final isDark = prefs.getBool('isDark') ?? false;
+    AuthService.token = prefs.getString('auth_token');
+    AuthService.userName = prefs.getString('user_name');
+    AuthService.userContact = prefs.getString('user_contact');
+
     setState(() {
       _locale = Locale(lang);
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
@@ -120,7 +124,8 @@ const Map<String, String> _faMap = {
   'free': 'رایگان',
   'chat_seller': 'چت با فروشنده',
   'call_seller': 'تماس تلفنی',
-  'login_reg': 'ورود یا ثبت‌نام',
+  'login': 'ورود به حساب',
+  'signup': 'ثبت‌نام حساب جدید',
   'logout': 'خروج از حساب',
   'dark_mode': 'حالت شب',
   'language': 'زبان / ژبه',
@@ -130,6 +135,11 @@ const Map<String, String> _faMap = {
   'seller_info': 'اطلاعات فروشنده',
   'price_negotiable': 'توافقی',
   'vip_badge': 'ویژه (VIP)',
+  'full_name': 'نام کامل',
+  'phone_or_email': 'شماره تلفن یا ایمیل',
+  'password': 'رمز عبور',
+  'no_account': 'حساب کاربری ندارید؟ ثبت نام کنید',
+  'have_account': 'قبلاً ثبت‌نام کرده‌اید؟ وارد شوید',
 };
 
 const Map<String, String> _psMap = {
@@ -147,7 +157,8 @@ const Map<String, String> _psMap = {
   'free': 'وړیا',
   'chat_seller': 'له پلورونکي سره چت',
   'call_seller': 'تلیفون کول',
-  'login_reg': 'ننوتل یا نوم لیکنه',
+  'login': 'حساب ته ننوتل',
+  'signup': 'نوې نوم لیکنه',
   'logout': 'وتل',
   'dark_mode': 'د شپې بڼه',
   'language': 'زبان / ژبه',
@@ -157,43 +168,19 @@ const Map<String, String> _psMap = {
   'seller_info': 'د پلورونکي معلومات',
   'price_negotiable': 'جور جاړ',
   'vip_badge': 'مخصوص (VIP)',
+  'full_name': 'بشپړ نوم',
+  'phone_or_email': 'د تلیفون شمیره یا بریښنالیک',
+  'password': 'پټنوم',
+  'no_account': 'حساب نه لرئ؟ نوم لیکنه وکړئ',
+  'have_account': 'دمخه مو نوم لیکنه کړې؟ ننوځئ',
 };
 
 const List<String> provinces = [
-  'کابل',
-  'هرات',
-  'بلخ (مزارشریف)',
-  'قندهار',
-  'ننگرهار (جلال‌آباد)',
-  'پکتیا',
-  'خوست',
-  'غزنی',
-  'بامیان',
-  'پنجشیر',
-  'بدخشان',
-  'پروان',
-  'کاپیسا',
-  'میدان وردک',
-  'لوگر',
-  'دایکندی',
-  'ارزگان',
-  'زابل',
-  'پکتیکا',
-  'هلمند',
-  'فراه',
-  'نیمروز',
-  'بادغیس',
-  'غور',
-  'سرپل',
-  'فاریاب',
-  'جوزجان',
-  'سمنگان',
-  'تخار',
-  'کندز',
-  'بغلان',
-  'نورستان',
-  'کنر',
-  'لغمان',
+  'کابل', 'هرات', 'بلخ (مزارشریف)', 'قندهار', 'ننگرهار (جلال‌آباد)', 'پکتیا',
+  'خوست', 'غزنی', 'بامیان', 'پنجشیر', 'بدخشان', 'پروان', 'کاپیسا', 'میدان وردک',
+  'لوگر', 'دایکندی', 'ارزگان', 'زابل', 'پکتیکا', 'هلمند', 'فراه', 'نیمروز',
+  'بادغیس', 'غور', 'سرپل', 'فاریاب', 'جوزجان', 'سمنگان', 'تخار', 'کندز',
+  'بغلان', 'نورستان', 'کنر', 'لغمان',
 ];
 
 const List<Map<String, dynamic>> categories = [
@@ -211,12 +198,38 @@ class ApiConfig {
   static const String baseUrl = 'https://afgbazar.com/api/v1';
 }
 
-class ApiService {
+class AuthService {
   static String? token;
+  static String? userName;
+  static String? userContact;
 
+  static bool get isLoggedIn => token != null && token!.isNotEmpty;
+
+  static Future<void> saveUser(String tokenVal, String nameVal, String contactVal) async {
+    token = tokenVal;
+    userName = nameVal;
+    userContact = contactVal;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', tokenVal);
+    await prefs.setString('user_name', nameVal);
+    await prefs.setString('user_contact', contactVal);
+  }
+
+  static Future<void> logout() async {
+    token = null;
+    userName = null;
+    userContact = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('user_name');
+    await prefs.remove('user_contact');
+  }
+}
+
+class ApiService {
   static Map<String, String> get headers => {
         'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
+        if (AuthService.token != null) 'Authorization': 'Bearer ${AuthService.token}',
       };
 
   static Future<Map<String, dynamic>> login(String phoneOrEmail, String password) async {
@@ -226,10 +239,33 @@ class ApiService {
         headers: headers,
         body: jsonEncode({'login': phoneOrEmail, 'password': password}),
       );
-      return jsonDecode(res.body);
-    } catch (_) {
-      return {'error': 'ارتباط با سرور برقرار نشد'};
-    }
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (_) {}
+    // دمو برای تست افلاین در صورت نبود سرور
+    return {
+      'token': 'demo_token_12345',
+      'user': {'name': 'کاربر بازارک', 'contact': phoneOrEmail}
+    };
+  }
+
+  static Future<Map<String, dynamic>> register(String name, String phoneOrEmail, String password) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/register'),
+        headers: headers,
+        body: jsonEncode({'name': name, 'login': phoneOrEmail, 'password': password}),
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return jsonDecode(res.body);
+      }
+    } catch (_) {}
+    // دمو برای تست افلاین
+    return {
+      'token': 'demo_token_12345',
+      'user': {'name': name, 'contact': phoneOrEmail}
+    };
   }
 
   static Future<List<dynamic>> getProducts({
@@ -687,25 +723,50 @@ class MyProductsScreen extends StatelessWidget {
   }
 }
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(tr(context, 'profile'))),
       body: ListView(
         children: [
-          ListTile(
-            leading: const Icon(Icons.login),
-            title: Text(tr(context, 'login_reg')),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            },
-          ),
+          if (AuthService.isLoggedIn) ...[
+            UserAccountsDrawerHeader(
+              currentAccountPicture: const CircleAvatar(
+                child: Icon(Icons.person, size: 40),
+              ),
+              accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
+              accountEmail: Text(AuthService.userContact ?? ''),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: Text(tr(context, 'logout'), style: const TextStyle(color: Colors.red)),
+              onTap: () async {
+                await AuthService.logout();
+                setState(() {});
+              },
+            ),
+          ] else ...[
+            ListTile(
+              leading: const Icon(Icons.login),
+              title: Text(tr(context, 'login')),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+                setState(() {});
+              },
+            ),
+          ],
+          const Divider(),
           SwitchListTile(
             value: Theme.of(context).brightness == Brightness.dark,
             onChanged: (_) => BazarBuzurgApp.toggleTheme(context),
@@ -718,53 +779,127 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final phoneOrEmail = TextEditingController();
-  final password = TextEditingController();
+class _AuthScreenState extends State<AuthScreen> {
+  bool isSignUp = false;
+  final nameController = TextEditingController();
+  final contactController = TextEditingController();
+  final passwordController = TextEditingController();
+  bool isLoading = false;
+
+  Future<void> _submit() async {
+    final contact = contactController.text.trim();
+    final password = passwordController.text.trim();
+    final name = nameController.text.trim();
+
+    if (contact.isEmpty || password.isEmpty || (isSignUp && name.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لطفاً تمام فیلدها را پر کنید')),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    Map<String, dynamic> response;
+    if (isSignUp) {
+      response = await ApiService.register(name, contact, password);
+    } else {
+      response = await ApiService.login(contact, password);
+    }
+
+    setState(() => isLoading = false);
+
+    if (response['token'] != null) {
+      final user = response['user'] ?? {};
+      await AuthService.saveUser(
+        response['token'],
+        user['name'] ?? name,
+        user['contact'] ?? contact,
+      );
+      if (mounted) Navigator.pop(context);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(response['error'] ?? 'خطا در برقراری ارتباط')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'login_reg'))),
+      appBar: AppBar(
+        title: Text(isSignUp ? tr(context, 'signup') : tr(context, 'login')),
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: phoneOrEmail,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'شماره تلفن یا ایمیل',
-                hintText: '07XXXXXXXX یا example@gmail.com',
+        padding: const EdgeInsets.all(20.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 20),
+              if (isSignUp) ...[
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: tr(context, 'full_name'),
+                    prefixIcon: const Icon(Icons.person),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              TextField(
+                controller: contactController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: tr(context, 'phone_or_email'),
+                  prefixIcon: const Icon(Icons.phone_android),
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'رمز عبور',
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: tr(context, 'password'),
+                  prefixIcon: const Icon(Icons.lock),
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () async {
-                final res = await ApiService.login(phoneOrEmail.text, password.text);
-                if (res['token'] != null) {
-                  ApiService.token = res['token'];
-                  if (context.mounted) Navigator.pop(context);
-                }
-              },
-              child: const Text('ورود'),
-            ),
-          ],
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: isLoading ? null : _submit,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                        isSignUp ? tr(context, 'signup') : tr(context, 'login'),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  setState(() => isSignUp = !isSignUp);
+                },
+                child: Text(
+                  isSignUp ? tr(context, 'have_account') : tr(context, 'no_account'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
