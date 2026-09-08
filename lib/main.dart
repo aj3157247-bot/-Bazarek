@@ -47,9 +47,63 @@ String tr(String text) {
     'خدمات': 'خدمتونه',
     'کار': 'کار',
     'حیوانات': 'څاروي',
+    'عمومی': 'عمومي',
+    'قیمت': 'بیه',
+    'دسته‌بندی': 'کټګوري',
+    'محل': 'ځای',
+    'بازدید': 'کتنې',
+    'توضیحات': 'توضیحات',
+    'بازارک ویژه': 'ځانګړی بازارک',
+    'بازارک پین': 'پین بازارک',
+    'فروشنده بازارک': 'د بازارک پلورونکی',
+    'فروشنده در بازارک': 'په بازارک کې پلورونکی',
   };
   return m[text] ?? text;
 }
+
+// Translate user-entered listing text when the app is in Pashto.
+// Backend/category values remain in Dari so existing API filters keep working.
+String trListing(String value) {
+  if (appLanguage.value != 'ps') return value;
+  var s = value;
+  const replacements = <String, String>{
+    'لوازم برقی': 'برقي وسایل',
+    'موتر فروشی': 'د موټر خرڅلاو',
+    'فروش موتر': 'د موټر خرڅلاو',
+    'فروش خانه': 'د کور خرڅلاو',
+    'کرایه خانه': 'د کور کرایه',
+    'خانه فروشی': 'د کور خرڅلاو',
+    'زمین فروشی': 'د ځمکې خرڅلاو',
+    'موبایل': 'موبایل',
+    'کمپیوتر': 'کمپیوټر',
+    'لپ‌تاپ': 'لېپټاپ',
+    'لپ تاپ': 'لېپټاپ',
+    'تلویزیون': 'تلویزیون',
+    'یخچال': 'یخچال',
+    'ماشین': 'موټر',
+    'موتر': 'موټر',
+    'خانه': 'کور',
+    'زمین': 'ځمکه',
+    'لباس': 'کالي',
+    'کفش': 'بوټان',
+    'خدمات': 'خدمتونه',
+    'کار': 'کار',
+    'حیوانات': 'څاروي',
+    'افغانی': 'افغانۍ',
+    'آگهی': 'اعلان',
+    'فروش': 'خرڅلاو',
+    'کرایه': 'کرایه',
+    'گروی': 'ګروي',
+    'نو': 'نوی',
+    'کارکرده': 'کارول شوی',
+  };
+  for (final e in replacements.entries) {
+    s = s.replaceAll(e.key, e.value);
+  }
+  return s;
+}
+
+String trCategory(dynamic value) => trListing((value ?? 'عمومی').toString());
 
 class LText extends StatelessWidget {
   final String text;
@@ -164,15 +218,15 @@ class _HomeScreenState extends State<HomeScreen>{
   }
 
   void _details(Map<String,dynamic> p){ ApiService.incrementListingView(p['id'].toString()); showModalBottomSheet(context:context,isScrollControlled:true,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(20,20,20,32),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Stack(children:[ImageGallery(images:_imageUrls(p['image_url']),height:230),if(p['is_pinned']==true||p['is_featured']==true)Positioned(top:12,left:12,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.92),borderRadius:BorderRadius.circular(12)),child:Text(p['is_featured']==true&&p['is_pinned']==true?'🚀 BOOST بازارک':p['is_featured']==true?'⭐ بازارک ویژه':'📌 بازارک پین',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))))]),const SizedBox(height:14),Text(p['title']??'',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
-    Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[const Text('قیمت',style:TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
-    if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('دسته‌بندی: ${p['category']}')),
-    if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 محل: ${p['location_text']}')),
-    if(p['is_negotiable']==true)const Padding(padding:EdgeInsets.only(top:8),child:Text('🤝 قیمت قابل مذاکره است.')),
-    Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} بازدید')),
+    Stack(children:[ImageGallery(images:_imageUrls(p['image_url']),height:230),if(p['is_pinned']==true||p['is_featured']==true)Positioned(top:12,left:12,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.92),borderRadius:BorderRadius.circular(12)),child:Text(p['is_featured']==true&&p['is_pinned']==true?'🚀 BOOST بازارک':p['is_featured']==true?'⭐ بازارک ویژه':'📌 بازارک پین',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))))]),const SizedBox(height:14),Text(trListing((p['title']??'').toString()),style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
+    Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[LText('قیمت',style:const TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
+    if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('${tr('دسته‌بندی')}: ${trCategory(p['category'])}')),
+    if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 ${tr('محل')}: ${trListing((p['location_text']??'').toString())}')),
+    if(p['is_negotiable']==true)Padding(padding:const EdgeInsets.only(top:8),child:LText('🤝 قیمت قابل مذاکره است.')),
+    Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} ${tr('بازدید')}')),
     const SizedBox(height:12),
-    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text((p['seller_name']??'فروشنده بازارک').toString()),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('شماره تماس: ${p['seller_phone']}'):const Text('فروشنده در بازارک'))),
-    const SizedBox(height:12),const Text('توضیحات',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text((p['description']??'توضیحی ثبت نشده است.').toString(),style:const TextStyle(height:1.6)),
+    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text(trListing((p['seller_name']??'فروشنده بازارک').toString())),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('${tr('شماره تماس')}: ${p['seller_phone']}'):LText('فروشنده در بازارک'))),
+    const SizedBox(height:12),LText('توضیحات',style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text(trListing((p['description']??'توضیحی ثبت نشده است.').toString()),style:const TextStyle(height:1.6)),
     if(p['allow_chat']!=false) const SizedBox(height:18),
     if(p['allow_chat']!=false) SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>_openChat(p),icon:const Icon(Icons.chat_bubble_outline),label:const Text('چت با فروشنده'))),
     const SizedBox(height:8),
@@ -187,7 +241,7 @@ List<String> _imageUrls(dynamic raw){
   try{final d=jsonDecode(s);if(d is List)return d.map((e)=>e.toString()).where((e)=>e.isNotEmpty).toList();}catch(_){ }
   return [s];
 }
-String _money(dynamic value){final n=(value is num)?value:double.tryParse('$value')??0;return '${n.toStringAsFixed(n%1==0?0:2)} افغانی';}
+String _money(dynamic value){final n=(value is num)?value:double.tryParse('$value')??0;return '${n.toStringAsFixed(n%1==0?0:2)} ${appLanguage.value == 'ps' ? 'افغانۍ' : 'افغانی'}';}
 
 class ImageGallery extends StatelessWidget {
   final List<String> images;
@@ -228,7 +282,7 @@ class ImageGallery extends StatelessWidget {
     );
   }
 }
-class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);final pinned=product['is_pinned']==true;final featured=product['is_featured']==true;return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),if(pinned||featured)Positioned(top:5,left:5,child:_promoWatermark(context,pinned,featured))]),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(pinned)const Icon(Icons.push_pin,size:17),if(featured)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text((product['title']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text((product['category']??'عمومی').toString()),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _promoWatermark(BuildContext context,bool pinned,bool featured){final text=featured&&pinned?'BOOST بازارک':featured?'بازارک ویژه':'بازارک پین';return Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.9),borderRadius:BorderRadius.circular(8)),child:Text(text,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
+class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);final pinned=product['is_pinned']==true;final featured=product['is_featured']==true;return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),if(pinned||featured)Positioned(top:5,left:5,child:_promoWatermark(context,pinned,featured))]),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(pinned)const Icon(Icons.push_pin,size:17),if(featured)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text(trListing((product['title']??'').toString()),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text(trCategory(product['category']),style:const TextStyle(fontSize:14)),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _promoWatermark(BuildContext context,bool pinned,bool featured){final text=featured&&pinned?'🚀 BOOST ${tr('بازارک')}':featured?'⭐ ${tr('بازارک ویژه')}':'📌 ${tr('بازارک پین')}';return Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.9),borderRadius:BorderRadius.circular(8)),child:Text(text,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
 
 class AuthScaffold extends StatelessWidget {
   final String title;
