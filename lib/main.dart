@@ -6,147 +6,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
-final ValueNotifier<String> appLanguage = ValueNotifier('fa');
-
-String tr(String text) {
-  if (appLanguage.value != 'ps') return text;
-  const m = <String, String>{
-    'بازارک': 'بازارک',
-    'بازار افغانستان، ساده و حرفه‌ای': 'د افغانستان بازار، ساده او مسلکي',
-    'چه چیزی می‌خواهید پیدا کنید؟': 'څه شی لټوئ؟',
-    'پیام‌ها': 'پیغامونه',
-    'حساب من': 'زما حساب',
-    'ثبت آگهی': 'اعلان ثبت کړئ',
-    'آگهی‌ای پیدا نشد.': 'هیڅ اعلان ونه موندل شو.',
-    'جستجو یا دسته‌بندی را تغییر دهید.': 'لټون یا کټګوري بدله کړئ.',
-    'ورود به بازارک': 'بازارک ته ننوتل',
-    'ایمیل': 'برېښنالیک',
-    'رمز عبور': 'پټ نوم',
-    'ورود': 'ننوتل',
-    'حساب ندارید؟ ثبت‌نام کنید': 'حساب نه لرئ؟ نوم‌لیکنه وکړئ',
-    'ساخت حساب': 'حساب جوړول',
-    'نام شما': 'ستاسو نوم',
-    'نام دکان / کسب‌وکار': 'د دوکان / سوداګرۍ نوم',
-    'شماره تماس': 'د اړیکې شمېره',
-    'رمز عبور (حداقل ۸ کاراکتر)': 'پټ نوم (لږ تر لږه ۸ توري)',
-    'ساخت حساب و ورود': 'حساب جوړ او ننوتل',
-    'زبان برنامه': 'د اپ ژبه',
-    'دری': 'دري',
-    'پښتو': 'پښتو',
-    'انتخاب زبان': 'ژبه وټاکئ',
-    'پروفایل من': 'زما پروفایل',
-    'شماره تلفن': 'د ټیلیفون شمېره',
-    'شهر / ولایت': 'ښار / ولایت',
-    'همه': 'ټول',
-    'موبایل': 'موبایل',
-    'موتر': 'موټر',
-    'املاک': 'املاک',
-    'لوازم برقی': 'برقي وسایل',
-    'خانه': 'کور',
-    'لباس': 'کالي',
-    'خدمات': 'خدمتونه',
-    'کار': 'کار',
-    'حیوانات': 'څاروي',
-    'عمومی': 'عمومي',
-    'قیمت': 'بیه',
-    'دسته‌بندی': 'کټګوري',
-    'محل': 'ځای',
-    'بازدید': 'کتنې',
-    'توضیحات': 'توضیحات',
-    'بازارک ویژه': 'ځانګړی بازارک',
-    'بازارک پین': 'پین بازارک',
-    'فروشنده بازارک': 'د بازارک پلورونکی',
-    'فروشنده در بازارک': 'په بازارک کې پلورونکی',
-  };
-  return m[text] ?? text;
-}
-
-// Translate user-entered listing text when the app is in Pashto.
-// Backend/category values remain in Dari so existing API filters keep working.
-String trListing(String value) {
-  if (appLanguage.value != 'ps') return value;
-  var s = value;
-  const replacements = <String, String>{
-    'لوازم برقی': 'برقي وسایل',
-    'موتر فروشی': 'د موټر خرڅلاو',
-    'فروش موتر': 'د موټر خرڅلاو',
-    'فروش خانه': 'د کور خرڅلاو',
-    'کرایه خانه': 'د کور کرایه',
-    'خانه فروشی': 'د کور خرڅلاو',
-    'زمین فروشی': 'د ځمکې خرڅلاو',
-    'موبایل': 'موبایل',
-    'کمپیوتر': 'کمپیوټر',
-    'لپ‌تاپ': 'لېپټاپ',
-    'لپ تاپ': 'لېپټاپ',
-    'تلویزیون': 'تلویزیون',
-    'یخچال': 'یخچال',
-    'ماشین': 'موټر',
-    'موتر': 'موټر',
-    'خانه': 'کور',
-    'زمین': 'ځمکه',
-    'لباس': 'کالي',
-    'کفش': 'بوټان',
-    'خدمات': 'خدمتونه',
-    'کار': 'کار',
-    'حیوانات': 'څاروي',
-    'افغانی': 'افغانۍ',
-    'آگهی': 'اعلان',
-    'فروش': 'خرڅلاو',
-    'کرایه': 'کرایه',
-    'گروی': 'ګروي',
-    'نو': 'نوی',
-    'کارکرده': 'کارول شوی',
-  };
-  for (final e in replacements.entries) {
-    s = s.replaceAll(e.key, e.value);
-  }
-  return s;
-}
-
-String trCategory(dynamic value) => trListing((value ?? 'عمومی').toString());
-
-class LText extends StatelessWidget {
-  final String text;
-  final TextStyle? style;
-  final TextAlign? textAlign;
-  const LText(this.text, {super.key, this.style, this.textAlign});
-  @override
-  Widget build(BuildContext context) => Text(tr(text), style: style, textAlign: textAlign);
-}
-
-Future<void> chooseLanguage(BuildContext context) async {
-  final selected = await showDialog<String>(
-    context: context,
-    builder: (_) => SimpleDialog(
-      title: LText('انتخاب زبان'),
-      children: [
-        SimpleDialogOption(onPressed: () => Navigator.pop(context, 'fa'), child: LText('دری')),
-        SimpleDialogOption(onPressed: () => Navigator.pop(context, 'ps'), child: LText('پښتو')),
-      ],
-    ),
-  );
-  if (selected == null) return;
-  appLanguage.value = selected;
-  appLanguage.notifyListeners();
-  final p = await SharedPreferences.getInstance();
-  await p.setString('bazarek_language', selected);
-}
-
-
 void main() => runApp(const BazarekApp());
 
 class BazarekApp extends StatelessWidget {
   const BazarekApp({super.key});
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<String>(
-    valueListenable: appLanguage,
-    builder: (context, language, _) => MaterialApp(
-      title: 'بازارک',
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('fa'),
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal, fontFamily: 'Roboto'),
-      home: Directionality(textDirection: TextDirection.rtl, child: const StartupScreen()),
-    ),
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'بازارک', debugShowCheckedModeBanner: false, locale: const Locale('fa'),
+    theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal, fontFamily: 'Roboto'),
+    home: const StartupScreen(),
   );
 }
 
@@ -155,8 +23,6 @@ class _StartupScreenState extends State<StartupScreen> {
   @override void initState(){super.initState();_start();}
   Future<void> _start() async {
     final p = await SharedPreferences.getInstance();
-    final savedLanguage = p.getString('bazarek_language');
-    if (savedLanguage == 'fa' || savedLanguage == 'ps') appLanguage.value = savedLanguage!;
     final token = p.getString('bazarek_token');
     final refresh = p.getString('bazarek_refresh_token');
     if (token != null && token.isNotEmpty) {
@@ -199,13 +65,13 @@ class _HomeScreenState extends State<HomeScreen>{
   Future<void> _openChat(Map<String,dynamic> listing)async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}try{final conv=await ApiService.startConversation(listing['id'].toString());if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:conv,listingTitle:(listing['title']??'آگهی').toString())));}catch(e){if(mounted)_msg(e);}}
   Future<void> _post()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:LText('بازارک',style:const TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:_openMessages,tooltip:tr('پیام‌ها'),icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:tr('حساب من'),icon:const Icon(Icons.person_outline)),IconButton(onPressed:()=>chooseLanguage(context),tooltip:tr('زبان برنامه'),icon:const Icon(Icons.language))]),
-    floatingActionButton:FloatingActionButton.extended(onPressed:_post,icon:const Icon(Icons.add),label:LText('ثبت آگهی')),
+    appBar:AppBar(title:const Text('بازارک',style:TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:_openMessages,tooltip:'پیام‌ها',icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:'حساب من',icon:const Icon(Icons.person_outline))]),
+    floatingActionButton:FloatingActionButton.extended(onPressed:_post,icon:const Icon(Icons.add),label:const Text('ثبت آگهی')),
     body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,100),children:[
-      LText('بازار افغانستان، ساده و حرفه‌ای',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),
-      const SizedBox(height:12),TextField(controller:search,onSubmitted:(_)=>_load(),textInputAction:TextInputAction.search,decoration:InputDecoration(hintText:tr('چه چیزی می‌خواهید پیدا کنید؟'),prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:_load,icon:const Icon(Icons.tune)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)))),
-      const SizedBox(height:12),SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:cats.length,itemBuilder:(_,i)=>ChoiceChip(label:LText(cats[i]),selected:(category.isEmpty&&i==0)||category==cats[i],onSelected:(_){setState(()=>category=cats[i]);_load();}),separatorBuilder:(_,__)=>const SizedBox(width:8))),
-      const SizedBox(height:12),Card(child:InkWell(onTap:_openBoost,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[CircleAvatar(child:const Icon(Icons.rocket_launch)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[LText('🚀 بازارک BOOST',style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900)),const SizedBox(height:3),LText('ویژه و پین آگهی برای دیده‌شدن بیشتر',style:const TextStyle(fontSize:13))])),const Icon(Icons.chevron_left)])))),const SizedBox(height:18),if(loading)const Center(child:Padding(padding:EdgeInsets.all(30),child:CircularProgressIndicator())) else if(listings.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(28),child:Column(children:[const Icon(Icons.search_off,size:46),const SizedBox(height:8),LText('آگهی‌ای پیدا نشد.'),LText('جستجو یا دسته‌بندی را تغییر دهید.')])) ) else ...listings.map((p)=>ListingCard(product:p,onTap:()=>_details(p)))
+      Text('بازار افغانستان، ساده و حرفه‌ای',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),
+      const SizedBox(height:12),TextField(controller:search,onSubmitted:(_)=>_load(),textInputAction:TextInputAction.search,decoration:InputDecoration(hintText:'چه چیزی می‌خواهید پیدا کنید؟',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:_load,icon:const Icon(Icons.tune)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)))),
+      const SizedBox(height:12),SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:cats.length,itemBuilder:(_,i)=>ChoiceChip(label:Text(cats[i]),selected:(category.isEmpty&&i==0)||category==cats[i],onSelected:(_){setState(()=>category=cats[i]);_load();}),separatorBuilder:(_,__)=>const SizedBox(width:8))),
+      const SizedBox(height:12),Card(child:InkWell(onTap:_openBoost,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[CircleAvatar(child:const Icon(Icons.rocket_launch)),const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('🚀 بازارک BOOST',style:TextStyle(fontSize:17,fontWeight:FontWeight.w900)),SizedBox(height:3),Text('ویژه و پین آگهی برای دیده‌شدن بیشتر',style:TextStyle(fontSize:13))])),const Icon(Icons.chevron_left)])))),const SizedBox(height:18),if(loading)const Center(child:Padding(padding:EdgeInsets.all(30),child:CircularProgressIndicator())) else if(listings.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(28),child:Column(children:[Icon(Icons.search_off,size:46),SizedBox(height:8),Text('آگهی‌ای پیدا نشد.'),Text('جستجو یا دسته‌بندی را تغییر دهید.')]))) else ...listings.map((p)=>ListingCard(product:p,onTap:()=>_details(p)))
     ])));
   Future<void> _report(Map<String,dynamic> p) async {
     final reason=await showDialog<String>(context:context,builder:(_)=>SimpleDialog(title:const Text('گزارش آگهی'),children:[
@@ -218,15 +84,15 @@ class _HomeScreenState extends State<HomeScreen>{
   }
 
   void _details(Map<String,dynamic> p){ ApiService.incrementListingView(p['id'].toString()); showModalBottomSheet(context:context,isScrollControlled:true,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(20,20,20,32),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Stack(children:[ImageGallery(images:_imageUrls(p['image_url']),height:230),if(p['is_pinned']==true||p['is_featured']==true)Positioned(top:12,left:12,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.92),borderRadius:BorderRadius.circular(12)),child:Text(p['is_featured']==true&&p['is_pinned']==true?'🚀 BOOST بازارک':p['is_featured']==true?'⭐ بازارک ویژه':'📌 بازارک پین',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))))]),const SizedBox(height:14),Text(trListing((p['title']??'').toString()),style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
-    Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[LText('قیمت',style:const TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
-    if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('${tr('دسته‌بندی')}: ${trCategory(p['category'])}')),
-    if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 ${tr('محل')}: ${trListing((p['location_text']??'').toString())}')),
-    if(p['is_negotiable']==true)Padding(padding:const EdgeInsets.only(top:8),child:LText('🤝 قیمت قابل مذاکره است.')),
-    Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} ${tr('بازدید')}')),
+    Stack(children:[ImageGallery(images:_imageUrls(p['image_url']),height:230),if(p['is_pinned']==true||p['is_featured']==true)Positioned(top:12,left:12,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.92),borderRadius:BorderRadius.circular(12)),child:Text(p['is_featured']==true&&p['is_pinned']==true?'🚀 BOOST بازارک':p['is_featured']==true?'⭐ بازارک ویژه':'📌 بازارک پین',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))))]),const SizedBox(height:14),Text(p['title']??'',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
+    Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[const Text('قیمت',style:TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
+    if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('دسته‌بندی: ${p['category']}')),
+    if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 محل: ${p['location_text']}')),
+    if(p['is_negotiable']==true)const Padding(padding:EdgeInsets.only(top:8),child:Text('🤝 قیمت قابل مذاکره است.')),
+    Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} بازدید')),
     const SizedBox(height:12),
-    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text(trListing((p['seller_name']??'فروشنده بازارک').toString())),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('${tr('شماره تماس')}: ${p['seller_phone']}'):LText('فروشنده در بازارک'))),
-    const SizedBox(height:12),LText('توضیحات',style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text(trListing((p['description']??'توضیحی ثبت نشده است.').toString()),style:const TextStyle(height:1.6)),
+    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text((p['seller_name']??'فروشنده بازارک').toString()),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('شماره تماس: ${p['seller_phone']}'):const Text('فروشنده در بازارک'))),
+    const SizedBox(height:12),const Text('توضیحات',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text((p['description']??'توضیحی ثبت نشده است.').toString(),style:const TextStyle(height:1.6)),
     if(p['allow_chat']!=false) const SizedBox(height:18),
     if(p['allow_chat']!=false) SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>_openChat(p),icon:const Icon(Icons.chat_bubble_outline),label:const Text('چت با فروشنده'))),
     const SizedBox(height:8),
@@ -241,7 +107,7 @@ List<String> _imageUrls(dynamic raw){
   try{final d=jsonDecode(s);if(d is List)return d.map((e)=>e.toString()).where((e)=>e.isNotEmpty).toList();}catch(_){ }
   return [s];
 }
-String _money(dynamic value){final n=(value is num)?value:double.tryParse('$value')??0;return '${n.toStringAsFixed(n%1==0?0:2)} ${appLanguage.value == 'ps' ? 'افغانۍ' : 'افغانی'}';}
+String _money(dynamic value){final n=(value is num)?value:double.tryParse('$value')??0;return '${n.toStringAsFixed(n%1==0?0:2)} افغانی';}
 
 class ImageGallery extends StatelessWidget {
   final List<String> images;
@@ -282,7 +148,7 @@ class ImageGallery extends StatelessWidget {
     );
   }
 }
-class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);final pinned=product['is_pinned']==true;final featured=product['is_featured']==true;return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),if(pinned||featured)Positioned(top:5,left:5,child:_promoWatermark(context,pinned,featured))]),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(pinned)const Icon(Icons.push_pin,size:17),if(featured)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text(trListing((product['title']??'').toString()),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text(trCategory(product['category']),style:const TextStyle(fontSize:14)),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _promoWatermark(BuildContext context,bool pinned,bool featured){final text=featured&&pinned?'🚀 BOOST ${tr('بازارک')}':featured?'⭐ ${tr('بازارک ویژه')}':'📌 ${tr('بازارک پین')}';return Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.9),borderRadius:BorderRadius.circular(8)),child:Text(text,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
+class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);final pinned=product['is_pinned']==true;final featured=product['is_featured']==true;return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),if(pinned||featured)Positioned(top:5,left:5,child:_promoWatermark(context,pinned,featured))]),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(pinned)const Icon(Icons.push_pin,size:17),if(featured)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text((product['title']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text((product['category']??'عمومی').toString()),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _promoWatermark(BuildContext context,bool pinned,bool featured){final text=featured&&pinned?'BOOST بازارک':featured?'بازارک ویژه':'بازارک پین';return Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.9),borderRadius:BorderRadius.circular(8)),child:Text(text,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
 
 class AuthScaffold extends StatelessWidget {
   final String title;
@@ -311,34 +177,7 @@ class AuthScaffold extends StatelessWidget {
 }
 
 class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginScreenState(); }
-class _LoginScreenState extends State<LoginScreen>{
-  final phone=TextEditingController(),password=TextEditingController();
-  bool loading=false;
-  Future<void> _login()async{
-    setState(()=>loading=true);
-    try{
-      final t=await ApiService.login(phone.text.trim(),password.text);
-      final p=await SharedPreferences.getInstance();
-      await p.setString('bazarek_token',t);
-      final rt=ApiService.refreshToken;
-      if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);
-      if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);
-    }catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}
-  }
-  void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
-  @override Widget build(BuildContext context)=>AuthScaffold(
-    title:tr('ورود به بازارک'),
-    children:[
-      TextField(controller:phone,keyboardType:TextInputType.phone,decoration:InputDecoration(labelText:tr('شماره تلفن'),hintText:'07XXXXXXXX',prefixIcon:const Icon(Icons.phone_outlined),border:const OutlineInputBorder())),
-      const SizedBox(height:14),
-      TextField(controller:password,obscureText:true,decoration:InputDecoration(labelText:tr('رمز عبور'),prefixIcon:const Icon(Icons.lock_outline),border:const OutlineInputBorder())),
-      const SizedBox(height:20),
-      SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():LText('ورود'))),
-      TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:LText('حساب ندارید؟ ثبت‌نام کنید')),
-      const Divider(height:28),
-      TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:LText('ورود مدیریت'))
-    ]);
-}
+class _LoginScreenState extends State<LoginScreen>{final phone=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.login(phone.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',t);final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));@override Widget build(BuildContext context)=>AuthScaffold(title:'ورود به بازارک',children:[TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تلفن',hintText:'07XXXXXXXX',prefixIcon:Icon(Icons.phone_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:const Text('حساب ندارید؟ ثبت‌نام کنید')),const Divider(height:28),TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('ورود مدیریت'))]);}
 
 class AdminLoginScreen extends StatefulWidget{const AdminLoginScreen({super.key});@override State<AdminLoginScreen> createState()=>_AdminLoginScreenState();}
 class _AdminLoginScreenState extends State<AdminLoginScreen>{final email=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.adminLogin(email.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_admin_token',t);if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>AdminDashboardScreen(token:t)));}catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}@override Widget build(BuildContext context)=>AuthScaffold(title:'پنل مدیریت بازارک',children:[const Text('این بخش فقط برای مدیر سیستم است.',textAlign:TextAlign.center),const SizedBox(height:20),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'ایمیل مدیر',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور مدیر',border:OutlineInputBorder())),const SizedBox(height:18),SizedBox(height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود امن به مدیریت')))]);}
@@ -373,35 +212,20 @@ class RegisterScreen extends StatefulWidget { const RegisterScreen({super.key});
 class _RegisterScreenState extends State<RegisterScreen>{
   final name=TextEditingController(),shop=TextEditingController(),phone=TextEditingController(),password=TextEditingController();
   bool loading=false;
-  Future<void> _register()async{
-    if(password.text.length<8){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('رمز عبور باید حداقل ۸ کاراکتر باشد.')));return;}
-    setState(()=>loading=true);
-    try{
-      final d=await ApiService.register(phone:phone.text.trim(),password:password.text,fullName:name.text,shopName:shop.text);
-      final token=d['token'];
-      if(token!=null){
-        final p=await SharedPreferences.getInstance();
-        await p.setString('bazarek_token',token.toString());
-        final rt=ApiService.refreshToken;
-        if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);
-        if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);
-      }else{throw Exception('حساب ساخته نشد. لطفاً دوباره تلاش کنید.');}
-    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
-    finally{if(mounted)setState(()=>loading=false);}
-  }
-  @override Widget build(BuildContext context)=>AuthScaffold(
-    title:tr('ساخت حساب'),
-    children:[
-      TextField(controller:name,decoration:InputDecoration(labelText:tr('نام شما'),border:const OutlineInputBorder())),
-      const SizedBox(height:10),
-      TextField(controller:shop,decoration:InputDecoration(labelText:tr('نام دکان / کسب‌وکار'),border:const OutlineInputBorder())),
-      const SizedBox(height:10),
-      TextField(controller:phone,keyboardType:TextInputType.phone,decoration:InputDecoration(labelText:tr('شماره تماس'),hintText:'07XXXXXXXX',border:const OutlineInputBorder())),
-      const SizedBox(height:10),
-      TextField(controller:password,obscureText:true,decoration:InputDecoration(labelText:tr('رمز عبور (حداقل ۸ کاراکتر)'),border:const OutlineInputBorder())),
-      const SizedBox(height:18),
-      SizedBox(height:52,child:FilledButton(onPressed:loading?null:_register,child:loading?const CircularProgressIndicator():LText('ساخت حساب و ورود')))
-    ]);
+  String _normalize(String value){var v=value.trim().replaceAll(' ','').replaceAll('-','').replaceAll('(','').replaceAll(')','');const fa='۰۱۲۳۴۵۶۷۸۹', ar='٠١٢٣٤٥٦٧٨٩';v=v.split('').map((c){final i=fa.indexOf(c);if(i>=0)return '$i';final j=ar.indexOf(c);if(j>=0)return '$j';return c;}).join();if(v.startsWith('+93'))v='0${v.substring(3)}';else if(v.startsWith('0093'))v='0${v.substring(4)}';else if(v.startsWith('93'))v='0${v.substring(2)}';else if(RegExp(r'^7\d{8}$').hasMatch(v))v='0$v';return v;}
+  Future<void> _register()async{final raw=phone.text;final normalized=_normalize(raw);if(!RegExp(r'^07\d{8}$').hasMatch(normalized)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('شماره تلفن معتبر افغانستان را وارد کنید؛ مثال: 0780455492')));return;}if(password.text.length<8){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('رمز عبور باید حداقل ۸ کاراکتر باشد.')));return;}if(name.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('نام خود را وارد کنید.')));return;}setState(()=>loading=true);try{await ApiService.startRegistration(phone:normalized,password:password.text,fullName:name.text,shopName:shop.text);if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>VerifyRegistrationScreen(phone:normalized,password:password.text,fullName:name.text,shopName:shop.text)));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}
+  @override Widget build(BuildContext context)=>AuthScaffold(title:'ساخت حساب',children:[TextField(controller:name,decoration:const InputDecoration(labelText:'نام شما',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:shop,decoration:const InputDecoration(labelText:'نام دکان / کسب‌وکار',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تلفن',hintText:'07XXXXXXXX',prefixIcon:Icon(Icons.phone_outlined),border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور (حداقل ۸ کاراکتر)',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:18),SizedBox(height:52,child:FilledButton(onPressed:loading?null:_register,child:loading?const CircularProgressIndicator():const Text('ارسال کد تأیید')))]);
+}
+
+class VerifyRegistrationScreen extends StatefulWidget { final String phone,password,fullName,shopName; const VerifyRegistrationScreen({super.key,required this.phone,required this.password,required this.fullName,required this.shopName}); @override State<VerifyRegistrationScreen> createState()=>_VerifyRegistrationScreenState(); }
+class _VerifyRegistrationScreenState extends State<VerifyRegistrationScreen>{
+  final code=TextEditingController();bool loading=false,resending=false;int seconds=60;Timer? timer;
+  @override void initState(){super.initState();_startTimer();}
+  void _startTimer(){timer?.cancel();setState(()=>seconds=60);timer=Timer.periodic(const Duration(seconds:1),(t){if(!mounted)return;if(seconds<=1){t.cancel();setState(()=>seconds=0);}else{setState(()=>seconds--);}});}
+  @override void dispose(){timer?.cancel();code.dispose();super.dispose();}
+  Future<void> _verify()async{final c=code.text.trim();if(!RegExp(r'^\d{4,10}$').hasMatch(c)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('کد تأیید را درست وارد کنید.')));return;}setState(()=>loading=true);try{final d=await ApiService.verifyRegistration(phone:widget.phone,password:widget.password,code:c,fullName:widget.fullName,shopName:widget.shopName);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',d['token'].toString());final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}}
+  Future<void> _resend()async{if(seconds>0||resending)return;setState(()=>resending=true);try{await ApiService.startRegistration(phone:widget.phone,password:widget.password,fullName:widget.fullName,shopName:widget.shopName);if(mounted){_startTimer();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('کد جدید ارسال شد.')));}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>resending=false);}}
+  @override Widget build(BuildContext context)=>AuthScaffold(title:'تأیید شماره تلفن',children:[Text('کد تأیید به شماره ${widget.phone} ارسال شد.',textAlign:TextAlign.center),const SizedBox(height:18),TextField(controller:code,keyboardType:TextInputType.number,maxLength:6,textAlign:TextAlign.center,decoration:const InputDecoration(labelText:'کد تأیید',hintText:'123456',prefixIcon:Icon(Icons.sms_outlined),border:OutlineInputBorder())),const SizedBox(height:10),SizedBox(height:52,width:double.infinity,child:FilledButton(onPressed:loading?null:_verify,child:loading?const CircularProgressIndicator():const Text('تأیید و ساخت حساب'))),const SizedBox(height:8),TextButton(onPressed:seconds==0&&!resending?_resend:null,child:Text(seconds>0?'ارسال دوباره پس از $seconds ثانیه':(resending?'در حال ارسال...':'ارسال دوباره کد'))),TextButton(onPressed:()=>Navigator.pop(context),child:const Text('تغییر شماره تلفن'))]);
 }
 
 class MonetizationScreen extends StatefulWidget { const MonetizationScreen({super.key}); @override State<MonetizationScreen> createState()=>_MonetizationScreenState(); }
