@@ -10,6 +10,16 @@ const { requireUser, getSupabaseAdmin } = require('./middlewares/auth');
 const requireAdmin = require('./middlewares/adminAuth');
 
 const app = express();
+const normalizeAfghanPhone = (value) => {
+  let s = String(value || '').trim().replace(/[\s-]/g, '');
+  if (s.startsWith('0093')) s = '+' + s.slice(4);
+  if (s.startsWith('93') && !s.startsWith('+93')) s = '+' + s;
+  if (s.startsWith('0')) s = '+93' + s.slice(1);
+  if (!/^\+937\d{8}$/.test(s)) return null;
+  return s;
+};
+const phoneAuthEmail = (phone) => `${phone.replace(/\D/g, '')}@phone.bazarek.local`;
+
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 6 } });
@@ -34,38 +44,25 @@ app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', versi
 app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
 app.get('/api/version', (_, res) => res.json({ version: '2.4.0', features: ['warnings','reports','image-upload','wallet','promotions','favorites','listing-views','contact-phone'] }));
 
-function normalizeAfghanPhone(value) {
-  let p = String(value || '').trim().replace(/[\s().-]/g, '');
-  if (p.startsWith('0093')) p = '+' + p.slice(2);
-  if (p.startsWith('0')) p = '+93' + p.slice(1);
-  if (p.startsWith('7') && p.length === 9) p = '+93' + p;
-  if (!/^\+937\d{8}$/.test(p)) return '';
-  return p;
-}
-function phoneEmail(phone) { return `${phone.replace('+', '')}@phone.bazarek.local`; }
-
 app.post('/api/auth/register', async (req, res) => {
   try {
     if (!requireConfig(res)) return;
-    const { password, full_name = '', shop_name = '', phone = '' } = req.body || {};
+    const { phone, password, full_name = '', shop_name = '' } = req.body || {};
     const normalizedPhone = normalizeAfghanPhone(phone);
-    if (!normalizedPhone || !password) return res.status(400).json({ error: 'شماره تلفن افغانستان و رمز عبور الزامی است.' });
+    if (!normalizedPhone || !password) return res.status(400).json({ error: !normalizedPhone ? 'شماره تلفن معتبر افغانستان وارد کنید.' : 'شماره تلفن و رمز عبور الزامی است.' });
     if (password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
     const db = getSupabaseAdmin();
-    const { data: existing } = await db.from('profiles').select('id').eq('phone', normalizedPhone).maybeSingle();
-    if (existing) return res.status(409).json({ error: 'این شماره تلفن قبلاً ثبت‌نام شده است.' });
-    const email = phoneEmail(normalizedPhone);
+    const authEmail = phoneAuthEmail(normalizedPhone);
     const { data: created, error } = await db.auth.admin.createUser({
-      email,
+      email: authEmail,
       password,
       email_confirm: true,
       user_metadata: { full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone }
     });
     if (error) return res.status(400).json({ error: error.message });
     const user = created.user;
-    const { error: profileError } = await db.from('profiles').upsert({ id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone }, { onConflict: 'id' });
-    if (profileError) throw profileError;
-    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    await db.from('profiles').upsert({ id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone }, { onConflict: 'id' });
+    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email: authEmail, password });
     if (loginError || !signedIn.session) return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
     res.status(201).json({ token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token, user });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
@@ -118,14 +115,9 @@ app.post('/api/auth/login', async (req, res) => {
     if (!requireConfig(res)) return;
     const { phone, password } = req.body || {};
     const normalizedPhone = normalizeAfghanPhone(phone);
-    if (!normalizedPhone || !password) return res.status(400).json({ error: 'شماره تلفن افغانستان و رمز عبور الزامی است.' });
-    const db = getSupabaseAdmin();
-    const { data: profile, error: profileError } = await db.from('profiles').select('id').eq('phone', normalizedPhone).maybeSingle();
-    if (profileError || !profile) return res.status(401).json({ error: 'شماره تلفن یا رمز عبور اشتباه است.' });
-    const { data: userData, error: userError } = await db.auth.admin.getUserById(profile.id);
-    const email = userData?.user?.email || phoneEmail(normalizedPhone);
-    if (userError || !email) return res.status(401).json({ error: 'شماره تلفن یا رمز عبور اشتباه است.' });
-    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    if (!normalizedPhone || !password) return res.status(400).json({ error: !normalizedPhone ? 'شماره تلفن معتبر افغانستان وارد کنید.' : 'شماره تلفن و رمز عبور الزامی است.' });
+    const authEmail = phoneAuthEmail(normalizedPhone);
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: authEmail, password });
     if (error || !data.session) return res.status(401).json({ error: 'شماره تلفن یا رمز عبور اشتباه است.' });
     res.json({ token: data.session.access_token, refresh_token: data.session.refresh_token, user: data.user });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ورود.' }); }
