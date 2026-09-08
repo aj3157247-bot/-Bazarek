@@ -519,7 +519,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    Text(
                       tr(context,'هشدارهای مدیریت'),
                       style: TextStyle(
                         fontSize: 18,
