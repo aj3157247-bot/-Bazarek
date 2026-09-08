@@ -25,6 +25,13 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
 const TWILIO_VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID || '';
 
+// Free test OTP mode: no SMS provider is needed.
+// Keep this enabled only while testing.
+const OTP_TEST_MODE = String(process.env.OTP_TEST_MODE ?? 'true').toLowerCase() === 'true';
+const OTP_TEST_CODE = String(process.env.OTP_TEST_CODE || '123456').trim();
+const OTP_TEST_VALID_MINUTES = Math.max(1, Number(process.env.OTP_TEST_VALID_MINUTES || 5));
+const testOtps = new Map();
+
 function requireConfig(res) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     res.status(503).json({ error: 'اتصال Supabase روی سرور تنظیم نشده است.' });
@@ -111,6 +118,10 @@ app.post('/api/auth/register/start', async (req, res) => {
     const db = getSupabaseAdmin();
     const { data: existing } = await db.from('profiles').select('id,phone').eq('phone', normalizedPhone).limit(1).maybeSingle();
     if (existing?.id) return res.status(409).json({ error: 'این شماره تلفن قبلاً ثبت شده است. وارد حساب خود شوید.' });
+    if (OTP_TEST_MODE) {
+      testOtps.set(normalizedPhone, { code: OTP_TEST_CODE, expiresAt: Date.now() + OTP_TEST_VALID_MINUTES * 60 * 1000 });
+      return res.status(200).json({ ok: true, phone: normalizedPhone, test_mode: true, test_code: OTP_TEST_CODE, message: `کد آزمایشی ${OTP_TEST_CODE} فعال شد. پیامک واقعی ارسال نمی‌شود.` });
+    }
     await twilioVerifyStart(e164);
     res.status(200).json({ ok: true, phone: normalizedPhone, message: 'کد تأیید به شماره شما ارسال شد.' });
   } catch (e) {
@@ -128,7 +139,14 @@ app.post('/api/auth/register/verify', async (req, res) => {
     if (!normalizedPhone || !e164) return res.status(400).json({ error: 'شماره تلفن معتبر افغانستان را وارد کنید.' });
     if (!/^\d{4,10}$/.test(String(code).trim())) return res.status(400).json({ error: 'کد تأیید را درست وارد کنید.' });
     if (!password || password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
-    const approved = await twilioVerifyCheck(e164, code);
+    let approved = false;
+    if (OTP_TEST_MODE) {
+      const pending = testOtps.get(normalizedPhone);
+      approved = !!pending && Date.now() <= pending.expiresAt && String(code).trim() === pending.code;
+      if (approved) testOtps.delete(normalizedPhone);
+    } else {
+      approved = await twilioVerifyCheck(e164, code);
+    }
     if (!approved) return res.status(400).json({ error: 'کد تأیید اشتباه است یا منقضی شده است.' });
     const db = getSupabaseAdmin();
     const { data: existing } = await db.from('profiles').select('id,phone').eq('phone', normalizedPhone).limit(1).maybeSingle();
