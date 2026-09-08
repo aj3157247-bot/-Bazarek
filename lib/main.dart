@@ -256,57 +256,257 @@ class _StartupScreenState extends State<StartupScreen> {
   @override Widget build(BuildContext context)=>const Scaffold(body:Center(child:CircularProgressIndicator()));
 }
 
-class HomeScreen extends StatefulWidget { final String provinceFilter; const HomeScreen({super.key, required this.provinceFilter}); @override State<HomeScreen> createState()=>_HomeScreenState(); }
-class _HomeScreenState extends State<HomeScreen>{
-  final search=TextEditingController(); List<Map<String,dynamic>> listings=[]; bool loading=true; String category='';
-  final cats=['همه','موبایل','موتر','املاک','لوازم برقی','خانه','لباس','خدمات','کار','حیوانات'];
-  @override void initState(){super.initState();_load();}
-  Future<void> _load()async{if(mounted)setState(()=>loading=true);try{final x=await ApiService.getListings(q:search.text,category:category=='همه'?'':category,province:widget.provinceFilter);if(mounted)setState(()=>listings=x);}catch(e){if(mounted)_msg(e);}finally{if(mounted)setState(()=>loading=false);}}
-  void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
-  Future<void> _openLogin()async{await Navigator.push(context,MaterialPageRoute(builder:(_)=>const LoginScreen()));if(mounted)_load();}
-  Future<void> _openBoost()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const MonetizationScreen()));}
-  Future<void> _openAccount()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
-  Future<void> _openMessages()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const ConversationsScreen()));}
-  Future<void> _openChat(Map<String,dynamic> listing)async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}try{final conv=await ApiService.startConversation(listing['id'].toString());if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:conv,listingTitle:(listing['title']??'آگهی').toString())));}catch(e){if(mounted)_msg(e);}}
-  Future<void> _post()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
-  @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(tr(context,'دیوار افغانستان'),style:const TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:() async { final r=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>ProvinceSelectionScreen(current:widget.provinceFilter))); if(r!=null&&mounted){final p=await SharedPreferences.getInstance(); await p.setString('bazarek_province_filter',r); Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>HomeScreen(provinceFilter:r)));}},tooltip:tr(context,'تغییر ولایت'),icon:const Icon(Icons.location_on_outlined)),IconButton(onPressed:()=>chooseLanguage(context),tooltip:tr(context,'زبان برنامه'),icon:const Icon(Icons.language)),IconButton(onPressed:_openMessages,tooltip:tr(context,'پیام‌ها'),icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:tr(context,'حساب من'),icon:const Icon(Icons.person_outline))]),
-    floatingActionButton:FloatingActionButton.extended(onPressed:_post,icon:const Icon(Icons.add),label:Text(tr(context,'ثبت آگهی'))),
-    body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,100),children:[
-      Card(child:ListTile(dense:true,leading:const Icon(Icons.location_on_outlined),title:Text(provinceLabel(context,widget.provinceFilter),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text(tr(context,'ولایت انتخاب‌شده')),trailing:const Icon(Icons.chevron_left),onTap:() async { final r=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>ProvinceSelectionScreen(current:widget.provinceFilter))); if(r!=null&&mounted){final p=await SharedPreferences.getInstance(); await p.setString('bazarek_province_filter',r); Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>HomeScreen(provinceFilter:r)));}})),
-      const SizedBox(height:8),
-      Text(tr(context,'بازار افغانستان، ساده و حرفه‌ای'),style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),
-      const SizedBox(height:12),TextField(controller:search,onSubmitted:(_)=>_load(),textInputAction:TextInputAction.search,decoration:InputDecoration(hintText:tr(context,'چه چیزی می‌خواهید پیدا کنید؟'),prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:_load,icon:const Icon(Icons.tune)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)))),
-      const SizedBox(height:12),SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:cats.length,itemBuilder:(_,i)=>ChoiceChip(label:Text(tr(context,cats[i])),selected:(category.isEmpty&&i==0)||category==cats[i],onSelected:(_){setState(()=>category=cats[i]);_load();}),separatorBuilder:(_,__)=>const SizedBox(width:8))),
-      const SizedBox(height:12),Card(child:InkWell(onTap:_openBoost,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[CircleAvatar(child:const Icon(Icons.rocket_launch)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(tr(context,'🚀 دیوار افغانستان BOOST'),style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900)),const SizedBox(height:3),Text(tr(context,'ویژه و پین آگهی برای دیده‌شدن بیشتر'),style:const TextStyle(fontSize:13))])),const Icon(Icons.chevron_left)])))),const SizedBox(height:18),if(loading)const Center(child:Padding(padding:EdgeInsets.all(30),child:CircularProgressIndicator())) else if(listings.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(28),child:Column(children:[const Icon(Icons.search_off,size:46),const SizedBox(height:8),Text(tr(context,'آگهی‌ای پیدا نشد.')),Text(tr(context,'جستجو یا دسته‌بندی را تغییر دهید.'))]))) else ...listings.map((p)=>ListingCard(product:p,onTap:()=>_details(p)))
-    ])));
-  Future<void> _report(Map<String,dynamic> p) async {
-    final reason=await showDialog<String>(context:context,builder:(_)=>SimpleDialog(title:const Text('گزارش آگهی'),children:[
-      for(final x in ['کلاهبرداری یا تقلب','کالای ممنوع یا غیرقانونی','محتوای توهین‌آمیز','آگهی تکراری یا جعلی','اطلاعات نادرست']) SimpleDialogOption(onPressed:()=>Navigator.pop(context,x),child:Text(x)),
-    ]));
-    if(reason==null)return;
-    final prefs=await SharedPreferences.getInstance();
-    if(prefs.getString('bazarek_token')==null){await _openLogin();return;}
-    try{await ApiService.reportListing(p['id'].toString(),reason);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('گزارش شما ثبت شد و توسط مدیریت بررسی می‌شود.')));}catch(e){if(mounted)_msg(e);}
+class HomeScreen extends StatefulWidget {
+  final String provinceFilter;
+  const HomeScreen({super.key, required this.provinceFilter});
+  @override State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final search = TextEditingController();
+  List<Map<String,dynamic>> listings = [];
+  bool loading = true;
+  String category = '';
+  final cats = const ['همه','موبایل','موتر','املاک','لوازم برقی','خانه','لباس','خدمات','کار','حیوانات'];
+
+  @override
+  void initState() { super.initState(); _load(); }
+  @override
+  void dispose() { search.dispose(); super.dispose(); }
+
+  Future<void> _load() async {
+    if (mounted) setState(() => loading = true);
+    try {
+      final x = await ApiService.getListings(
+        q: search.text,
+        category: category == 'همه' ? '' : category,
+        province: widget.provinceFilter,
+      );
+      if (mounted) setState(() => listings = x);
+    } catch (e) {
+      if (mounted) _msg(e);
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
   }
 
-  void _details(Map<String,dynamic> p){ ApiService.incrementListingView(p['id'].toString()); showModalBottomSheet(context:context,isScrollControlled:true,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(20,20,20,32),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Stack(children:[ImageGallery(images:_imageUrls(p['image_url']),height:230),if(p['is_pinned']==true||p['is_featured']==true)Positioned(top:12,left:12,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.92),borderRadius:BorderRadius.circular(12)),child:Text(p['is_featured']==true&&p['is_pinned']==true?'🚀 BOOST دیوار افغانستان':p['is_featured']==true?'⭐ دیوار افغانستان ویژه':'📌 دیوار افغانستان پین',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))))]),const SizedBox(height:14),Text(p['title']??'',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
-    Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[const Text('قیمت',style:TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
-    if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('دسته‌بندی: ${p['category']}')),
-    if((p['province']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 ${provinceLabel(context,(p['province']??'').toString())}',style:const TextStyle(fontWeight:FontWeight.bold))),if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 محل: ${p['location_text']}')),
-    if(p['is_negotiable']==true)const Padding(padding:EdgeInsets.only(top:8),child:Text('🤝 قیمت قابل مذاکره است.')),
-    Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} بازدید')),
-    const SizedBox(height:12),
-    Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.store_outlined)),title:Text((p['seller_name']??'فروشنده دیوار افغانستان').toString()),subtitle:(p['seller_phone']??'').toString().isNotEmpty?Text('شماره تماس: ${p['seller_phone']}'):const Text('فروشنده در دیوار افغانستان'))),
-    const SizedBox(height:12),const Text('توضیحات',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:6),Text((p['description']??'توضیحی ثبت نشده است.').toString(),style:const TextStyle(height:1.6)),
-    if(p['allow_chat']!=false) const SizedBox(height:18),
-    if(p['allow_chat']!=false) SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()=>_openChat(p),icon:const Icon(Icons.chat_bubble_outline),label:const Text('چت با فروشنده'))),
-    const SizedBox(height:8),
-    OutlinedButton.icon(onPressed:() async { final prefs=await SharedPreferences.getInstance(); if(prefs.getString('bazarek_token')==null){await _openLogin();return;} try{final fav=await ApiService.toggleFavorite(p['id'].toString()); if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(fav?'به علاقه‌مندی‌ها اضافه شد ❤️':'از علاقه‌مندی‌ها حذف شد.')));}catch(e){if(mounted)_msg(e);} },icon:const Icon(Icons.favorite_border),label:const Text('افزودن به علاقه‌مندی‌ها')),
-    const SizedBox(height:8),
-    OutlinedButton.icon(onPressed:()=>_report(p),icon:const Icon(Icons.flag_outlined),label:const Text('گزارش این آگهی')),
-  ])))); }
+  void _msg(Object e) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+  );
+
+  Future<void> _openLogin() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    if (mounted) _load();
+  }
+  Future<void> _openBoost() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getString('bazarek_token') == null) { await _openLogin(); return; }
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const MonetizationScreen()));
+  }
+  Future<void> _openAccount() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getString('bazarek_token') == null) { await _openLogin(); return; }
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
+  }
+  Future<void> _openMessages() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getString('bazarek_token') == null) { await _openLogin(); return; }
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const ConversationsScreen()));
+  }
+  Future<void> _openChat(Map<String,dynamic> listing) async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getString('bazarek_token') == null) { await _openLogin(); return; }
+    try {
+      final conv = await ApiService.startConversation(listing['id'].toString());
+      if (!mounted) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+        conversation: conv,
+        listingTitle: (listing['title'] ?? 'آگهی').toString(),
+      )));
+    } catch (e) { if (mounted) _msg(e); }
+  }
+  Future<void> _post() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getString('bazarek_token') == null) { await _openLogin(); return; }
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
+  }
+
+  Future<void> _changeProvince() async {
+    final r = await Navigator.push<String>(context, MaterialPageRoute(
+      builder: (_) => ProvinceSelectionScreen(current: widget.provinceFilter),
+    ));
+    if (r == null || !mounted) return;
+    final p = await SharedPreferences.getInstance();
+    await p.setString('bazarek_province_filter', r);
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen(provinceFilter: r)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr(context, 'دیوار افغانستان'), style: const TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(onPressed: _changeProvince, tooltip: tr(context, 'تغییر ولایت'), icon: const Icon(Icons.location_on_outlined)),
+          IconButton(onPressed: () => chooseLanguage(context), tooltip: tr(context, 'زبان برنامه'), icon: const Icon(Icons.language)),
+          IconButton(onPressed: _openMessages, tooltip: tr(context, 'پیام‌ها'), icon: const Icon(Icons.chat_outlined)),
+          IconButton(onPressed: _openAccount, tooltip: tr(context, 'حساب من'), icon: const Icon(Icons.person_outline)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _post,
+        icon: const Icon(Icons.add),
+        label: Text(tr(context, 'ثبت آگهی')),
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.location_on_outlined, size: 30),
+                    title: Text(provinceLabel(context, widget.provinceFilter), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(tr(context, 'ولایت انتخاب‌شده')),
+                    trailing: const Icon(Icons.chevron_left),
+                    onTap: _changeProvince,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  tr(context, 'بازار افغانستان، ساده و حرفه‌ای'),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: search,
+                  onSubmitted: (_) => _load(),
+                  textInputAction: TextInputAction.search,
+                  maxLines: 1,
+                  decoration: InputDecoration(
+                    hintText: tr(context, 'چه چیزی می‌خواهید پیدا کنید؟'),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(onPressed: _load, icon: const Icon(Icons.tune)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 44,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: cats.length,
+                    itemBuilder: (_, i) => ChoiceChip(
+                      label: Text(tr(context, cats[i])),
+                      selected: (category.isEmpty && i == 0) || category == cats[i],
+                      onSelected: (_) { setState(() => category = cats[i]); _load(); },
+                    ),
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: InkWell(
+                    onTap: _openBoost,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(children: [
+                        const CircleAvatar(child: Icon(Icons.rocket_launch)),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr(context, '🚀 دیوار افغانستان BOOST'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 3),
+                            Text(tr(context, 'ویژه و پین آگهی برای دیده‌شدن بیشتر'), style: const TextStyle(fontSize: 13)),
+                          ],
+                        )),
+                        const Icon(Icons.chevron_left),
+                      ]),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                if (loading)
+                  const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()))
+                else if (listings.isEmpty)
+                  Card(child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(children: [
+                      const Icon(Icons.search_off, size: 46),
+                      const SizedBox(height: 8),
+                      Text(tr(context, 'آگهی‌ای پیدا نشد.')),
+                      Text(tr(context, 'جستجو یا دسته‌بندی را تغییر دهید.')),
+                    ]),
+                  ))
+                else
+                  ...listings.map((p) => ListingCard(product: p, onTap: () => _details(p))),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _report(Map<String,dynamic> p) async {
+    final reason = await showDialog<String>(context: context, builder: (_) => SimpleDialog(
+      title: const Text('گزارش آگهی'),
+      children: [for (final x in ['کلاهبرداری یا تقلب','کالای ممنوع یا غیرقانونی','محتوای توهین‌آمیز','آگهی تکراری یا جعلی','اطلاعات نادرست'])
+        SimpleDialogOption(onPressed: () => Navigator.pop(context, x), child: Text(x))],
+    ));
+    if (reason == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('bazarek_token') == null) { await _openLogin(); return; }
+    try {
+      await ApiService.reportListing(p['id'].toString(), reason);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('گزارش شما ثبت شد و توسط مدیریت بررسی می‌شود.')));
+    } catch (e) { if (mounted) _msg(e); }
+  }
+
+  void _details(Map<String,dynamic> p) {
+    ApiService.incrementListingView(p['id'].toString());
+    showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20,20,20,32),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Stack(children: [ImageGallery(images: _imageUrls(p['image_url']), height: 230)]),
+          const SizedBox(height: 14),
+          Text(p['title'] ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('قیمت', style: TextStyle(fontSize: 16)), Text(_money(p['price']), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold))])),
+          if ((p['category'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top:12), child: Text('دسته‌بندی: ${p['category']}')),
+          if ((p['province'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top:8), child: Text('📍 ${provinceLabel(context, (p['province'] ?? '').toString())}', style: const TextStyle(fontWeight: FontWeight.bold))),
+          if ((p['location_text'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top:8), child: Text('📍 محل: ${p['location_text']}')),
+          if (p['is_negotiable'] == true) const Padding(padding: EdgeInsets.only(top:8), child: Text('🤝 قیمت قابل مذاکره است.')),
+          Padding(padding: const EdgeInsets.only(top:8), child: Text('👁 ${p['views_count'] ?? 0} بازدید')),
+          const SizedBox(height:12),
+          Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.store_outlined)), title: Text((p['seller_name'] ?? 'فروشنده دیوار افغانستان').toString()), subtitle: (p['seller_phone'] ?? '').toString().isNotEmpty ? Text('شماره تماس: ${p['seller_phone']}') : const Text('فروشنده در دیوار افغانستان'))),
+          const SizedBox(height:12),
+          const Text('توضیحات', style: TextStyle(fontSize:17, fontWeight:FontWeight.bold)),
+          const SizedBox(height:6),
+          Text((p['description'] ?? 'توضیحی ثبت نشده است.').toString(), style: const TextStyle(height:1.6)),
+          if (p['allow_chat'] != false) const SizedBox(height:18),
+          if (p['allow_chat'] != false) SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => _openChat(p), icon: const Icon(Icons.chat_bubble_outline), label: const Text('چت با فروشنده'))),
+          const SizedBox(height:8),
+          OutlinedButton.icon(onPressed: () async { final prefs = await SharedPreferences.getInstance(); if (prefs.getString('bazarek_token') == null) { await _openLogin(); return; } try { final fav = await ApiService.toggleFavorite(p['id'].toString()); if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fav ? 'به علاقه‌مندی‌ها اضافه شد ❤️' : 'از علاقه‌مندی‌ها حذف شد.'))); } catch (e) { if (mounted) _msg(e); } }, icon: const Icon(Icons.favorite_border), label: const Text('افزودن به علاقه‌مندی‌ها')),
+          const SizedBox(height:8),
+          OutlinedButton.icon(onPressed: () => _report(p), icon: const Icon(Icons.flag_outlined), label: const Text('گزارش این آگهی')),
+        ]),
+      ),
+    ));
+  }
 }
 
 List<String> _imageUrls(dynamic raw){
