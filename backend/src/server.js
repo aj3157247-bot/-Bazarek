@@ -21,6 +21,7 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabaseAuth = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
 function requireConfig(res) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     res.status(503).json({ error: 'اتصال Supabase روی سرور تنظیم نشده است.' });
@@ -33,52 +34,78 @@ app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', versi
 app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
 app.get('/api/version', (_, res) => res.json({ version: '2.4.0', features: ['warnings','reports','image-upload','wallet','promotions','favorites','listing-views','contact-phone'] }));
 
-function normalizeAfghanPhone(value) {
-  let v = String(value || '').trim();
-  const fa = '۰۱۲۳۴۵۶۷۸۹';
-  const ar = '٠١٢٣٤٥٦٧٨٩';
-  v = v.replace(/[۰-۹]/g, ch => String(fa.indexOf(ch))).replace(/[٠-٩]/g, ch => String(ar.indexOf(ch)));
-  v = v.replace(/[\s\-()]/g, '');
-  if (v.startsWith('+93')) v = '0' + v.slice(3);
-  else if (v.startsWith('0093')) v = '0' + v.slice(4);
-  else if (v.startsWith('93')) v = '0' + v.slice(2);
-  else if (/^7\d{8}$/.test(v)) v = '0' + v;
-  if (!/^07\d{8}$/.test(v)) return '';
-  return v;
-}
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    if (!requireConfig(res)) return;
+    const { email, password, full_name = '', shop_name = '', phone = '' } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'ایمیل و رمز عبور الزامی است.' });
+    if (password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
+    const db = getSupabaseAdmin();
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data: created, error } = await db.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: full_name.trim(), shop_name: shop_name.trim(), phone: phone.trim() }
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    const user = created.user;
+    await db.from('profiles').upsert({ id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), phone: phone.trim() }, { onConflict: 'id' });
+    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email: normalizedEmail, password });
+    if (loginError || !signedIn.session) return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
+    res.status(201).json({ token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token, user });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
+});
 
-function phoneLoginEmail(phone) {
-  return `phone_${phone.slice(1)}@users.bazarek.af`;
-}
-
-
+app.post('/api/upload-images', requireUser, upload.array('images', 6), async (req, res) => {
+  try {
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (!files.length) return res.status(400).json({ error: 'حداقل یک عکس انتخاب کنید.' });
+    if (files.length > 6) return res.status(400).json({ error: 'حداکثر ۶ عکس مجاز است.' });
+    const imageExts = new Set(['jpg','jpeg','png','webp','gif','heic','heif']);
+    for (const file of files) {
+      const ext = (file.originalname.split('.').pop() || '').toLowerCase();
+      if (!file.mimetype.startsWith('image/') && !imageExts.has(ext)) {
+        return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
+      }
+      if (!file.mimetype.startsWith('image/')) {
+        const inferred = ext === 'jpg' || ext === 'jpeg' ? 'jpeg' : ext;
+        file.mimetype = `image/${inferred}`;
+      }
+    }
+    const db = getSupabaseAdmin();
+    const buckets = await db.storage.listBuckets();
+    if (!buckets.data?.some(b => b.name === IMAGE_BUCKET)) {
+      const { error: bucketError } = await db.storage.createBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif'] });
+      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
+    } else {
+      const { error: bucketUpdateError } = await db.storage.updateBucket(IMAGE_BUCKET, { public: true, fileSizeLimit: '10MB', allowedMimeTypes: ['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif'] });
+      if (bucketUpdateError) console.warn('Could not update image bucket settings:', bucketUpdateError.message);
+    }
+    const urls = [];
+    for (const file of files) {
+      const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `${req.user.id}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await db.storage.from(IMAGE_BUCKET).upload(path, file.buffer, { contentType: file.mimetype || 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (error) throw error;
+      const { data } = db.storage.from(IMAGE_BUCKET).getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+    res.status(201).json({ urls });
+  } catch (e) {
+    console.error('Listing image upload error:', e);
+    const detail = String(e?.message || '').trim();
+    res.status(500).json({ error: detail ? `خطا در آپلود عکس‌ها: ${detail}` : 'خطا در آپلود عکس‌ها.' });
+  }
+});
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     if (!requireConfig(res)) return;
-    const { phone, password, email } = req.body || {};
-    if (!password) return res.status(400).json({ error: 'رمز عبور الزامی است.' });
-
-    let loginEmail = '';
-    const normalizedPhone = normalizeAfghanPhone(phone);
-    const db = getSupabaseAdmin();
-
-    if (normalizedPhone) {
-      const { data: profile } = await db.from('profiles').select('id,phone').eq('phone', normalizedPhone).limit(1).maybeSingle();
-      if (profile?.id) {
-        const { data: authUser } = await db.auth.admin.getUserById(profile.id);
-        loginEmail = authUser?.user?.email || '';
-      }
-      if (!loginEmail) loginEmail = phoneLoginEmail(normalizedPhone);
-    } else if (email) {
-      // Backward compatibility for accounts created before phone-only login.
-      loginEmail = String(email).trim().toLowerCase();
-    } else {
-      return res.status(400).json({ error: 'شماره تلفن معتبر افغانستان را وارد کنید.' });
-    }
-
-    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: loginEmail, password });
-    if (error || !data.session) return res.status(401).json({ error: 'شماره تلفن یا رمز عبور اشتباه است.' });
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'ایمیل و رمز عبور الزامی است.' });
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error || !data.session) return res.status(401).json({ error: 'ایمیل یا رمز عبور اشتباه است.' });
     res.json({ token: data.session.access_token, refresh_token: data.session.refresh_token, user: data.user });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ورود.' }); }
 });
@@ -250,7 +277,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,created_at,updated_at,province').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,created_at,updated_at').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -408,8 +435,8 @@ app.post('/api/products', requireUser, async (req, res) => {
   try {
     const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
-    if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
     const db = getSupabaseAdmin();
+    if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
     const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
@@ -419,7 +446,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'province', 'is_negotiable'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'is_negotiable'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
