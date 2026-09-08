@@ -1,4 +1,4 @@
-import 'dartd:convert';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -208,7 +208,6 @@ const List<Map<String, dynamic>> categories = [
   {'id': 'personal', 'title': 'وسایل شخصی', 'icon': Icons.person},
 ];
 
-// API Config
 class ApiConfig {
   static const String baseUrl = 'https://afgbazar.com/api/v1';
 }
@@ -549,6 +548,16 @@ class ProductDetailScreen extends StatelessWidget {
   final dynamic product;
   const ProductDetailScreen({super.key, required this.product});
 
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
+    );
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     List<dynamic> images = [];
@@ -627,7 +636,7 @@ class ProductDetailScreen extends StatelessWidget {
                   onPressed: () {
                     final phone = product['contact_phone'] ?? '';
                     if (phone.isNotEmpty) {
-                      launchUrl(Uri.parse('tel:$phone'));
+                      _makePhoneCall(phone);
                     }
                   },
                   icon: const Icon(Icons.phone),
@@ -818,7 +827,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   Future<void> _uploadImages() async {
     setState(() => uploading = true);
-    // در این بخش تصاویر آپلود می‌شوند
     setState(() => uploading = false);
   }
 
