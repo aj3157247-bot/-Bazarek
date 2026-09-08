@@ -21,17 +21,6 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabaseAuth = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const TWILIO_VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID || '';
-
-// Free test OTP mode: no SMS provider is needed.
-// Keep this enabled only while testing.
-const OTP_TEST_MODE = String(process.env.OTP_TEST_MODE ?? 'true').toLowerCase() === 'true';
-const OTP_TEST_CODE = String(process.env.OTP_TEST_CODE || '123456').trim();
-const OTP_TEST_VALID_MINUTES = Math.max(1, Number(process.env.OTP_TEST_VALID_MINUTES || 5));
-const testOtps = new Map();
-
 function requireConfig(res) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     res.status(503).json({ error: 'اتصال Supabase روی سرور تنظیم نشده است.' });
@@ -63,118 +52,55 @@ function phoneLoginEmail(phone) {
 }
 
 
-function toE164Afghan(phone) {
-  const n = normalizeAfghanPhone(phone);
-  return n ? `+93${n.slice(1)}` : '';
-}
 
-async function twilioVerifyStart(phone) {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_VERIFY_SERVICE_SID) {
-    throw new Error('سرویس ارسال کد تأیید پیامکی روی سرور تنظیم نشده است.');
-  }
-  const body = new URLSearchParams({ To: phone, Channel: 'sms' });
-  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
-  const r = await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(TWILIO_VERIFY_SERVICE_SID)}/Verifications`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || d.status !== 'pending') {
-    console.error('Twilio start verification failed:', d);
-    throw new Error(d.message || 'ارسال کد تأیید انجام نشد.');
-  }
-  return d;
-}
-
-async function twilioVerifyCheck(phone, code) {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_VERIFY_SERVICE_SID) {
-    throw new Error('سرویس تأیید پیامکی روی سرور تنظیم نشده است.');
-  }
-  const body = new URLSearchParams({ To: phone, Code: String(code || '').trim() });
-  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
-  const r = await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(TWILIO_VERIFY_SERVICE_SID)}/VerificationCheck`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.error('Twilio verification check failed:', d);
-    throw new Error(d.message || 'کد تأیید نادرست یا منقضی شده است.');
-  }
-  return d.status === 'approved';
-}
-
-app.post('/api/auth/register/start', async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     if (!requireConfig(res)) return;
-    const { password, full_name = '', shop_name = '', phone = '' } = req.body || {};
-    const normalizedPhone = normalizeAfghanPhone(phone);
-    const e164 = toE164Afghan(phone);
-    if (!normalizedPhone || !e164) return res.status(400).json({ error: 'شماره تلفن معتبر افغانستان را وارد کنید؛ مثال: 0780455492' });
-    if (!password) return res.status(400).json({ error: 'رمز عبور الزامی است.' });
-    if (password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
-    const db = getSupabaseAdmin();
-    const { data: existing } = await db.from('profiles').select('id,phone').eq('phone', normalizedPhone).limit(1).maybeSingle();
-    if (existing?.id) return res.status(409).json({ error: 'این شماره تلفن قبلاً ثبت شده است. وارد حساب خود شوید.' });
-    if (OTP_TEST_MODE) {
-      testOtps.set(normalizedPhone, { code: OTP_TEST_CODE, expiresAt: Date.now() + OTP_TEST_VALID_MINUTES * 60 * 1000 });
-      return res.status(200).json({ ok: true, phone: normalizedPhone, test_mode: true, test_code: OTP_TEST_CODE, message: `کد آزمایشی ${OTP_TEST_CODE} فعال شد. پیامک واقعی ارسال نمی‌شود.` });
-    }
-    await twilioVerifyStart(e164);
-    res.status(200).json({ ok: true, phone: normalizedPhone, message: 'کد تأیید به شماره شما ارسال شد.' });
-  } catch (e) {
-    console.error('Registration OTP start error:', e);
-    res.status(400).json({ error: e?.message || 'ارسال کد تأیید انجام نشد.' });
-  }
-});
-
-app.post('/api/auth/register/verify', async (req, res) => {
-  try {
-    if (!requireConfig(res)) return;
-    const { password, full_name = '', shop_name = '', phone = '', code = '' } = req.body || {};
-    const normalizedPhone = normalizeAfghanPhone(phone);
-    const e164 = toE164Afghan(phone);
-    if (!normalizedPhone || !e164) return res.status(400).json({ error: 'شماره تلفن معتبر افغانستان را وارد کنید.' });
-    if (!/^\d{4,10}$/.test(String(code).trim())) return res.status(400).json({ error: 'کد تأیید را درست وارد کنید.' });
-    if (!password || password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
-    let approved = false;
-    if (OTP_TEST_MODE) {
-      const pending = testOtps.get(normalizedPhone);
-      approved = !!pending && Date.now() <= pending.expiresAt && String(code).trim() === pending.code;
-      if (approved) testOtps.delete(normalizedPhone);
-    } else {
-      approved = await twilioVerifyCheck(e164, code);
-    }
-    if (!approved) return res.status(400).json({ error: 'کد تأیید اشتباه است یا منقضی شده است.' });
-    const db = getSupabaseAdmin();
-    const { data: existing } = await db.from('profiles').select('id,phone').eq('phone', normalizedPhone).limit(1).maybeSingle();
-    if (existing?.id) return res.status(409).json({ error: 'این شماره تلفن قبلاً ثبت شده است. وارد حساب خود شوید.' });
-    const email = phoneLoginEmail(normalizedPhone);
-    const { data: created, error } = await db.auth.admin.createUser({
-      email, password, email_confirm: true,
-      user_metadata: { full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone, phone_verified: true }
-    });
-    if (error) return res.status(400).json({ error: error.message });
-    const user = created.user;
-    const { error: profileError } = await db.from('profiles').upsert({ id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone }, { onConflict: 'id' });
-    if (profileError) {
-      await db.auth.admin.deleteUser(user.id).catch(() => {});
-      console.error('Profile creation error:', profileError);
-      return res.status(500).json({ error: 'حساب ساخته نشد. لطفاً دوباره تلاش کنید.' });
-    }
-    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email, password });
-    if (loginError || !signedIn.session) return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
-    res.status(201).json({ token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token, user });
-  } catch (e) {
-    console.error('Registration OTP verify error:', e);
-    res.status(400).json({ error: e?.message || 'تأیید ثبت‌نام انجام نشد.' });
-  }
+    const { identifier = '', password = '' } = req.body || {};
+    const value = String(identifier || '').trim();
+    if (!value || !password) return res.status(400).json({ error: 'شماره تلفن/ایمیل و رمز عبور الزامی است.' });
+    let email = value;
+    const normalizedPhone = normalizeAfghanPhone(value);
+    if (normalizedPhone) email = phoneLoginEmail(normalizedPhone);
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    if (error || !data?.session) return res.status(401).json({ error: 'شماره تلفن/ایمیل یا رمز عبور نادرست است.' });
+    res.json({ token: data.session.access_token, refresh_token: data.session.refresh_token, user: data.user });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ورود.' }); }
 });
 
 app.post('/api/auth/register', async (req, res) => {
-  return res.status(410).json({ error: 'ثبت‌نام جدید باید با کد تأیید پیامکی انجام شود.' });
+  try {
+    if (!requireConfig(res)) return;
+    const { password = '', full_name = '', shop_name = '', phone = '', email = '' } = req.body || {};
+    if (!password) return res.status(400).json({ error: 'رمز عبور الزامی است.' });
+    if (password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
+    const normalizedPhone = normalizeAfghanPhone(phone);
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedPhone && !normalizedEmail) return res.status(400).json({ error: 'شماره تلفن یا ایمیل را وارد کنید.' });
+    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'ایمیل واردشده معتبر نیست.' });
+    if (phone && !normalizedPhone) return res.status(400).json({ error: 'شماره تلفن معتبر افغانستان را وارد کنید؛ مثال: 0780455492' });
+
+    const db = getSupabaseAdmin();
+    if (normalizedPhone) {
+      const { data: existing } = await db.from('profiles').select('id,phone').eq('phone', normalizedPhone).limit(1).maybeSingle();
+      if (existing?.id) return res.status(409).json({ error: 'این شماره تلفن قبلاً ثبت شده است. وارد حساب خود شوید.' });
+    }
+    const authEmail = normalizedEmail || phoneLoginEmail(normalizedPhone);
+    const { data: created, error } = await db.auth.admin.createUser({
+      email: authEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: full_name.trim(), shop_name: shop_name.trim(), ...(normalizedPhone ? { phone: normalizedPhone } : {}), ...(normalizedEmail ? { email: normalizedEmail } : {}) }
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    const user = created.user;
+    const profile = { id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), ...(normalizedPhone ? { phone: normalizedPhone } : {}) };
+    const { error: profileError } = await db.from('profiles').upsert(profile, { onConflict: 'id' });
+    if (profileError) { await db.auth.admin.deleteUser(user.id).catch(() => {}); console.error('Profile creation error:', profileError); return res.status(500).json({ error: 'حساب ساخته نشد. لطفاً دوباره تلاش کنید.' }); }
+    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email: authEmail, password });
+    if (loginError || !signedIn.session) return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
+    res.status(201).json({ token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token, user });
+  } catch (e) { console.error('Registration error:', e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
 });
 
 app.post('/api/upload-images', requireUser, upload.array('images', 6), async (req, res) => {
