@@ -5,7 +5,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -548,16 +547,6 @@ class ProductDetailScreen extends StatelessWidget {
   final dynamic product;
   const ProductDetailScreen({super.key, required this.product});
 
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final Uri launchUri = Uri(
-      scheme: 'tel',
-      path: phoneNumber,
-    );
-    if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     List<dynamic> images = [];
@@ -636,7 +625,9 @@ class ProductDetailScreen extends StatelessWidget {
                   onPressed: () {
                     final phone = product['contact_phone'] ?? '';
                     if (phone.isNotEmpty) {
-                      _makePhoneCall(phone);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('شماره تماس: $phone')),
+                      );
                     }
                   },
                   icon: const Icon(Icons.phone),
