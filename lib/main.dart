@@ -87,8 +87,103 @@ String tr(BuildContext context, String dari) {
     '🔥 بسته‌های BOOST و تبلیغ آگهی': '🔥 د BOOST او اعلانونو کڅوړې',
     '🏪 فروشگاه حرفه‌ای': '🏪 مسلکي پلورنځی',
     'اشتراک‌های من': 'زما ګډونونه',
+    'کل افغانستان': 'ټول افغانستان',
+    'نمایش آگهی‌های تمام ولایات': 'د ټولو ولایتونو اعلانونه ښودل',
+    'انتخاب ولایت': 'ولایت وټاکئ',
+    'آگهی‌های کدام ولایت را می‌خواهید ببینید؟': 'د کوم ولایت اعلانونه لیدل غواړئ؟',
+    'می‌توانید بعداً ولایت انتخاب‌شده را تغییر دهید.': 'تاسو وروسته ټاکل شوی ولایت بدلولای شئ.',
+    'تغییر ولایت': 'ولایت بدلول',
+    'ولایت آگهی': 'د اعلان ولایت',
   };
   return ps[dari] ?? dari;
+}
+
+
+const List<Map<String,String>> afghanistanProvinces = [
+  {'fa':'بدخشان','ps':'بدخشان'}, {'fa':'بادغیس','ps':'بادغیس'}, {'fa':'بغلان','ps':'بغلان'},
+  {'fa':'بلخ','ps':'بلخ'}, {'fa':'بامیان','ps':'بامیان'}, {'fa':'دایکندی','ps':'دایکندي'},
+  {'fa':'فراه','ps':'فراه'}, {'fa':'فاریاب','ps':'فاریاب'}, {'fa':'غزنی','ps':'غزني'},
+  {'fa':'غور','ps':'غور'}, {'fa':'هلمند','ps':'هلمند'}, {'fa':'هرات','ps':'هرات'},
+  {'fa':'جوزجان','ps':'جوزجان'}, {'fa':'کابل','ps':'کابل'}, {'fa':'کندهار','ps':'کندهار'},
+  {'fa':'کاپیسا','ps':'کاپیسا'}, {'fa':'خوست','ps':'خوست'}, {'fa':'کنر','ps':'کونړ'},
+  {'fa':'کندز','ps':'کندوز'}, {'fa':'لغمان','ps':'لغمان'}, {'fa':'لوگر','ps':'لوګر'},
+  {'fa':'ننگرهار','ps':'ننګرهار'}, {'fa':'نیمروز','ps':'نیمروز'}, {'fa':'نورستان','ps':'نورستان'},
+  {'fa':'پکتیکا','ps':'پکتیکا'}, {'fa':'پکتیا','ps':'پکتیا'}, {'fa':'پنجشیر','ps':'پنجشېر'},
+  {'fa':'پروان','ps':'پروان'}, {'fa':'سمنگان','ps':'سمنګان'}, {'fa':'سرپل','ps':'سرپل'},
+  {'fa':'تخار','ps':'تخار'}, {'fa':'ارزگان','ps':'اروزګان'}, {'fa':'وردک','ps':'وردګ'}, {'fa':'زابل','ps':'زابل'},
+];
+
+String provinceLabel(BuildContext context, String? province) {
+  if (province == null || province.isEmpty || province == '__all__') {
+    return tr(context, 'کل افغانستان');
+  }
+  final item = afghanistanProvinces.firstWhere((x) => x['fa'] == province, orElse: () => {'fa':province, 'ps':province});
+  return Localizations.localeOf(context).languageCode == 'ps' ? (item['ps'] ?? province) : (item['fa'] ?? province);
+}
+
+class HomeGate extends StatefulWidget {
+  const HomeGate({super.key});
+  @override State<HomeGate> createState() => _HomeGateState();
+}
+class _HomeGateState extends State<HomeGate> {
+  String? province;
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    final p = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => province = p.getString('bazarek_province_filter'));
+  }
+  Future<void> _select() async {
+    final result = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => ProvinceSelectionScreen(current: province)));
+    if (result == null || !mounted) return;
+    final p = await SharedPreferences.getInstance();
+    await p.setString('bazarek_province_filter', result);
+    setState(() => province = result);
+  }
+  @override Widget build(BuildContext context) {
+    if (province == null) return ProvinceSelectionScreen(onSelected: (v) async {
+      final p = await SharedPreferences.getInstance();
+      await p.setString('bazarek_province_filter', v);
+      if (mounted) setState(() => province = v);
+    });
+    return HomeScreen(provinceFilter: province!);
+  }
+}
+
+class ProvinceSelectionScreen extends StatefulWidget {
+  final String? current;
+  final Future<void> Function(String)? onSelected;
+  const ProvinceSelectionScreen({super.key, this.current, this.onSelected});
+  @override State<ProvinceSelectionScreen> createState() => _ProvinceSelectionScreenState();
+}
+class _ProvinceSelectionScreenState extends State<ProvinceSelectionScreen> {
+  String? selected;
+  @override void initState() { super.initState(); selected = widget.current; }
+  Future<void> _choose(String value) async {
+    setState(() => selected = value);
+    if (widget.onSelected != null) {
+      await widget.onSelected!(value);
+      return;
+    }
+    if (mounted) Navigator.pop(context, value);
+  }
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(tr(context, 'انتخاب ولایت'))),
+    body: SafeArea(child: ListView(padding: const EdgeInsets.all(16), children: [
+      Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.location_on_outlined, size: 42), const SizedBox(height: 10),
+        Text(tr(context, 'آگهی‌های کدام ولایت را می‌خواهید ببینید؟'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8), Text(tr(context, 'می‌توانید بعداً ولایت انتخاب‌شده را تغییر دهید.')),
+      ]))),
+      const SizedBox(height: 12),
+      Card(child: RadioListTile<String>(value: '__all__', groupValue: selected, onChanged: (v) { if (v != null) _choose(v); }, title: Text(tr(context, 'کل افغانستان')), subtitle: Text(tr(context, 'نمایش آگهی‌های تمام ولایات')))),
+      const SizedBox(height: 8),
+      ...afghanistanProvinces.map((item) {
+        final fa = item['fa']!;
+        return Card(child: RadioListTile<String>(value: fa, groupValue: selected, onChanged: (v) { if (v != null) _choose(v); }, title: Text(provinceLabel(context, fa)), subtitle: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'ولایت' : 'ولایت')));
+      }),
+    ])),
+  );
 }
 
 Future<void> chooseLanguage(BuildContext context) async {
@@ -140,7 +235,7 @@ class _StartupScreenState extends State<StartupScreen> {
       ApiService.setRefreshToken(refresh);
       try {
         await ApiService.getProfile();
-        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeGate()));
         return;
       } catch (_) {
         // Access tokens expire. Try the saved refresh token before asking the user to log in again.
@@ -148,7 +243,7 @@ class _StartupScreenState extends State<StartupScreen> {
           await p.setString('bazarek_token', ApiService.currentToken!);
           final newRefresh = ApiService.refreshToken;
           if (newRefresh != null && newRefresh.isNotEmpty) await p.setString('bazarek_refresh_token', newRefresh);
-          if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+          if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeGate()));
           return;
         }
         await p.remove('bazarek_token');
@@ -156,17 +251,17 @@ class _StartupScreenState extends State<StartupScreen> {
         ApiService.clearSession();
       }
     }
-    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeGate()));
   }
   @override Widget build(BuildContext context)=>const Scaffold(body:Center(child:CircularProgressIndicator()));
 }
 
-class HomeScreen extends StatefulWidget { const HomeScreen({super.key}); @override State<HomeScreen> createState()=>_HomeScreenState(); }
+class HomeScreen extends StatefulWidget { final String provinceFilter; const HomeScreen({super.key, required this.provinceFilter}); @override State<HomeScreen> createState()=>_HomeScreenState(); }
 class _HomeScreenState extends State<HomeScreen>{
   final search=TextEditingController(); List<Map<String,dynamic>> listings=[]; bool loading=true; String category='';
   final cats=['همه','موبایل','موتر','املاک','لوازم برقی','خانه','لباس','خدمات','کار','حیوانات'];
   @override void initState(){super.initState();_load();}
-  Future<void> _load()async{if(mounted)setState(()=>loading=true);try{final x=await ApiService.getListings(q:search.text,category:category=='همه'?'':category);if(mounted)setState(()=>listings=x);}catch(e){if(mounted)_msg(e);}finally{if(mounted)setState(()=>loading=false);}}
+  Future<void> _load()async{if(mounted)setState(()=>loading=true);try{final x=await ApiService.getListings(q:search.text,category:category=='همه'?'':category,province:widget.provinceFilter);if(mounted)setState(()=>listings=x);}catch(e){if(mounted)_msg(e);}finally{if(mounted)setState(()=>loading=false);}}
   void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
   Future<void> _openLogin()async{await Navigator.push(context,MaterialPageRoute(builder:(_)=>const LoginScreen()));if(mounted)_load();}
   Future<void> _openBoost()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const MonetizationScreen()));}
@@ -175,9 +270,11 @@ class _HomeScreenState extends State<HomeScreen>{
   Future<void> _openChat(Map<String,dynamic> listing)async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}try{final conv=await ApiService.startConversation(listing['id'].toString());if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:conv,listingTitle:(listing['title']??'آگهی').toString())));}catch(e){if(mounted)_msg(e);}}
   Future<void> _post()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(tr(context,'دیوار افغانستان'),style:const TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:()=>chooseLanguage(context),tooltip:tr(context,'زبان برنامه'),icon:const Icon(Icons.language)),IconButton(onPressed:_openMessages,tooltip:tr(context,'پیام‌ها'),icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:tr(context,'حساب من'),icon:const Icon(Icons.person_outline))]),
+    appBar:AppBar(title:Text(tr(context,'دیوار افغانستان'),style:const TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:() async { final r=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>ProvinceSelectionScreen(current:widget.provinceFilter))); if(r!=null&&mounted){final p=await SharedPreferences.getInstance(); await p.setString('bazarek_province_filter',r); Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>HomeScreen(provinceFilter:r)));}},tooltip:tr(context,'تغییر ولایت'),icon:const Icon(Icons.location_on_outlined)),IconButton(onPressed:()=>chooseLanguage(context),tooltip:tr(context,'زبان برنامه'),icon:const Icon(Icons.language)),IconButton(onPressed:_openMessages,tooltip:tr(context,'پیام‌ها'),icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:tr(context,'حساب من'),icon:const Icon(Icons.person_outline))]),
     floatingActionButton:FloatingActionButton.extended(onPressed:_post,icon:const Icon(Icons.add),label:Text(tr(context,'ثبت آگهی'))),
     body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,100),children:[
+      Card(child:ListTile(dense:true,leading:const Icon(Icons.location_on_outlined),title:Text(provinceLabel(context,widget.provinceFilter),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text(tr(context,'ولایت انتخاب‌شده')),trailing:const Icon(Icons.chevron_left),onTap:() async { final r=await Navigator.push<String>(context,MaterialPageRoute(builder:(_)=>ProvinceSelectionScreen(current:widget.provinceFilter))); if(r!=null&&mounted){final p=await SharedPreferences.getInstance(); await p.setString('bazarek_province_filter',r); Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>HomeScreen(provinceFilter:r)));}})),
+      const SizedBox(height:8),
       Text(tr(context,'بازار افغانستان، ساده و حرفه‌ای'),style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),
       const SizedBox(height:12),TextField(controller:search,onSubmitted:(_)=>_load(),textInputAction:TextInputAction.search,decoration:InputDecoration(hintText:tr(context,'چه چیزی می‌خواهید پیدا کنید؟'),prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:_load,icon:const Icon(Icons.tune)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)))),
       const SizedBox(height:12),SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:cats.length,itemBuilder:(_,i)=>ChoiceChip(label:Text(tr(context,cats[i])),selected:(category.isEmpty&&i==0)||category==cats[i],onSelected:(_){setState(()=>category=cats[i]);_load();}),separatorBuilder:(_,__)=>const SizedBox(width:8))),
@@ -197,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen>{
     Stack(children:[ImageGallery(images:_imageUrls(p['image_url']),height:230),if(p['is_pinned']==true||p['is_featured']==true)Positioned(top:12,left:12,child:Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.92),borderRadius:BorderRadius.circular(12)),child:Text(p['is_featured']==true&&p['is_pinned']==true?'🚀 BOOST دیوار افغانستان':p['is_featured']==true?'⭐ دیوار افغانستان ویژه':'📌 دیوار افغانستان پین',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))))]),const SizedBox(height:14),Text(p['title']??'',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:12),
     Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14)),child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[const Text('قیمت',style:TextStyle(fontSize:16)),Text(_money(p['price']),style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))])),
     if((p['category']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Text('دسته‌بندی: ${p['category']}')),
-    if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 محل: ${p['location_text']}')),
+    if((p['province']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 ${provinceLabel(context,(p['province']??'').toString())}',style:const TextStyle(fontWeight:FontWeight.bold))),if((p['location_text']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('📍 محل: ${p['location_text']}')),
     if(p['is_negotiable']==true)const Padding(padding:EdgeInsets.only(top:8),child:Text('🤝 قیمت قابل مذاکره است.')),
     Padding(padding:const EdgeInsets.only(top:8),child:Text('👁 ${p['views_count']??0} بازدید')),
     const SizedBox(height:12),
@@ -258,7 +355,7 @@ class ImageGallery extends StatelessWidget {
     );
   }
 }
-class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);final pinned=product['is_pinned']==true;final featured=product['is_featured']==true;return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),if(pinned||featured)Positioned(top:5,left:5,child:_promoWatermark(context,pinned,featured))]),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(pinned)const Icon(Icons.push_pin,size:17),if(featured)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text((product['title']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text((product['category']??'عمومی').toString()),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _promoWatermark(BuildContext context,bool pinned,bool featured){final text=featured&&pinned?'BOOST دیوار افغانستان':featured?'دیوار افغانستان ویژه':'دیوار افغانستان پین';return Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.9),borderRadius:BorderRadius.circular(8)),child:Text(text,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
+class ListingCard extends StatelessWidget{final Map<String,dynamic> product;final VoidCallback onTap;const ListingCard({super.key,required this.product,required this.onTap});@override Widget build(BuildContext context){final images=_imageUrls(product['image_url']);final pinned=product['is_pinned']==true;final featured=product['is_featured']==true;return Card(clipBehavior:Clip.antiAlias,margin:const EdgeInsets.only(bottom:10),child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(10),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:images.isNotEmpty?Image.network(images.first,width:86,height:86,fit:BoxFit.cover,errorBuilder:(_,__,___)=>_placeholder(context)):_placeholder(context)),if(pinned||featured)Positioned(top:5,left:5,child:_promoWatermark(context,pinned,featured))]),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[if(pinned)const Icon(Icons.push_pin,size:17),if(featured)const Icon(Icons.star,size:17),const SizedBox(width:3),Expanded(child:Text((product['title']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)))]),const SizedBox(height:8),Text((product['category']??'عمومی').toString()),if((product['province']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:5),child:Text('📍 ${provinceLabel(context,(product['province']??'').toString())}',style:const TextStyle(fontSize:12,fontWeight:FontWeight.w600))),const SizedBox(height:8),Text(_money(product['price']),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold,color:Theme.of(context).colorScheme.primary))])),const Icon(Icons.chevron_left)]))));}Widget _promoWatermark(BuildContext context,bool pinned,bool featured){final text=featured&&pinned?'BOOST دیوار افغانستان':featured?'دیوار افغانستان ویژه':'دیوار افغانستان پین';return Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:Theme.of(context).colorScheme.primary.withOpacity(.9),borderRadius:BorderRadius.circular(8)),child:Text(text,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));}Widget _placeholder(BuildContext context)=>Container(width:86,height:86,decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.image_outlined,size:34));}
 
 class AuthScaffold extends StatelessWidget {
   final String title;
@@ -287,7 +384,7 @@ class AuthScaffold extends StatelessWidget {
 }
 
 class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginScreenState(); }
-class _LoginScreenState extends State<LoginScreen>{final phone=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.login(phone.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',t);final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));@override Widget build(BuildContext context)=>AuthScaffold(title:tr(context,'ورود به دیوار افغانستان'),children:[TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:tr(context,'شماره تلفن یا ایمیل'),hintText:'07XXXXXXXX یا example@gmail.com',prefixIcon:Icon(Icons.phone_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:tr(context,'رمز عبور'),prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:Text(tr(context,'حساب ندارید؟ ثبت‌نام کنید'))),const Divider(height:28),TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:Text(tr(context,'ورود مدیریت')))]);}
+class _LoginScreenState extends State<LoginScreen>{final phone=TextEditingController(),password=TextEditingController();bool loading=false;Future<void> _login()async{setState(()=>loading=true);try{final t=await ApiService.login(phone.text.trim(),password.text);final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',t);final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeGate()),(_)=>false);}catch(e){_msg(e);}finally{if(mounted)setState(()=>loading=false);}}void _msg(Object e)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));@override Widget build(BuildContext context)=>AuthScaffold(title:tr(context,'ورود به دیوار افغانستان'),children:[TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:tr(context,'شماره تلفن یا ایمیل'),hintText:'07XXXXXXXX یا example@gmail.com',prefixIcon:Icon(Icons.phone_outlined),border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:tr(context,'رمز عبور'),prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:loading?null:_login,child:loading?const CircularProgressIndicator():const Text('ورود'))),TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const RegisterScreen())),child:Text(tr(context,'حساب ندارید؟ ثبت‌نام کنید'))),const Divider(height:28),TextButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminLoginScreen())),icon:const Icon(Icons.admin_panel_settings_outlined),label:Text(tr(context,'ورود مدیریت')))]);}
 
 
 class AdminLoginScreen extends StatefulWidget{const AdminLoginScreen({super.key});@override State<AdminLoginScreen> createState()=>_AdminLoginScreenState();}
@@ -331,7 +428,7 @@ class _RegisterScreenState extends State<RegisterScreen>{
     if(useEmail){normalizedEmail=email.text.trim();if(!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(normalizedEmail)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('لطفاً یک ایمیل معتبر وارد کنید.')));return;}}
     else {normalizedPhone=_normalizePhone(phone.text);if(!RegExp(r'^07\d{8}$').hasMatch(normalizedPhone)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('شماره تلفن معتبر افغانستان را وارد کنید؛ مثال: 0780455492')));return;}}
     setState(()=>loading=true);
-    try{final d=await ApiService.register(phone:normalizedPhone,email:normalizedEmail,password:password.text,fullName:name.text,shopName:shop.text);final token=d['token'];if(token!=null){final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',token.toString());final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeScreen()),(_)=>false);}else{throw Exception('حساب ساخته نشد. لطفاً دوباره تلاش کنید.');}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}
+    try{final d=await ApiService.register(phone:normalizedPhone,email:normalizedEmail,password:password.text,fullName:name.text,shopName:shop.text);final token=d['token'];if(token!=null){final p=await SharedPreferences.getInstance();await p.setString('bazarek_token',token.toString());final rt=ApiService.refreshToken;if(rt!=null&&rt.isNotEmpty)await p.setString('bazarek_refresh_token',rt);if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const HomeGate()),(_)=>false);}else{throw Exception('حساب ساخته نشد. لطفاً دوباره تلاش کنید.');}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}
   }
   @override Widget build(BuildContext context)=>AuthScaffold(title:tr(context,'ساخت حساب'),children:[
     SegmentedButton<bool>(segments:const[ButtonSegment(value:false,label:Text(tr(context,'شماره تلفن')),icon:Icon(Icons.phone_outlined)),ButtonSegment(value:true,label:Text(tr(context,'جیمیل / ایمیل')),icon:Icon(Icons.email_outlined))],selected:{useEmail},onSelectionChanged:(v)=>setState(()=>useEmail=v.first)),
@@ -531,7 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
               if (!mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (_) => const HomeScreen()),
+                MaterialPageRoute(builder: (_) => const HomeGate()),
                 (_) => false,
               );
             },
@@ -648,7 +745,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const HomeGate()),
         (_) => false,
       );
     }
@@ -852,6 +949,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final price = TextEditingController();
   final stock = TextEditingController(text: '1');
   final desc = TextEditingController();
+  String province = '';
   String category = '';
   List<Uint8List> imageBytes = [];
   List<String> imageNames = [];
@@ -1029,6 +1127,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
             const SizedBox(height: 10),
             TextField(controller:contactPhone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تماس آگهی',hintText:'07XXXXXXXX',prefixIcon:Icon(Icons.phone_outlined),border:OutlineInputBorder())),
             const SizedBox(height:10),
+            DropdownButtonFormField<String>(value: province.isEmpty ? null : province, decoration: const InputDecoration(labelText:'ولایت آگهی',prefixIcon:Icon(Icons.map_outlined),border:OutlineInputBorder()), items: afghanistanProvinces.map((x)=>DropdownMenuItem<String>(value:x['fa'],child:Text(provinceLabel(context,x['fa'])))).toList(), onChanged:(v)=>setState(()=>province=v??'')),
+            const SizedBox(height:10),
             TextField(controller:locationText,decoration:const InputDecoration(labelText:'محل آگهی',hintText:'مثلاً کابل، کارته چهار',prefixIcon:Icon(Icons.location_on_outlined),border:OutlineInputBorder())),
             const SizedBox(height:10),
             Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -1057,6 +1157,10 @@ class _AddProductSheetState extends State<AddProductSheet> {
                         _msg(Exception('دسته‌بندی را انتخاب کنید.'));
                         return;
                       }
+                      if (province.isEmpty) {
+                        _msg(Exception('ولایت آگهی را انتخاب کنید.'));
+                        return;
+                      }
                       if (imageBytes.isNotEmpty && imageUrls.isEmpty) {
                         await _uploadImages();
                         if (imageUrls.isEmpty) return;
@@ -1073,6 +1177,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
                         'show_phone': showPhone,
                         'contact_phone': contactPhone.text.trim(),
                         'location_text': locationText.text.trim(),
+                        'province': province,
                         'is_negotiable': isNegotiable,
                       });
                     },
