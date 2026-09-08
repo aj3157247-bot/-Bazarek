@@ -4,13 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'api_service.dart';
 
-final ValueNotifier<Locale> appLocale = ValueNotifier(const Locale('fa'));
+final ValueNotifier<String> appLanguage = ValueNotifier('fa');
 
 String tr(String text) {
-  if (appLocale.value.languageCode != 'ps') return text;
+  if (appLanguage.value != 'ps') return text;
   const m = <String, String>{
     'بازارک': 'بازارک',
     'بازار افغانستان، ساده و حرفه‌ای': 'د افغانستان بازار، ساده او مسلکي',
@@ -36,15 +35,18 @@ String tr(String text) {
     'پښتو': 'پښتو',
     'انتخاب زبان': 'ژبه وټاکئ',
     'پروفایل من': 'زما پروفایل',
-    'نام و نام خانوادگی': 'نوم او تخلص',
     'شماره تلفن': 'د ټیلیفون شمېره',
     'شهر / ولایت': 'ښار / ولایت',
-    'ایمیل مدیر': 'د مدیر برېښنالیک',
-    'ورود مدیریت': 'مدیریت ته ننوتل',
-    'ایمیل و رمز عبور الزامی است.': 'د برېښنالیک او پټ نوم ډکول اړین دي.',
-    'شماره تلفن و رمز عبور الزامی است.': 'د ټیلیفون شمېره او پټ نوم اړین دي.',
-    'شماره تلفن معتبر افغانستان وارد کنید.': 'د افغانستان معتبره د ټیلیفون شمېره دننه کړئ.',
-    'شماره تماس الزامی است.': 'د اړیکې شمېره اړینه ده.',
+    'همه': 'ټول',
+    'موبایل': 'موبایل',
+    'موتر': 'موټر',
+    'املاک': 'املاک',
+    'لوازم برقی': 'برقي وسایل',
+    'خانه': 'کور',
+    'لباس': 'کالي',
+    'خدمات': 'خدمتونه',
+    'کار': 'کار',
+    'حیوانات': 'څاروي',
   };
   return m[text] ?? text;
 }
@@ -70,25 +72,26 @@ Future<void> chooseLanguage(BuildContext context) async {
     ),
   );
   if (selected == null) return;
-  appLocale.value = Locale(selected);
+  appLanguage.value = selected;
+  appLanguage.notifyListeners();
   final p = await SharedPreferences.getInstance();
   await p.setString('bazarek_language', selected);
 }
+
 
 void main() => runApp(const BazarekApp());
 
 class BazarekApp extends StatelessWidget {
   const BazarekApp({super.key});
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<Locale>(
-    valueListenable: appLocale,
-    builder: (context, locale, _) => MaterialApp(
+  Widget build(BuildContext context) => ValueListenableBuilder<String>(
+    valueListenable: appLanguage,
+    builder: (context, language, _) => MaterialApp(
       title: 'بازارک',
       debugShowCheckedModeBanner: false,
-      locale: locale,
-      supportedLocales: const [Locale('fa'), Locale('ps')],
+      locale: const Locale('fa'),
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal, fontFamily: 'Roboto'),
-      home: const StartupScreen(),
+      home: Directionality(textDirection: TextDirection.rtl, child: const StartupScreen()),
     ),
   );
 }
@@ -99,7 +102,7 @@ class _StartupScreenState extends State<StartupScreen> {
   Future<void> _start() async {
     final p = await SharedPreferences.getInstance();
     final savedLanguage = p.getString('bazarek_language');
-    if (savedLanguage == 'fa' || savedLanguage == 'ps') appLocale.value = Locale(savedLanguage!);
+    if (savedLanguage == 'fa' || savedLanguage == 'ps') appLanguage.value = savedLanguage!;
     final token = p.getString('bazarek_token');
     final refresh = p.getString('bazarek_refresh_token');
     if (token != null && token.isNotEmpty) {
@@ -142,13 +145,13 @@ class _HomeScreenState extends State<HomeScreen>{
   Future<void> _openChat(Map<String,dynamic> listing)async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}try{final conv=await ApiService.startConversation(listing['id'].toString());if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatScreen(conversation:conv,listingTitle:(listing['title']??'آگهی').toString())));}catch(e){if(mounted)_msg(e);}}
   Future<void> _post()async{final p=await SharedPreferences.getInstance();if(p.getString('bazarek_token')==null){await _openLogin();return;}if(!mounted)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>const DashboardScreen()));}
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:LText('بازارک',style:const TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:_openMessages,tooltip:tr('پیام‌ها'),icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:tr('حساب من'),icon:const Icon(Icons.person_outline))]),
+    appBar:AppBar(title:LText('بازارک',style:const TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:_openMessages,tooltip:tr('پیام‌ها'),icon:const Icon(Icons.chat_outlined)),IconButton(onPressed:_openAccount,tooltip:tr('حساب من'),icon:const Icon(Icons.person_outline)),IconButton(onPressed:()=>chooseLanguage(context),tooltip:tr('زبان برنامه'),icon:const Icon(Icons.language))]),
     floatingActionButton:FloatingActionButton.extended(onPressed:_post,icon:const Icon(Icons.add),label:LText('ثبت آگهی')),
     body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,100),children:[
       LText('بازار افغانستان، ساده و حرفه‌ای',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),
       const SizedBox(height:12),TextField(controller:search,onSubmitted:(_)=>_load(),textInputAction:TextInputAction.search,decoration:InputDecoration(hintText:tr('چه چیزی می‌خواهید پیدا کنید؟'),prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:_load,icon:const Icon(Icons.tune)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(18)))),
-      const SizedBox(height:12),SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:cats.length,itemBuilder:(_,i)=>ChoiceChip(label:Text(cats[i]),selected:(category.isEmpty&&i==0)||category==cats[i],onSelected:(_){setState(()=>category=cats[i]);_load();}),separatorBuilder:(_,__)=>const SizedBox(width:8))),
-      const SizedBox(height:12),Card(child:InkWell(onTap:_openBoost,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[CircleAvatar(child:const Icon(Icons.rocket_launch)),const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[LText('🚀 بازارک BOOST',style:TextStyle(fontSize:17,fontWeight:FontWeight.w900)),SizedBox(height:3),Text('ویژه و پین آگهی برای دیده‌شدن بیشتر',style:TextStyle(fontSize:13))])),const Icon(Icons.chevron_left)])))),const SizedBox(height:18),if(loading)const Center(child:Padding(padding:EdgeInsets.all(30),child:CircularProgressIndicator())) else if(listings.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(28),child:Column(children:[Icon(Icons.search_off,size:46),SizedBox(height:8),LText('آگهی‌ای پیدا نشد.'),LText('جستجو یا دسته‌بندی را تغییر دهید.')]))) else ...listings.map((p)=>ListingCard(product:p,onTap:()=>_details(p)))
+      const SizedBox(height:12),SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:cats.length,itemBuilder:(_,i)=>ChoiceChip(label:LText(cats[i]),selected:(category.isEmpty&&i==0)||category==cats[i],onSelected:(_){setState(()=>category=cats[i]);_load();}),separatorBuilder:(_,__)=>const SizedBox(width:8))),
+      const SizedBox(height:12),Card(child:InkWell(onTap:_openBoost,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[CircleAvatar(child:const Icon(Icons.rocket_launch)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[LText('🚀 بازارک BOOST',style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900)),const SizedBox(height:3),LText('ویژه و پین آگهی برای دیده‌شدن بیشتر',style:const TextStyle(fontSize:13))])),const Icon(Icons.chevron_left)])))),const SizedBox(height:18),if(loading)const Center(child:Padding(padding:EdgeInsets.all(30),child:CircularProgressIndicator())) else if(listings.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(28),child:Column(children:[const Icon(Icons.search_off,size:46),const SizedBox(height:8),LText('آگهی‌ای پیدا نشد.'),LText('جستجو یا دسته‌بندی را تغییر دهید.')])) ) else ...listings.map((p)=>ListingCard(product:p,onTap:()=>_details(p)))
     ])));
   Future<void> _report(Map<String,dynamic> p) async {
     final reason=await showDialog<String>(context:context,builder:(_)=>SimpleDialog(title:const Text('گزارش آگهی'),children:[
@@ -443,7 +446,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
     }
 
     return Scaffold(
-      appBar: AppBar(title: LText('پروفایل من'), actions: [IconButton(onPressed: () => chooseLanguage(context), tooltip: tr('زبان برنامه'), icon: const Icon(Icons.language))]),
+      appBar: AppBar(title: const Text('پروفایل من')),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
