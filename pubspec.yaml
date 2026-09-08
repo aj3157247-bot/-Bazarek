@@ -9,6 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # بسته مربوط به پشتیبانی از راست‌به‌چپ و زبان‌های فارسی/پشتو
+  flutter_localizations:
+    sdk: flutter
+
   http: ^1.2.0
   cupertino_icons: ^1.0.6
   shared_preferences: ^2.5.3
