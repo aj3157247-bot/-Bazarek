@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
@@ -136,8 +135,8 @@ const Map<String, String> _faMap = {
   'price_negotiable': 'توافقی',
   'vip_badge': 'ویژه (VIP)',
   'full_name': 'نام کامل',
-  'phone_or_email': 'شماره تلفن یا ایمیل',
-  'password': 'رمز عبور',
+  'phone_or_email': 'شماره تلفن یا ایمیل معتبر',
+  'password': 'رمز عبور (حداقل ۶ کاراکتر)',
   'no_account': 'حساب کاربری ندارید؟ ثبت نام کنید',
   'have_account': 'قبلاً ثبت‌نام کرده‌اید؟ وارد شوید',
 };
@@ -233,38 +232,67 @@ class ApiService {
       };
 
   static Future<Map<String, dynamic>> login(String phoneOrEmail, String password) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // ۱. بررسی ثبت نام قبلی در حافظه دستگاه
+    final savedPassword = prefs.getString('user_pwd_$phoneOrEmail');
+    final savedName = prefs.getString('registered_name_$phoneOrEmail');
+
     try {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/login'),
         headers: headers,
         body: jsonEncode({'login': phoneOrEmail, 'password': password}),
-      );
+      ).timeout(const Duration(seconds: 4));
+      
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
     } catch (_) {}
-    // دمو برای تست افلاین در صورت نبود سرور
+
+    // ۲. عدم اجازه ورود در صورت عدم وجود حساب ثبت شده
+    if (savedPassword == null) {
+      return {'error': 'این حساب کاربری وجود ندارد. لطفاً ابتدا ثبت‌نام (Sign Up) کنید.'};
+    }
+
+    if (savedPassword != password) {
+      return {'error': 'رمز عبور وارد شده اشتباه است.'};
+    }
+
     return {
-      'token': 'demo_token_12345',
-      'user': {'name': 'کاربر بازارک', 'contact': phoneOrEmail}
+      'token': 'local_sec_token_${DateTime.now().millisecondsSinceEpoch}',
+      'user': {
+        'name': savedName ?? 'کاربر بازارک',
+        'contact': phoneOrEmail,
+      }
     };
   }
 
   static Future<Map<String, dynamic>> register(String name, String phoneOrEmail, String password) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // ذخیره اطلاعات ثبت‌نام جهت اعتبارسنجی ورود بعدی
+    await prefs.setString('registered_name_$phoneOrEmail', name);
+    await prefs.setString('user_pwd_$phoneOrEmail', password);
+
     try {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/register'),
         headers: headers,
         body: jsonEncode({'name': name, 'login': phoneOrEmail, 'password': password}),
-      );
+      ).timeout(const Duration(seconds: 4));
+
       if (res.statusCode == 200 || res.statusCode == 201) {
         return jsonDecode(res.body);
       }
     } catch (_) {}
-    // دمو برای تست افلاین
+
     return {
-      'token': 'demo_token_12345',
-      'user': {'name': name, 'contact': phoneOrEmail}
+      'token': 'local_reg_token_${DateTime.now().millisecondsSinceEpoch}',
+      'user': {
+        'name': name,
+        'contact': phoneOrEmail,
+      }
     };
   }
 
@@ -787,23 +815,25 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  final _formKey = GlobalKey<FormState>();
   bool isSignUp = false;
   final nameController = TextEditingController();
   final contactController = TextEditingController();
   final passwordController = TextEditingController();
   bool isLoading = false;
 
+  bool _isValidEmailOrPhone(String value) {
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final phoneRegex = RegExp(r'^\+?[0-9]{9,13}$');
+    return emailRegex.hasMatch(value) || phoneRegex.hasMatch(value);
+  }
+
   Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
     final contact = contactController.text.trim();
     final password = passwordController.text.trim();
     final name = nameController.text.trim();
-
-    if (contact.isEmpty || password.isEmpty || (isSignUp && name.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لطفاً تمام فیلدها را پر کنید')),
-      );
-      return;
-    }
 
     setState(() => isLoading = true);
 
@@ -823,11 +853,22 @@ class _AuthScreenState extends State<AuthScreen> {
         user['name'] ?? name,
         user['contact'] ?? contact,
       );
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isSignUp ? 'ثبت‌نام با موفقیت انجام شد' : 'با موفقیت وارد شدید'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response['error'] ?? 'خطا در برقراری ارتباط')),
+          SnackBar(
+            content: Text(response['error'] ?? 'خطا در ثبت یا ورود'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -842,63 +883,91 @@ class _AuthScreenState extends State<AuthScreen> {
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-              if (isSignUp) ...[
-                TextField(
-                  controller: nameController,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+                if (isSignUp) ...[
+                  TextFormField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: tr(context, 'full_name'),
+                      prefixIcon: const Icon(Icons.person),
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().length < 2) {
+                        return 'لطفاً نام کامل خود را وارد کنید';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                TextFormField(
+                  controller: contactController,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: tr(context, 'full_name'),
-                    prefixIcon: const Icon(Icons.person),
+                    labelText: tr(context, 'phone_or_email'),
+                    prefixIcon: const Icon(Icons.phone_android),
                     border: const OutlineInputBorder(),
                   ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'لطفاً ایمیل یا شماره تلفن خود را وارد کنید';
+                    }
+                    if (!_isValidEmailOrPhone(val.trim())) {
+                      return 'فرمت ایمیل (مثل name@gmail.com) یا شماره تلفن معتبر نیست';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
+                TextFormField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: tr(context, 'password'),
+                    prefixIcon: const Icon(Icons.lock),
+                    border: const OutlineInputBorder(),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().length < 6) {
+                      return 'رمز عبور باید حداقل ۶ کاراکتر باشد';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: isLoading ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text(
+                          isSignUp ? tr(context, 'signup') : tr(context, 'login'),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    setState(() => isSignUp = !isSignUp);
+                  },
+                  child: Text(
+                    isSignUp ? tr(context, 'have_account') : tr(context, 'no_account'),
+                  ),
+                ),
               ],
-              TextField(
-                controller: contactController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: tr(context, 'phone_or_email'),
-                  prefixIcon: const Icon(Icons.phone_android),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: tr(context, 'password'),
-                  prefixIcon: const Icon(Icons.lock),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: isLoading ? null : _submit,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(
-                        isSignUp ? tr(context, 'signup') : tr(context, 'login'),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () {
-                  setState(() => isSignUp = !isSignUp);
-                },
-                child: Text(
-                  isSignUp ? tr(context, 'have_account') : tr(context, 'no_account'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
