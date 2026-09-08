@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dartd:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -180,7 +180,7 @@ const List<String> provinces = [
   'ارزگان',
   'زابل',
   'پکتیکا',
-  'هلند',
+  'هلمند',
   'فراه',
   'نیمروز',
   'بادغیس',
@@ -188,7 +188,7 @@ const List<String> provinces = [
   'سرپل',
   'فاریاب',
   'جوزجان',
-  'سمبنگان',
+  'سمنگان',
   'تخار',
   'کندز',
   'بغلان',
@@ -210,7 +210,7 @@ const List<Map<String, dynamic>> categories = [
 
 // API Config
 class ApiConfig {
-  static const String baseUrl = 'https://afgbazar.com/api/v1'; // جایگزین با آدرس سرور
+  static const String baseUrl = 'https://afgbazar.com/api/v1';
 }
 
 class ApiService {
@@ -222,12 +222,16 @@ class ApiService {
       };
 
   static Future<Map<String, dynamic>> login(String phoneOrEmail, String password) async {
-    final res = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/login'),
-      headers: headers,
-      body: jsonEncode({'login': phoneOrEmail, 'password': password}),
-    );
-    return jsonDecode(res.body);
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/login'),
+        headers: headers,
+        body: jsonEncode({'login': phoneOrEmail, 'password': password}),
+      );
+      return jsonDecode(res.body);
+    } catch (_) {
+      return {'error': 'ارتباط با سرور برقرار نشد'};
+    }
   }
 
   static Future<List<dynamic>> getProducts({
@@ -263,23 +267,14 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
-  String selectedProvince = '';
-  String selectedCategory = '';
-  String searchQuery = '';
 
-  final List<Widget> _pages = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _pages.addAll([
-      const HomeScreen(),
-      const ChatListScreen(),
-      const AddProductScreen(),
-      const MyProductsScreen(),
-      const ProfileScreen(),
-    ]);
-  }
+  final List<Widget> _pages = const [
+    HomeScreen(),
+    ChatListScreen(),
+    AddProductScreen(),
+    MyProductsScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -354,10 +349,12 @@ class _HomeScreenState extends State<HomeScreen> {
       province: selectedProvince,
       query: searchQuery,
     );
-    setState(() {
-      products = data;
-      isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        products = data;
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -382,7 +379,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: _loadProducts,
         child: Column(
           children: [
-            // Search Bar
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: TextField(
@@ -400,14 +396,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
-            // Filters
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  // Province Filter
                   DropdownButton<String>(
                     value: selectedProvince.isEmpty ? null : selectedProvince,
                     hint: Text(tr(context, 'all_provinces')),
@@ -424,7 +417,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
                   const SizedBox(width: 16),
-                  // Category Filter
                   DropdownButton<String>(
                     value: selectedCategory.isEmpty ? null : selectedCategory,
                     hint: Text(tr(context, 'all_categories')),
@@ -446,10 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 8),
-
-            // Product Grid / List
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -465,8 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           itemCount: products.length,
                           itemBuilder: (context, idx) {
-                            final item = products[idx];
-                            return _ProductCard(item: item);
+                            return _ProductCard(item: products[idx]);
                           },
                         ),
             ),
@@ -578,7 +566,6 @@ class ProductDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Slider
             if (images.isNotEmpty)
               SizedBox(
                 height: 250,
@@ -593,7 +580,6 @@ class ProductDetailScreen extends StatelessWidget {
                 color: Colors.grey.shade300,
                 child: const Center(child: Icon(Icons.image, size: 80)),
               ),
-
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -652,9 +638,7 @@ class ProductDetailScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () {
-                    // Open Chat
-                  },
+                  onPressed: () {},
                   icon: const Icon(Icons.chat),
                   label: Text(tr(context, 'chat_seller')),
                 ),
@@ -815,9 +799,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   final ImagePicker _picker = ImagePicker();
 
-  void _msg(Exception e) {
+  void _msg(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString())),
+      SnackBar(content: Text(text)),
     );
   }
 
@@ -834,7 +818,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   Future<void> _uploadImages() async {
     setState(() => uploading = true);
-    // منطق آپلود عکس به سرور
+    // در این بخش تصاویر آپلود می‌شوند
     setState(() => uploading = false);
   }
 
@@ -924,20 +908,19 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 ? null
                 : () async {
                     if (title.text.trim().isEmpty) {
-                      _msg(Exception('عنوان آگهی را وارد کنید.'));
+                      _msg('عنوان آگهی را وارد کنید.');
                       return;
                     }
                     if (category.isEmpty) {
-                      _msg(Exception('دسته‌بندی را انتخاب کنید.'));
+                      _msg('دسته‌بندی را انتخاب کنید.');
                       return;
                     }
                     if (province.isEmpty) {
-                      _msg(Exception('ولایت آگهی را انتخاب کنید.'));
+                      _msg('ولایت آگهی را انتخاب کنید.');
                       return;
                     }
                     if (imageBytes.isNotEmpty && imageUrls.isEmpty) {
                       await _uploadImages();
-                      if (imageUrls.isEmpty) return;
                     }
                     if (!mounted) return;
                     Navigator.pop(context, {
