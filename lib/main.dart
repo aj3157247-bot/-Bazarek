@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +48,7 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     AuthService.token = prefs.getString('auth_token');
     AuthService.userName = prefs.getString('user_name');
     AuthService.userContact = prefs.getString('user_contact');
+    AuthService.avatarUrl = prefs.getString('avatar_url');
     AuthService.refreshToken = prefs.getString('refresh_token');
     // توکن‌های ساختگی نسخه‌های قدیمی معتبر نیستند؛ آنها را پاک می‌کنیم.
     if (AuthService.token != null && AuthService.token!.startsWith('local_')) {
@@ -347,6 +349,7 @@ class AuthService {
   static String? token;
   static String? userName;
   static String? userContact;
+  static String? avatarUrl;
   static String? refreshToken;
 
   static bool get isLoggedIn => token != null && token!.isNotEmpty;
@@ -360,6 +363,7 @@ class AuthService {
     await prefs.setString('auth_token', tokenVal);
     await prefs.setString('user_name', nameVal);
     await prefs.setString('user_contact', contactVal);
+    if (avatarUrl != null && avatarUrl!.isNotEmpty) await prefs.setString('avatar_url', avatarUrl!);
     if (refreshTokenVal != null && refreshTokenVal.isNotEmpty) {
       await prefs.setString('refresh_token', refreshTokenVal);
     }
@@ -370,11 +374,13 @@ class AuthService {
     token = null;
     userName = null;
     userContact = null;
+    avatarUrl = null;
     refreshToken = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
     await prefs.remove('user_name');
     await prefs.remove('user_contact');
+    await prefs.remove('avatar_url');
     await prefs.remove('refresh_token');
     authVersion.value++;
   }
@@ -517,6 +523,36 @@ class ApiService {
     final data = jsonDecode(res.body);
     if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌های شما.') : 'خطا در دریافت آگهی‌های شما.');
     return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
+  }
+
+  static Future<Map<String, dynamic>> getPaymentInfo() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/payment-info'), headers: headers).timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/payment-info'), headers: headers).timeout(const Duration(seconds: 15));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت اطلاعات پرداخت.') : 'خطا در دریافت اطلاعات پرداخت.');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  static Future<String> uploadAvatar(XFile image) async {
+    Future<http.Response> send() async {
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
+      if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      req.files.add(await http.MultipartFile.fromPath('avatar', image.path));
+      final streamed = await req.send().timeout(const Duration(seconds: 30));
+      return http.Response.fromStream(streamed);
+    }
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'آپلود تصویر پروفایل ناموفق بود.') : 'آپلود تصویر پروفایل ناموفق بود.');
+    final url = data['url']?.toString() ?? '';
+    if (url.isEmpty) throw Exception('آدرس تصویر پروفایل از سرور دریافت نشد.');
+    AuthService.avatarUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('avatar_url', url);
+    return url;
   }
 
   static Future<List<dynamic>> getBoostPackages() async {
@@ -1279,21 +1315,42 @@ class _BoostScreenState extends State<BoostScreen> {
 
   Future<String?> _referenceDialog({required String title, required int price}) async {
     final c = TextEditingController();
+    Map<String, dynamic> payment = {};
+    try { payment = await ApiService.getPaymentInfo(); } catch (_) {}
+    final bank = payment['bank'] is Map ? Map<String, dynamic>.from(payment['bank']) : <String, dynamic>{};
+    final card = (payment['card_number'] ?? bank['card_number'] ?? payment['account_number'] ?? bank['account_number'] ?? '').toString();
+    final bankName = (payment['bank_name'] ?? bank['name'] ?? '').toString();
+    final accountName = (payment['account_name'] ?? bank['account_name'] ?? '').toString();
+    final instructions = (payment['instructions'] ?? '').toString();
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return showDialog<String>(
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           title: Text(title),
-          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${tr(context, 'price')}: $price ${tr(context, 'afghani')}'),
-            const SizedBox(height: 8),
-            Text(Localizations.localeOf(context).languageCode == 'ps' ? 'پیسې ولېږئ او د رسید/تعقیب شمېره ولیکئ.' : 'مبلغ را انتقال دهید و شماره پیگیری/رسید را وارد کنید.'),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${tr(context, 'price')}: $price ${tr(context, 'afghani')}', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            TextField(controller: c, onChanged: (_) => setDialogState(() {}), decoration: InputDecoration(labelText: Localizations.localeOf(context).languageCode == 'ps' ? 'د رسید شمېره' : 'شماره پیگیری / رسید', border: const OutlineInputBorder())),
-          ]),
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Theme.of(context).colorScheme.primaryContainer), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(ps ? '💳 د پیسو لېږلو معلومات' : '💳 اطلاعات پرداخت', style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              if (bankName.isNotEmpty) Text('${ps ? 'بانک' : 'بانک'}: $bankName'),
+              if (accountName.isNotEmpty) Text('${ps ? 'د حساب نوم' : 'نام حساب'}: $accountName'),
+              if (card.isNotEmpty) Row(children: [
+                Expanded(child: SelectableText('${ps ? 'شمېره / کارت' : 'شماره کارت / حساب'}: $card', style: const TextStyle(fontWeight: FontWeight.w800))),
+                IconButton(tooltip: ps ? 'کاپي' : 'کپی', onPressed: () async { await Clipboard.setData(ClipboardData(text: card)); if (dialogContext.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ps ? 'شمېره کاپي شوه.' : 'شماره کارت کپی شد.'))); }, icon: const Icon(Icons.copy, size: 20)),
+              ]),
+              if (card.isEmpty) Text(ps ? 'د تادیې معلومات لا نه دي تنظیم شوي.' : 'اطلاعات کارت/حساب هنوز تنظیم نشده است.'),
+              if (instructions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(instructions)),
+            ])),
+            const SizedBox(height: 10),
+            Text(ps ? '۱) پورته حساب/کارت ته دقیق مبلغ ولېږئ.\n۲) د انتقال رسید یا تعقیبي شمېره واخلئ.\n۳) هماغه شمېره لاندې ولیکئ.\n۴) مدیریت د پیسو له تایید وروسته Boost فعالوي.' : '۱) مبلغ دقیقاً به حساب/کارت بالا انتقال کنید.\n۲) رسید یا شماره پیگیری انتقال را بگیرید.\n۳) همان شماره را در کادر زیر وارد کنید.\n۴) بعد از تأیید پرداخت توسط مدیریت، Boost فعال می‌شود.'),
+            const SizedBox(height: 12),
+            TextField(controller: c, onChanged: (_) => setDialogState(() {}), decoration: InputDecoration(labelText: ps ? 'د رسید / تعقیب شمېره' : 'شماره پیگیری / رسید', border: const OutlineInputBorder())),
+          ])),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'لغوه' : 'لغو')),
-            FilledButton(onPressed: c.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, c.text.trim()), child: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'درخواست ثبتول' : 'ثبت درخواست')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(ps ? 'لغوه' : 'لغو')),
+            FilledButton(onPressed: c.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, c.text.trim()), child: Text(ps ? 'ثبت غوښتنه' : 'ثبت درخواست')),
           ],
         ),
       ),
@@ -1339,6 +1396,8 @@ class _BoostScreenState extends State<BoostScreen> {
             Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
           ])),
           const SizedBox(height: 22),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: د Boost د انتخاب پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي. مبلغ ولېږئ، د رسید شمېره ولیکئ، او د مدیریت تایید ته انتظار وباسئ.' : '💳 روش پرداخت: هنگام انتخاب Boost، شماره کارت/حساب بازارک نمایش داده می‌شود. مبلغ را انتقال دهید، شماره رسید را وارد کنید و منتظر تأیید مدیریت بمانید.')),
+          const SizedBox(height: 14),
           Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
           Text(ps ? 'یوازې د یوه ټاکلي اعلان لپاره؛ ارزانه او مناسب د چټک پلور لپاره.' : 'فقط برای یک آگهی؛ ارزان و مناسب برای فروش سریع.', style: const TextStyle(color: Colors.black54)),
@@ -1355,8 +1414,8 @@ class _BoostScreenState extends State<BoostScreen> {
           const SizedBox(height: 5),
           Text(ps ? 'د پیسو په بدل کې ستاسو ټول فعال اعلانونه Boost کېږي.' : 'یک اشتراک بخرید تا تمام آگهی‌های فعال شما Boost شوند.', style: const TextStyle(color: Colors.black54)),
           const SizedBox(height: 10),
-          Card(child: ListTile(leading: const Text('👑', style: TextStyle(fontSize: 30)), title: Text(ps ? 'میاشتنی — ټول اعلانونه' : 'ماهانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_month_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_monthly', 250, ps ? '👑 میاشتنی Boost' : '👑 بوست ماهانه'), child: Text('۲۵۰ ${tr(context,'afghani')}')))),
-          Card(child: ListTile(leading: const Text('🏆', style: TextStyle(fontSize: 30)), title: Text(ps ? 'کلنی — ټول اعلانونه' : 'سالانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_year_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_yearly', 2200, ps ? '🏆 کلنی Boost' : '🏆 بوست سالانه'), child: Text('۲۲۰۰ ${tr(context,'afghani')}')))),
+          Card(child: ListTile(leading: const Text('👑', style: TextStyle(fontSize: 30)), title: Text(ps ? 'میاشتنی — ټول اعلانونه' : 'ماهانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_month_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_monthly', 300, ps ? '👑 میاشتنی Boost' : '👑 بوست ماهانه'), child: Text('۳۰۰ ${tr(context,'afghani')}')))),
+          Card(child: ListTile(leading: const Text('🏆', style: TextStyle(fontSize: 30)), title: Text(ps ? 'کلنی — ټول اعلانونه' : 'سالانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_year_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_yearly', 2500, ps ? '🏆 کلنی Boost' : '🏆 بوست سالانه'), child: Text('۲۵۰۰ ${tr(context,'afghani')}')))),
           const SizedBox(height: 8),
           Text(ps ? '💡 لنډمهاله Boost یوازې پر ټاکلي اعلان لګېږي. میاشتنی او کلنی پلان ستاسو پر ټولو فعالو اعلانونو اغېز کوي.' : '💡 بوست کوتاه‌مدت فقط روی همان آگهی اعمال می‌شود؛ اشتراک ماهانه و سالانه روی تمام آگهی‌های فعال شما اثر می‌گذارد.', style: const TextStyle(color: Colors.black54)),
         ],
@@ -1459,11 +1518,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           if (AuthService.isLoggedIn) ...[
             UserAccountsDrawerHeader(
-              currentAccountPicture: const CircleAvatar(
-                child: Icon(Icons.person, size: 40),
+              currentAccountPicture: GestureDetector(
+                onTap: () async {
+                  final picker = ImagePicker();
+                  final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1000);
+                  if (image == null) return;
+                  try {
+                    await ApiService.uploadAvatar(image);
+                    if (mounted) setState(() {});
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'عکس پروفایل با موفقیت تغییر کرد.', 'ستاسو د پروفایل انځور بدل شو.'))));
+                  } catch (e) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                  }
+                },
+                child: CircleAvatar(
+                  backgroundImage: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty) ? NetworkImage(AuthService.avatarUrl!) : null,
+                  child: (AuthService.avatarUrl == null || AuthService.avatarUrl!.isEmpty) ? const Icon(Icons.person, size: 40) : null,
+                ),
               ),
               accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
               accountEmail: Text(AuthService.userContact ?? ''),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_a_photo_outlined),
+              title: Text(psText(context, 'تغییر عکس پروفایل', 'د پروفایل انځور بدلول')),
+              subtitle: Text(psText(context, 'یک عکس از گالری انتخاب کنید.', 'له ګالري څخه یو انځور وټاکئ.')),
+              onTap: () async {
+                final picker = ImagePicker();
+                final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1000);
+                if (image == null) return;
+                try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+              },
             ),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
