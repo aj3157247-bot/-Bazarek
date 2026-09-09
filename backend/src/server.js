@@ -32,7 +32,7 @@ function requireConfig(res) {
 
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
 app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
-app.get('/api/version', (_, res) => res.json({ version: '2.4.0', features: ['warnings','reports','image-upload','wallet','promotions','favorites','listing-views','contact-phone'] }));
+app.get('/api/version', (_, res) => res.json({ version: '2.5.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone'] }));
 
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -277,7 +277,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,created_at,updated_at').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -313,6 +313,8 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
       is_pinned: pinDays > 0,
       featured_until: featureDays > 0 ? new Date(now + featureDays * 86400000).toISOString() : null,
       pinned_until: pinDays > 0 ? new Date(now + pinDays * 86400000).toISOString() : null,
+      boost_level: 0,
+      boost_until: null,
       updated_at: new Date().toISOString()
     };
     const { data, error } = await db.from('products').update(payload).eq('id', req.params.id).select().single();
@@ -324,74 +326,44 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,allow_chat,show_phone,contact_phone,location_text,is_negotiable,views_count,province').eq('is_active', true).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,is_negotiable,views_count,province').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
+    const subcategory = String(req.query.subcategory || '').trim();
     if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
     if (category) query = query.eq('category', category);
+    if (subcategory) query = query.eq('subcategory', subcategory);
     if (province) query = query.eq('province', province);
     const { data, error } = await query;
     if (error) throw error;
     const now = Date.now();
-    const rows = (data || []).map(x => ({
-      ...x,
-      is_featured: x.is_featured === true && (!x.featured_until || new Date(x.featured_until).getTime() > now),
-      is_pinned: x.is_pinned === true && (!x.pinned_until || new Date(x.pinned_until).getTime() > now),
-    }));
-
-    // Boost is automatic: the higher the paid boost package, the higher the ranking score.
-    // Global monthly/yearly boost applies to every active ad of that seller.
-    const vendorIds = [...new Set(rows.map(x => x.vendor_id).filter(Boolean))];
-    let globalBoost = {};
-    if (vendorIds.length) {
-      const { data: subs } = await db.from('seller_subscriptions')
-        .select('user_id,plan,ends_at,status')
-        .in('user_id', vendorIds)
-        .in('plan', ['monthly_boost','yearly_boost'])
-        .eq('status','active');
-      for (const sub of (subs || [])) {
-        if (!sub.ends_at || new Date(sub.ends_at).getTime() <= now) continue;
-        const score = sub.plan === 'yearly_boost' ? 5000 : 3000;
-        globalBoost[sub.user_id] = Math.max(globalBoost[sub.user_id] || 0, score);
-      }
-    }
-
-    const listingIds = rows.map(x => x.id).filter(Boolean);
-    let paidBoost = {};
-    if (listingIds.length) {
-      const { data: orders } = await db.from('promotion_orders')
-        .select('listing_id,amount_afn,package_id,created_at,promotion_packages(title,boost_level,feature_days,pin_days)')
-        .in('listing_id', listingIds).eq('status','paid');
-      for (const order of (orders || [])) {
-        const pkg = order.promotion_packages || {};
-        const days = Math.max(Number(pkg.feature_days || 0), Number(pkg.pin_days || 0));
-        const until = new Date(order.created_at).getTime() + days * 86400000;
-        if (days > 0 && until <= now) continue;
-        // Price is the main factor, with a small package-level bonus for stronger packages.
-        const score = Number(order.amount_afn || 0) * 100 + Number(pkg.boost_level || 0) * 1000;
-        paidBoost[order.listing_id] = Math.max(paidBoost[order.listing_id] || 0, score);
-      }
-    }
-
-    const ranked = rows.map(x => {
-      const subscriptionScore = globalBoost[x.vendor_id] || 0;
-      const listingScore = paidBoost[x.id] || 0;
-      const pinBonus = x.is_pinned ? 800 : 0;
-      const featureBonus = x.is_featured ? 300 : 0;
-      const boostScore = subscriptionScore + listingScore + pinBonus + featureBonus;
-      let boostBadge = '';
-      if (subscriptionScore >= 5000) boostBadge = '🏆 فروشنده طلایی';
-      else if (subscriptionScore >= 3000) boostBadge = '👑 فروشنده ویژه';
-      if (listingScore >= 7000) boostBadge = '💥 قدرتی';
-      else if (listingScore >= 4000) boostBadge = '🔥 انفجاری';
-      else if (listingScore >= 2000) boostBadge = '⚡ توربو';
-      return { ...x, boost_score: boostScore, boost_badge: boostBadge, is_boosted: boostScore > 0 };
-    }).sort((a,b) => Number(b.boost_score) - Number(a.boost_score) || Number(b.is_pinned) - Number(a.is_pinned) || Number(b.is_featured) - Number(a.is_featured) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-    const { data: profiles } = vendorIds.length ? await db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : { data: [] };
+    const vendorIds = [...new Set((data || []).map(x => x.vendor_id).filter(Boolean))];
+    const [{ data: profiles }, { data: globalSubs }] = await Promise.all([
+      vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : Promise.resolve({ data: [] }),
+      vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,ends_at,status').in('user_id', vendorIds).in('status', ['active']) : Promise.resolve({ data: [] }),
+    ]);
     const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
-    res.json(ranked.map(x => ({ ...x, seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' })));
+    const globalLevel = {};
+    for (const sub of (globalSubs || [])) {
+      const end = new Date(sub.ends_at || 0).getTime();
+      if (end <= now) continue;
+      const level = sub.plan === 'boost_yearly' ? 5 : sub.plan === 'boost_monthly' ? 4 : 0;
+      if (level > (globalLevel[sub.user_id] || 0)) globalLevel[sub.user_id] = level;
+    }
+    const rows = (data || []).map(x => {
+      const featured = x.is_featured === true && (!x.featured_until || new Date(x.featured_until).getTime() > now);
+      const pinned = x.is_pinned === true && (!x.pinned_until || new Date(x.pinned_until).getTime() > now);
+      const ownBoost = x.boost_level && (!x.boost_until || new Date(x.boost_until).getTime() > now) ? Number(x.boost_level) : 0;
+      const level = Math.max(ownBoost, globalLevel[x.vendor_id] || 0);
+      const boostUntil = level === globalLevel[x.vendor_id] ? (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0]?.ends_at || x.boost_until : x.boost_until;
+      return { ...x, is_featured: featured, is_pinned: pinned, effective_boost_level: level, boost_until: boostUntil };
+    }).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || Number(b.is_featured) - Number(a.is_featured) || Number(b.effective_boost_level || 0) - Number(a.effective_boost_level || 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    res.json(rows.map(x => {
+      const level = Number(x.effective_boost_level || 0);
+      const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
+      return { ...x, boost_label: labels[level] || '', seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
+    }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
 
@@ -429,7 +401,7 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
   });
 });
 
-app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).in('id',['turbo24','blast3','power7']).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های بوست.'});}});
+app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
 app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
 app.get('/api/promotions/orders', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_orders').select('*,promotion_packages(title),products(title)').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت سفارش‌ها.'});}});
 app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='bank_transfer',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});if(Number(pkg.price_afn||0)<=0)return res.status(400).json({error:'این بسته تبلیغاتی قیمت معتبر ندارد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
@@ -439,21 +411,25 @@ const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.
 res.status(201).json(order);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت سفارش ارتقای آگهی.'});}});
 app.get('/api/subscriptions', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('seller_subscriptions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(20);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت اشتراک‌ها.'});}});
 app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
-  const plans={monthly_boost:{price:400,days:30},yearly_boost:{price:3500,days:365}};
+  const plans={
+    basic:{price:150,days:30},pro:{price:250,days:30},business:{price:450,days:30},
+    boost_monthly:{price:400,days:30,boost_level:4},
+    boost_yearly:{price:3500,days:365,boost_level:5}
+  };
   const plan=String(req.body?.plan||'');
-  if(!plans[plan])return res.status(400).json({error:'پلن بوست نامعتبر است.'});
+  if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
   const p=plans[plan];
   const reference=String(req.body?.payment_reference||'').trim();
-  if(!reference)return res.status(400).json({error:'شماره پیگیری/رسید انتقال را وارد کنید.'});
+  if(!reference)return res.status(400).json({error:'برای خرید اشتراک باید مبلغ را انتقال دهید و شماره پیگیری را وارد کنید.'});
   const db=getSupabaseAdmin();
   const {data:existing}=await db.from('seller_subscriptions').select('id').eq('user_id',req.user.id).eq('plan',plan).eq('status','pending').limit(1);
-  if(existing?.length)return res.status(409).json({error:'یک درخواست برای این بوست در انتظار تأیید است.'});
+  if(existing?.length)return res.status(409).json({error:'یک درخواست پرداخت برای این پلن در انتظار تأیید است.'});
   const now=new Date();
   const end=new Date(now.getTime()+p.days*86400000);
   const {data,error}=await db.from('seller_subscriptions').insert([{user_id:req.user.id,plan,price_afn:p.price,starts_at:now.toISOString(),ends_at:end.toISOString(),status:'pending',payment_method:'manual',payment_reference:reference.slice(0,200)}]).select().single();
   if(error)throw error;
   res.status(201).json(data);
-}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست بوست سراسری.'});}});
+}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست اشتراک.'});}});
 
 app.patch('/api/admin/subscriptions/:id', requireAdmin, async (req,res)=>{try{
   const status=String(req.body?.status||'active');
@@ -462,15 +438,15 @@ app.patch('/api/admin/subscriptions/:id', requireAdmin, async (req,res)=>{try{
   const {data:sub,error:se}=await db.from('seller_subscriptions').select('*').eq('id',req.params.id).maybeSingle();
   if(se)throw se;if(!sub)return res.status(404).json({error:'اشتراک پیدا نشد.'});
   const patch={status};
-  if(status==='active'){const start=new Date();const days=sub.plan==='yearly_boost'?365:sub.plan==='monthly_boost'?30:30;const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
+  if(status==='active'){const days=sub.plan==='boost_yearly'?365:30;const start=new Date();const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
   const {data,error}=await db.from('seller_subscriptions').update(patch).eq('id',req.params.id).select().single();
   if(error)throw error;
-  if(status==='active' && ['basic','pro','business'].includes(sub.plan))await db.from('profiles').update({plan:sub.plan}).eq('id',sub.user_id);
+  if(status==='active')await db.from('profiles').update({plan:sub.plan}).eq('id',sub.user_id);
   res.json(data);
 }catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر وضعیت اشتراک.'});}});
 app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const [{data:orders,error:oe},{data:tx,error:te},{data:subs,error:se}]=await Promise.all([db.from('promotion_orders').select('id,user_id,listing_id,package_id,amount_afn,payment_method,status,created_at').order('created_at',{ascending:false}).limit(300),db.from('wallet_transactions').select('id,user_id,type,amount_afn,description,reference_id,created_at').order('created_at',{ascending:false}).limit(300),db.from('seller_subscriptions').select('*').order('created_at',{ascending:false}).limit(100)]);if(oe)throw oe;if(te)throw te;if(se)throw se;const paidPromotions=(orders||[]).filter(x=>x.status==='paid').reduce((a,x)=>a+Number(x.amount_afn||0),0);const paidSubscriptions=(subs||[]).filter(x=>x.status==='active').reduce((a,x)=>a+Number(x.price_afn||0),0);const revenue=paidPromotions+paidSubscriptions;res.json({revenue_afn:revenue,promotion_revenue_afn:paidPromotions,subscription_revenue_afn:paidSubscriptions,orders:orders||[],transactions:tx||[],subscriptions:subs||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آمار درآمد.'});}});
 app.post('/api/admin/wallets/:id/credit', requireAdmin, async (req,res)=>{try{const amount=Math.trunc(Number(req.body?.amount_afn||0));if(amount<=0)return res.status(400).json({error:'مبلغ نامعتبر است.'});const db=getSupabaseAdmin();const balance=await db.rpc('bazarek_wallet_credit',{p_user_id:req.params.id,p_amount:amount,p_type:'credit',p_description:String(req.body?.description||'شارژ کیف پول توسط مدیریت').slice(0,200),p_reference:'admin'});res.status(201).json({balance_afn:balance.data});}catch(e){console.error(e);res.status(500).json({error:'خطا در شارژ کیف پول.'});}});
-app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
+app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();const days=Math.max(Number(pkg.feature_days||0),Number(pkg.pin_days||0));await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,boost_level:Number(pkg.boost_level||0),boost_until:days>0?new Date(now+days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
 app.get('/api/products', requireUser, async (req, res) => {
   try {
     const db = getSupabaseAdmin();
