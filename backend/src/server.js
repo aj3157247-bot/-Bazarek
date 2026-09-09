@@ -12,7 +12,7 @@ const requireAdmin = require('./middlewares/adminAuth');
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 6 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
 const IMAGE_BUCKET = 'listing-images';
 const AVATAR_BUCKET = 'profile-avatars';
 
@@ -57,11 +57,11 @@ app.post('/api/auth/register', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
 });
 
-app.post('/api/upload-images', requireUser, upload.array('images', 6), async (req, res) => {
+app.post('/api/upload-images', requireUser, upload.array('images', 10), async (req, res) => {
   try {
     const files = Array.isArray(req.files) ? req.files : [];
     if (!files.length) return res.status(400).json({ error: 'حداقل یک عکس انتخاب کنید.' });
-    if (files.length > 6) return res.status(400).json({ error: 'حداکثر ۶ عکس مجاز است.' });
+    if (files.length > 10) return res.status(400).json({ error: 'حداکثر ۱۰ عکس مجاز است.' });
     const imageExts = new Set(['jpg','jpeg','png','webp','gif','heic','heif']);
     for (const file of files) {
       const ext = (file.originalname.split('.').pop() || '').toLowerCase();
@@ -277,7 +277,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,province,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,created_at,updated_at').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,created_at,updated_at').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -324,7 +324,7 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,allow_chat,show_phone,contact_phone,location_text,is_negotiable,views_count,province').eq('is_active', true).order('is_pinned', { ascending: false }).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,allow_chat,show_phone,contact_phone,location_text,is_negotiable,views_count,province').eq('is_active', true).order('is_pinned', { ascending: false }).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -433,11 +433,11 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -446,7 +446,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'is_negotiable'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'is_negotiable'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
