@@ -999,7 +999,6 @@ class AddProductScreen extends StatelessWidget {
 
 class MyProductsScreen extends StatefulWidget {
   const MyProductsScreen({super.key});
-
   @override
   State<MyProductsScreen> createState() => _MyProductsScreenState();
 }
@@ -1016,7 +1015,9 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
     _load();
   }
 
-  void _authChanged() { if (mounted) _load(); }
+  void _authChanged() {
+    if (mounted) _load();
+  }
 
   @override
   void dispose() {
@@ -1025,12 +1026,17 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   }
 
   Future<void> _load() async {
-    if (!AuthService.isLoggedIn) { if (mounted) setState(() { ads=[]; loading=false; error=null; }); return; }
-    if (mounted) setState(() { loading=true; error=null; });
+    if (!AuthService.isLoggedIn) {
+      if (mounted) setState(() { ads = []; loading = false; error = null; });
+      return;
+    }
+    if (mounted) setState(() { loading = true; error = null; });
     try {
       final data = await ApiService.getMyProducts();
-      if (mounted) setState(() { ads=data; loading=false; });
-    } catch(e) { if (mounted) setState(() { ads=[]; loading=false; error=e.toString().replaceFirst('Exception: ', ''); }); }
+      if (mounted) setState(() { ads = data; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { ads = []; loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
   }
 
   String _boostText(dynamic ad) {
@@ -1046,35 +1052,98 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   @override
   Widget build(BuildContext context) {
     if (!AuthService.isLoggedIn) {
-      return Scaffold(appBar: AppBar(title: Text(tr(context, 'my_ads'))), body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.lock_outline, size: 56), const SizedBox(height: 12),
-        const Text('برای دیدن آگهی‌های خود، ابتدا وارد حساب شوید.'), const SizedBox(height: 12),
-        FilledButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())), child: const Text('ورود / ثبت‌نام')),
-      ])));
+      return Scaffold(
+        appBar: AppBar(title: Text(tr(context, 'my_ads'))),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline, size: 56),
+              const SizedBox(height: 12),
+              const Text('برای دیدن آگهی‌های خود، ابتدا وارد حساب شوید.'),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () async {
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+                  if (mounted) _load();
+                },
+                child: const Text('ورود / ثبت‌نام'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
+
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'my_ads')), actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))]),
-      body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? Center(child: Text(error!, textAlign: TextAlign.center)) : ads.isEmpty ? const Center(child: Text('شما هنوز هیچ آگهی ثبت نکرده‌اید.')) : RefreshIndicator(
-        onRefresh: _load, child: ListView.builder(padding: const EdgeInsets.all(12), itemCount: ads.length, itemBuilder: (_, i) {
-          final ad=ads[i]; final badge=_boostText(ad);
-          return Card(margin: const EdgeInsets.only(bottom: 12), clipBehavior: Clip.antiAlias, child: Column(children: [
-            ListTile(
-              leading: SizedBox(width: 70, height: 60, child: _imageFor(ad)),
-              title: Text(ad['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('${NumberFormatHelper.format(ad['price'])} افغانی • ${ad['province'] ?? ''}'),
-            ),
-            if (badge.isNotEmpty) Align(alignment: Alignment.centerRight, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), child: Chip(label: Text(badge), avatar: const Icon(Icons.auto_awesome, size: 18)))),
-            Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BoostScreen(listing: ad))), icon: const Icon(Icons.rocket_launch), label: Text(badge.isEmpty ? '🚀 بوست آگهی' : '🚀 تقویت بوست')))),
-          ]));
-        }));
+      appBar: AppBar(
+        title: Text(tr(context, 'my_ads')),
+        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Text(error!, textAlign: TextAlign.center))
+              : ads.isEmpty
+                  ? const Center(child: Text('شما هنوز هیچ آگهی ثبت نکرده‌اید.'))
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: ads.length,
+                        itemBuilder: (_, i) {
+                          final ad = ads[i];
+                          final badge = _boostText(ad);
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                ListTile(
+                                  leading: SizedBox(width: 70, height: 60, child: _imageFor(ad)),
+                                  title: Text(ad['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text('${NumberFormatHelper.format(ad['price'])} افغانی • ${ad['province'] ?? ''}'),
+                                ),
+                                if (badge.isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                      child: Chip(label: Text(badge), avatar: const Icon(Icons.auto_awesome, size: 18)),
+                                    ),
+                                  ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () async {
+                                        await Navigator.push(context, MaterialPageRoute(builder: (_) => BoostScreen(listing: ad)));
+                                        if (mounted) _load();
+                                      },
+                                      icon: const Icon(Icons.rocket_launch),
+                                      label: Text(badge.isEmpty ? '🚀 بوست آگهی' : '🚀 تقویت بوست'),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+    );
   }
 
   Widget _imageFor(dynamic ad) {
     try {
-      final raw=ad['image_url']; final imgs=raw is String ? jsonDecode(raw) : raw;
-      final u=imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
-      if(u.isNotEmpty) return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover));
-    } catch(_) {}
+      final raw = ad['image_url'];
+      final imgs = raw is String ? jsonDecode(raw) : raw;
+      final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
+      if (u.isNotEmpty) {
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover));
+      }
+    } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
   }
 }
@@ -1082,78 +1151,248 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
 class BoostScreen extends StatefulWidget {
   final dynamic listing;
   const BoostScreen({super.key, this.listing});
-  @override State<BoostScreen> createState() => _BoostScreenState();
+  @override
+  State<BoostScreen> createState() => _BoostScreenState();
 }
 
 class _BoostScreenState extends State<BoostScreen> {
-  List<dynamic> packages=[];
-  List<dynamic> subscriptions=[];
-  bool loading=true;
+  List<dynamic> packages = [];
+  List<dynamic> subscriptions = [];
+  bool loading = true;
   String? error;
 
-  @override void initState(){super.initState(); _load();}
-  Future<void> _load() async { try { final p=await ApiService.getBoostPackages(); final s=await ApiService.getSubscriptions(); if(mounted)setState(() { packages=p; subscriptions=s; loading=false; }); } catch(e){ if(mounted)setState(() { loading=false; error=e.toString().replaceFirst('Exception: ',''); }); } }
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final p = await ApiService.getBoostPackages();
+      final s = await ApiService.getSubscriptions();
+      if (mounted) setState(() { packages = p; subscriptions = s; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
 
   Future<String?> _referenceDialog({required String title, required int price}) async {
-    final c=TextEditingController();
-    return showDialog<String>(context:context,builder:(_)=>AlertDialog(
-      title:Text(title),
-      content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('مبلغ: $price افغانی'), const SizedBox(height:8),
-        const Text('مبلغ را انتقال دهید و شماره پیگیری/رسید را وارد کنید.'), const SizedBox(height:12),
-        TextField(controller:c, decoration:const InputDecoration(labelText:'شماره پیگیری / رسید',border:OutlineInputBorder())),
-      ]),
-      actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('لغو')),FilledButton(onPressed:()=>c.text.trim().isEmpty?null:Navigator.pop(context,c.text.trim()),child:const Text('ثبت درخواست'))],
-    ));
+    final c = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('مبلغ: $price افغانی'),
+              const SizedBox(height: 8),
+              const Text('مبلغ را انتقال دهید و شماره پیگیری/رسید را وارد کنید.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: c,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'شماره پیگیری / رسید',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('لغو'),
+            ),
+            FilledButton(
+              onPressed: c.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(dialogContext, c.text.trim()),
+              child: const Text('ثبت درخواست'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _buyOne(dynamic pkg) async {
-    final id=widget.listing?['id']?.toString(); if(id==null||id.isEmpty)return;
-    final ref=await _referenceDialog(title:pkg['title']?.toString()??'بوست آگهی',price:int.tryParse('${pkg['price_afn']}')??0); if(ref==null)return;
-    try { await ApiService.createBoostOrder(id,pkg['id'].toString(),ref); if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.'))); Navigator.pop(context,true);} } catch(e){ if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ','')))); }
+    final id = widget.listing?['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final ref = await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: int.tryParse('${pkg['price_afn']}') ?? 0);
+    if (ref == null) return;
+    try {
+      await ApiService.createBoostOrder(id, pkg['id'].toString(), ref);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
   }
 
-  Future<void> _buyGlobal(String plan,int price,String title) async {
-    final ref=await _referenceDialog(title:title,price:price); if(ref==null)return;
-    try { await ApiService.createGlobalBoost(plan,ref); if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('درخواست اشتراک ثبت شد؛ پس از تأیید پرداخت برای همه آگهی‌های شما فعال می‌شود.'))); _load();} } catch(e){ if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ','')))); }
+  Future<void> _buyGlobal(String plan, int price, String title) async {
+    final ref = await _referenceDialog(title: title, price: price);
+    if (ref == null) return;
+    try {
+      await ApiService.createGlobalBoost(plan, ref);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('درخواست اشتراک ثبت شد؛ پس از تأیید پرداخت برای همه آگهی‌های شما فعال می‌شود.')));
+        _load();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
   }
 
-  @override Widget build(BuildContext context){
-    final globalActive=subscriptions.any((s)=>['boost_monthly','boost_yearly'].contains(s['plan'])&&s['status']=='active'&&DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now())==true);
-    return Scaffold(appBar:AppBar(title:const Text('🚀 Boost بازارک')),body:loading?const Center(child:CircularProgressIndicator()):error!=null?Center(child:Padding(padding:const EdgeInsets.all(20),child:Text(error!,textAlign:TextAlign.center))):ListView(padding:const EdgeInsets.all(16),children:[
-      Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(borderRadius:BorderRadius.circular(20),gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primaryContainer,Theme.of(context).colorScheme.secondaryContainer])),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('🚀 آگهی‌ات را از بقیه جلو بزن!',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)),SizedBox(height:6),Text('هرچه سطح بوست بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.')]),
-      const SizedBox(height:18),
-      if(widget.listing!=null) ...[
-        Text('⚡ فقط همین آگهی',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),const SizedBox(height:8),
-        for(final pkg in packages) Card(child:ListTile(leading:Text(pkg['id']=='boost24'?'⚡':pkg['id']=='boost3'?'🔥':'💥',style:const TextStyle(fontSize:30)),title:Text(pkg['title']??''),subtitle:Text(pkg['description']??''),trailing:FilledButton(onPressed:()=>_buyOne(pkg),child:Text('${pkg['price_afn']} افغانی')))),
-        const SizedBox(height:18),
-      ],
-      Text('👑 برای تمام آگهی‌های شما',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),const SizedBox(height:8),
-      Card(child:ListTile(leading:const Text('👑',style:TextStyle(fontSize:30)),title:const Text('ماهانه — همه آگهی‌ها'),subtitle:const Text('۳۰ روز؛ تمام آگهی‌های فعال شما با اولویت ویژه نمایش داده می‌شوند.'),trailing:globalActive?const Chip(label:Text('فعال')):FilledButton(onPressed:()=>_buyGlobal('boost_monthly',400,'👑 بوست ماهانه'),child:const Text('۴۰۰ افغانی')))),
-      Card(child:ListTile(leading:const Text('🏆',style:TextStyle(fontSize:30)),title:const Text('سالانه — همه آگهی‌ها'),subtitle:const Text('۳۶۵ روز؛ بالاترین سطح اولویت برای تمام آگهی‌های شما.'),trailing:globalActive?const Chip(label:Text('فعال')):FilledButton(onPressed:()=>_buyGlobal('boost_yearly',3500,'🏆 بوست سالانه'),child:const Text('۳۵۰۰ افغانی')))),
-      const SizedBox(height:8),const Text('💡 بوست‌های کوتاه‌مدت فقط روی همان آگهی اعمال می‌شوند؛ اشتراک ماهانه و سالانه روی همه آگهی‌های شما اثر می‌گذارد.',style:TextStyle(color:Colors.black54)),
-    ]));
+  @override
+  Widget build(BuildContext context) {
+    final globalActive = subscriptions.any((s) => ['boost_monthly', 'boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+    return Scaffold(
+      appBar: AppBar(title: const Text('🚀 Boost بازارک')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(error!, textAlign: TextAlign.center)))
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primaryContainer, Theme.of(context).colorScheme.secondaryContainer]),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('🚀 آگهی‌ات را از بقیه جلو بزن!', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                          SizedBox(height: 6),
+                          Text('هرچه سطح بوست بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (widget.listing != null) ...[
+                      Text('⚡ فقط همین آگهی', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      for (final pkg in packages)
+                        Card(
+                          child: ListTile(
+                            leading: Text(pkg['id'] == 'boost24' ? '⚡' : pkg['id'] == 'boost3' ? '🔥' : '💥', style: const TextStyle(fontSize: 30)),
+                            title: Text(pkg['title']?.toString() ?? ''),
+                            subtitle: Text(pkg['description']?.toString() ?? ''),
+                            trailing: FilledButton(onPressed: () => _buyOne(pkg), child: Text('${pkg['price_afn']} افغانی')),
+                          ),
+                        ),
+                      const SizedBox(height: 18),
+                    ],
+                    Text('👑 برای تمام آگهی‌های شما', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Card(
+                      child: ListTile(
+                        leading: const Text('👑', style: TextStyle(fontSize: 30)),
+                        title: const Text('ماهانه — همه آگهی‌ها'),
+                        subtitle: const Text('۳۰ روز؛ تمام آگهی‌های فعال شما با اولویت ویژه نمایش داده می‌شوند.'),
+                        trailing: globalActive ? const Chip(label: Text('فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_monthly', 400, '👑 بوست ماهانه'), child: const Text('۴۰۰ افغانی')),
+                      ),
+                    ),
+                    Card(
+                      child: ListTile(
+                        leading: const Text('🏆', style: TextStyle(fontSize: 30)),
+                        title: const Text('سالانه — همه آگهی‌ها'),
+                        subtitle: const Text('۳۶۵ روز؛ بالاترین سطح اولویت برای تمام آگهی‌های شما.'),
+                        trailing: globalActive ? const Chip(label: Text('فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_yearly', 3500, '🏆 بوست سالانه'), child: const Text('۳۵۰۰ افغانی')),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('💡 بوست‌های کوتاه‌مدت فقط روی همان آگهی اعمال می‌شوند؛ اشتراک ماهانه و سالانه روی همه آگهی‌های شما اثر می‌گذارد.', style: TextStyle(color: Colors.black54)),
+                  ],
+                ),
+    );
   }
 }
 
 class SubcategoryScreen extends StatelessWidget {
-  final Map<String,dynamic> category;
-  const SubcategoryScreen({super.key,required this.category});
-  @override Widget build(BuildContext context){
-    final list=subcategories[category['id']]??[];
-    return Scaffold(appBar:AppBar(title:Text(category['title']??'دسته‌بندی')),body:list.isEmpty?CategoryListingsScreen(categoryId:category['id'],categoryTitle:category['title']):ListView.separated(padding:const EdgeInsets.all(12),itemCount:list.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final c=list[i];return ListTile(leading:CircleAvatar(child:Icon(category['icon'] as IconData)),title:Text(c['title']!),trailing:const Icon(Icons.chevron_left),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>CategoryListingsScreen(categoryId:category['id'],subcategoryId:c['id'],categoryTitle:c['title']))));}});
+  final Map<String, dynamic> category;
+  const SubcategoryScreen({super.key, required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    final categoryId = category['id']?.toString() ?? '';
+    final categoryTitle = category['title']?.toString() ?? 'دسته‌بندی';
+    final categoryIcon = category['icon'] is IconData ? category['icon'] as IconData : Icons.category;
+    final list = subcategories[categoryId] ?? [];
+
+    if (list.isEmpty) {
+      return CategoryListingsScreen(categoryId: categoryId, categoryTitle: categoryTitle);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text(categoryTitle)),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: list.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (_, i) {
+          final c = list[i];
+          final subcategoryId = c['id']?.toString() ?? '';
+          final subcategoryTitle = c['title']?.toString() ?? '';
+          return ListTile(
+            leading: CircleAvatar(child: Icon(categoryIcon)),
+            title: Text(subcategoryTitle),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryListingsScreen(categoryId: categoryId, subcategoryId: subcategoryId, categoryTitle: subcategoryTitle))),
+          );
+        },
+      ),
+    );
   }
 }
 
 class CategoryListingsScreen extends StatefulWidget {
-  final String categoryId; final String? subcategoryId; final String categoryTitle;
-  const CategoryListingsScreen({super.key,required this.categoryId,this.subcategoryId,required this.categoryTitle});
-  @override State<CategoryListingsScreen> createState()=>_CategoryListingsScreenState();
+  final String categoryId;
+  final String? subcategoryId;
+  final String categoryTitle;
+  const CategoryListingsScreen({super.key, required this.categoryId, this.subcategoryId, required this.categoryTitle});
+  @override
+  State<CategoryListingsScreen> createState() => _CategoryListingsScreenState();
 }
-class _CategoryListingsScreenState extends State<CategoryListingsScreen>{List<dynamic> ads=[];bool loading=true;String? error;
-  @override void initState(){super.initState();_load();}
-  Future<void> _load() async{try{final d=await ApiService.getProducts(category:widget.categoryId,subcategory:widget.subcategoryId);if(mounted)setState(() { ads=d; loading=false; });}catch(e){if(mounted)setState(() { loading=false; error=e.toString().replaceFirst('Exception: ',''); });}}
-  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(widget.categoryTitle),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):error!=null?Center(child:Text(error!,textAlign:TextAlign.center)):ads.isEmpty?Center(child:Text('در «${widget.categoryTitle}» هنوز آگهی فعالی پیدا نشد.')):RefreshIndicator(onRefresh:_load,child:ListView.builder(padding:const EdgeInsets.all(12),itemCount:ads.length,itemBuilder:(_,i)=>_ProductCard(item:ads[i]))));
+
+class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
+  List<dynamic> ads = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    try {
+      final d = await ApiService.getProducts(category: widget.categoryId, subcategory: widget.subcategoryId);
+      if (mounted) setState(() { ads = d; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.categoryTitle), actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))]),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Text(error!, textAlign: TextAlign.center))
+              : ads.isEmpty
+                  ? Center(child: Text('در «${widget.categoryTitle}» هنوز آگهی فعالی پیدا نشد.'))
+                  : RefreshIndicator(onRefresh: _load, child: ListView.builder(padding: const EdgeInsets.all(12), itemCount: ads.length, itemBuilder: (_, i) => _ProductCard(item: ads[i]))),
+    );
+  }
 }
 
 class ProfileScreen extends StatefulWidget {
