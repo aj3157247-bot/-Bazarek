@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'admin_panel_screen.dart';
 
 void main() {
@@ -275,6 +276,21 @@ class AuthService {
   }
 }
 
+Future<bool> requireAccount(BuildContext context) async {
+  if (AuthService.isLoggedIn) return true;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('برای ثبت آگهی و ارسال پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.'),
+      duration: Duration(seconds: 3),
+    ),
+  );
+  await Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const AuthScreen()),
+  );
+  return AuthService.isLoggedIn;
+}
+
 class ApiService {
   static Map<String, String> get headers => {
         'Content-Type': 'application/json',
@@ -393,7 +409,11 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) {
+        onDestinationSelected: (idx) async {
+          if ((idx == 1 || idx == 2) && !AuthService.isLoggedIn) {
+            await requireAccount(context);
+            return;
+          }
           setState(() {
             _currentIndex = idx;
           });
@@ -727,12 +747,39 @@ class ProductDetailScreen extends StatelessWidget {
             if (product['show_phone'] == true || product['show_phone'] == 1)
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    final phone = product['contact_phone'] ?? '';
-                    if (phone.isNotEmpty) {
+                  onPressed: () async {
+                    var phone = product['contact_phone']?.toString().trim() ?? '';
+                    if (phone.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('شماره تماس: $phone')),
+                        const SnackBar(content: Text('شماره تماس ثبت نشده است.')),
                       );
+                      return;
+                    }
+
+                    // تبدیل ارقام فارسی/عربی به ارقام انگلیسی برای tel:
+                    const fa = '۰۱۲۳۴۵۶۷۸۹';
+                    const ar = '٠١٢٣٤٥٦٧٨٩';
+                    const en = '0123456789';
+                    for (var i = 0; i < 10; i++) {
+                      phone = phone.replaceAll(fa[i], en[i]).replaceAll(ar[i], en[i]);
+                    }
+                    phone = phone.replaceAll(' ', '').replaceAll('-', '').replaceAll('(', '').replaceAll(')', '');
+
+                    final uri = Uri(scheme: 'tel', path: phone);
+                    try {
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('امکان تماس با $phone وجود ندارد.')),
+                        );
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('باز کردن تماس تلفنی ناموفق بود.')),
+                        );
+                      }
                     }
                   },
                   icon: const Icon(Icons.phone),
@@ -743,7 +790,14 @@ class ProductDetailScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () {},
+                  onPressed: () async {
+                    if (!await requireAccount(context)) return;
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('بخش گفت‌وگو پس از اتصال به سیستم پیام‌رسانی آماده است.')),
+                      );
+                    }
+                  },
                   icon: const Icon(Icons.chat),
                   label: Text(tr(context, 'chat_seller')),
                 ),
@@ -761,6 +815,34 @@ class ChatListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!AuthService.isLoggedIn) {
+      return Scaffold(
+        appBar: AppBar(title: Text(tr(context, 'chat'))),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline, size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  'برای ارسال و دریافت پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 17),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => requireAccount(context),
+                  icon: const Icon(Icons.login),
+                  label: const Text('ورود / ثبت‌نام'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(title: Text(tr(context, 'chat'))),
       body: const Center(child: Text('لیست پیام‌ها خالی است')),
@@ -773,6 +855,34 @@ class AddProductScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!AuthService.isLoggedIn) {
+      return Scaffold(
+        appBar: AppBar(title: Text(tr(context, 'add'))),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline, size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  'برای ثبت آگهی، ابتدا حساب خود را بسازید یا وارد حساب شوید.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 17),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => requireAccount(context),
+                  icon: const Icon(Icons.login),
+                  label: const Text('ورود / ثبت‌نام'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(title: Text(tr(context, 'add'))),
       body: const AddProductSheet(),
