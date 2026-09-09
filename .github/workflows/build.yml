@@ -24,7 +24,7 @@ jobs:
           channel: 'stable'
 
       - name: Repair Flutter Project Structure
-        run: flutter create . --platforms=android
+        run: flutter create . --platforms=android,web
 
       - name: Ensure Android Internet Permission
         run: |
@@ -51,3 +51,12 @@ jobs:
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build Web
+        run: flutter build web --release --base-href /
+
+      - name: Upload Web
+        uses: actions/upload-artifact@v4
+        with:
+          name: bazarek-web
+          path: build/web
