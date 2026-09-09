@@ -407,22 +407,46 @@ app.get('/api/admin/stats', requireAdmin, async (_, res) => {
 
 app.get('/api/payment-info', requireUser, async (_,res)=>{
   try {
-    const db = getSupabaseAdmin();
-    let row = null;
-    // Canonical Supabase table. Env vars remain a safe fallback for existing deployments.
-    const { data, error } = await db.from('payment_settings').select('*').eq('id', 1).maybeSingle();
-    if (!error) row = data;
-    const bank = {
-      name: row?.bank_name || process.env.PAYMENT_BANK_NAME || 'حساب بانکی بازارک',
-      account_name: row?.account_name || process.env.PAYMENT_ACCOUNT_NAME || '',
-      account_number: row?.account_number || process.env.PAYMENT_ACCOUNT_NUMBER || '',
-      branch: row?.branch || process.env.PAYMENT_BANK_BRANCH || '',
-      swift_code: row?.swift_code || process.env.PAYMENT_SWIFT_CODE || '',
-      card_number: row?.card_number || process.env.PAYMENT_CARD_NUMBER || ''
+    // Payment settings are managed in Render Environment Variables.
+    // Render values intentionally take priority so a stale/empty Supabase row
+    // can never hide the real payment details. A few backwards-compatible
+    // aliases are accepted for older Render deployments.
+    const env = (...names) => {
+      for (const name of names) {
+        const value = String(process.env[name] || '').trim();
+        if (value) return value;
+      }
+      return '';
     };
-    const instructions = row?.instructions || 'مبلغ دقیق را به کارت/حساب بالا انتقال دهید، رسید یا شماره پیگیری را نگه دارید، آن را در برنامه وارد کنید و منتظر تأیید مدیریت بمانید. پس از تأیید، Boost فعال می‌شود.';
-    const configured = Boolean(String(bank.card_number || bank.account_number || '').trim());
-    res.json({ methods:['bank_transfer','manual'], configured, bank, card_number: bank.card_number, account_number: bank.account_number, instructions });
+
+    const bankName = env('PAYMENT_BANK_NAME','BANK_NAME');
+    const accountName = env('PAYMENT_ACCOUNT_NAME','BANK_ACCOUNT_NAME','ACCOUNT_NAME');
+    const accountNumber = env('PAYMENT_ACCOUNT_NUMBER','BANK_ACCOUNT_NUMBER','ACCOUNT_NUMBER');
+    const cardNumber = env('PAYMENT_CARD_NUMBER','BANK_CARD_NUMBER','CARD_NUMBER','PAYMENT_CARD');
+    const branch = env('PAYMENT_BANK_BRANCH','BANK_BRANCH');
+    const swiftCode = env('PAYMENT_SWIFT_CODE','SWIFT_CODE');
+    const instructions = env('PAYMENT_INSTRUCTIONS','PAYMENT_NOTE','BANK_TRANSFER_INSTRUCTIONS') ||
+      '۱) مبلغ دقیق را به کارت/حساب بالا انتقال دهید.\n۲) رسید یا شماره پیگیری را نگه دارید.\n۳) شماره پیگیری را در برنامه وارد کنید.\n۴) درخواست را ثبت کنید.\n۵) پس از تأیید پرداخت توسط مدیریت، Boost فعال می‌شود.';
+
+    const bank = {
+      name: bankName || 'حساب بانکی بازارک',
+      account_name: accountName,
+      account_number: accountNumber,
+      branch,
+      swift_code: swiftCode,
+      card_number: cardNumber
+    };
+
+    res.json({
+      methods:['bank_transfer','manual'],
+      source:'render_env',
+      bank,
+      bank_name: bank.name,
+      account_name: bank.account_name,
+      account_number: bank.account_number,
+      card_number: bank.card_number,
+      instructions
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error:'خطا در دریافت اطلاعات پرداخت.' });
