@@ -46,6 +46,11 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     AuthService.token = prefs.getString('auth_token');
     AuthService.userName = prefs.getString('user_name');
     AuthService.userContact = prefs.getString('user_contact');
+    AuthService.refreshToken = prefs.getString('refresh_token');
+    // توکن‌های ساختگی نسخه‌های قدیمی معتبر نیستند؛ آنها را پاک می‌کنیم.
+    if (AuthService.token != null && AuthService.token!.startsWith('local_')) {
+      await AuthService.logout();
+    }
 
     setState(() {
       _locale = Locale(lang);
@@ -232,34 +237,41 @@ const Map<String, List<Map<String, String>>> subcategories = {
 };
 
 class ApiConfig {
-  static const String baseUrl = 'https://afgbazar.com/api/v1';
+  static const String baseUrl = 'https://bazarek.onrender.com/api';
 }
 
 class AuthService {
   static String? token;
   static String? userName;
   static String? userContact;
+  static String? refreshToken;
 
   static bool get isLoggedIn => token != null && token!.isNotEmpty;
 
-  static Future<void> saveUser(String tokenVal, String nameVal, String contactVal) async {
+  static Future<void> saveUser(String tokenVal, String nameVal, String contactVal, {String? refreshTokenVal}) async {
     token = tokenVal;
     userName = nameVal;
     userContact = contactVal;
+    refreshToken = refreshTokenVal;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_token', tokenVal);
     await prefs.setString('user_name', nameVal);
     await prefs.setString('user_contact', contactVal);
+    if (refreshTokenVal != null && refreshTokenVal.isNotEmpty) {
+      await prefs.setString('refresh_token', refreshTokenVal);
+    }
   }
 
   static Future<void> logout() async {
     token = null;
     userName = null;
     userContact = null;
+    refreshToken = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
     await prefs.remove('user_name');
     await prefs.remove('user_contact');
+    await prefs.remove('refresh_token');
   }
 }
 
@@ -269,69 +281,60 @@ class ApiService {
         if (AuthService.token != null) 'Authorization': 'Bearer ${AuthService.token}',
       };
 
-  static Future<Map<String, dynamic>> login(String phoneOrEmail, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // ۱. بررسی ثبت نام قبلی در حافظه دستگاه
-    final savedPassword = prefs.getString('user_pwd_$phoneOrEmail');
-    final savedName = prefs.getString('registered_name_$phoneOrEmail');
-
+  static Future<Map<String, dynamic>> login(String email, String password) async {
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/login'),
-        headers: headers,
-        body: jsonEncode({'login': phoneOrEmail, 'password': password}),
-      ).timeout(const Duration(seconds: 4));
-      
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-
-    // ۲. عدم اجازه ورود در صورت عدم وجود حساب ثبت شده
-    if (savedPassword == null) {
-      return {'error': 'این حساب کاربری وجود ندارد. لطفاً ابتدا ثبت‌نام (Sign Up) کنید.'};
+        Uri.parse('${ApiConfig.baseUrl}/auth/login'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'email': email.trim().toLowerCase(), 'password': password}),
+      ).timeout(const Duration(seconds: 30));
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200) return data;
+      return {'error': data['error'] ?? 'ایمیل یا رمز عبور اشتباه است.'};
+    } catch (e) {
+      return {'error': 'اتصال به سرور برقرار نشد. اینترنت و آدرس Backend را بررسی کنید.'};
     }
-
-    if (savedPassword != password) {
-      return {'error': 'رمز عبور وارد شده اشتباه است.'};
-    }
-
-    return {
-      'token': 'local_sec_token_${DateTime.now().millisecondsSinceEpoch}',
-      'user': {
-        'name': savedName ?? 'کاربر بازارک',
-        'contact': phoneOrEmail,
-      }
-    };
   }
 
-  static Future<Map<String, dynamic>> register(String name, String phoneOrEmail, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // ذخیره اطلاعات ثبت‌نام جهت اعتبارسنجی ورود بعدی
-    await prefs.setString('registered_name_$phoneOrEmail', name);
-    await prefs.setString('user_pwd_$phoneOrEmail', password);
-
+  static Future<Map<String, dynamic>> register(String name, String email, String password) async {
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/register'),
-        headers: headers,
-        body: jsonEncode({'name': name, 'login': phoneOrEmail, 'password': password}),
-      ).timeout(const Duration(seconds: 4));
+        Uri.parse('${ApiConfig.baseUrl}/auth/register'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'email': email.trim().toLowerCase(), 'password': password, 'full_name': name.trim()}),
+      ).timeout(const Duration(seconds: 30));
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200 || res.statusCode == 201) return data;
+      return {'error': data['error'] ?? 'خطا در ثبت‌نام.'};
+    } catch (e) {
+      return {'error': 'اتصال به سرور برقرار نشد. اینترنت و آدرس Backend را بررسی کنید.'};
+    }
+  }
 
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-
-    return {
-      'token': 'local_reg_token_${DateTime.now().millisecondsSinceEpoch}',
-      'user': {
-        'name': name,
-        'contact': phoneOrEmail,
-      }
-    };
+  static Future<bool> refreshSession() async {
+    final rt = AuthService.refreshToken;
+    if (rt == null || rt.isEmpty) return false;
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/auth/refresh'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'refresh_token': rt}),
+      ).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) return false;
+      final data = jsonDecode(res.body);
+      if (data['token'] == null) return false;
+      final user = data['user'] is Map ? data['user'] as Map : <String, dynamic>{};
+      final metadata = user['user_metadata'] is Map ? user['user_metadata'] as Map : <String, dynamic>{};
+      await AuthService.saveUser(
+        data['token'].toString(),
+        metadata['full_name']?.toString() ?? AuthService.userName ?? 'کاربر بازارک',
+        user['email']?.toString() ?? AuthService.userContact ?? '',
+        refreshTokenVal: data['refresh_token']?.toString() ?? rt,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<List<dynamic>> getProducts({
@@ -344,19 +347,24 @@ class ApiService {
       if (category != null && category.isNotEmpty) 'category': category,
       if (province != null && province.isNotEmpty) 'province': province,
       if (query != null && query.isNotEmpty) 'q': query,
-      'page': page.toString(),
     };
-
-    final uri = Uri.parse('${ApiConfig.baseUrl}/products').replace(queryParameters: queryParams);
+    final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams);
     try {
-      final res = await http.get(uri, headers: headers);
+      final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 30));
+      final data = jsonDecode(res.body);
       if (res.statusCode == 200) {
-        return jsonDecode(res.body)['data'] ?? [];
+        if (data is List) return data;
+        if (data is Map && data['data'] is List) return data['data'];
+        throw Exception('پاسخ آگهی‌ها از سرور نامعتبر است.');
       }
-    } catch (_) {}
-    return [];
+      throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌ها.') : 'خطا در دریافت آگهی‌ها.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('اتصال به سرور برقرار نشد.');
+    }
   }
 }
+
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -435,6 +443,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String searchQuery = '';
   List<dynamic> products = [];
   bool isLoading = true;
+  String? loadError;
 
   @override
   void initState() {
@@ -443,17 +452,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadProducts() async {
-    setState(() => isLoading = true);
-    final data = await ApiService.getProducts(
-      category: selectedCategory,
-      province: selectedProvince,
-      query: searchQuery,
-    );
-    if (mounted) {
-      setState(() {
-        products = data;
-        isLoading = false;
-      });
+    if (mounted) setState(() { isLoading = true; loadError = null; });
+    try {
+      final data = await ApiService.getProducts(
+        category: selectedCategory,
+        province: selectedProvince,
+        query: searchQuery,
+      );
+      if (mounted) {
+        setState(() {
+          products = data;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          products = [];
+          loadError = e.toString().replaceFirst('Exception: ', '');
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -542,9 +561,25 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : products.isEmpty
-                      ? const Center(child: Text('هیچ آگهی یافت نشد'))
-                      : ListView.builder(
+                  : loadError != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.cloud_off, size: 48),
+                                const SizedBox(height: 12),
+                                Text(loadError!, textAlign: TextAlign.center),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(onPressed: _loadProducts, icon: const Icon(Icons.refresh), label: const Text('تلاش دوباره')),
+                              ],
+                            ),
+                          ),
+                        )
+                      : products.isEmpty
+                          ? const Center(child: Text('هنوز هیچ آگهی فعالی ثبت نشده است.'))
+                          : ListView.builder(
                           padding: const EdgeInsets.all(12),
                           itemCount: products.length,
                           itemBuilder: (context, idx) => _ProductCard(item: products[idx]),
@@ -861,7 +896,8 @@ class _AuthScreenState extends State<AuthScreen> {
       await AuthService.saveUser(
         response['token'],
         user['name'] ?? name,
-        user['contact'] ?? contact,
+        user['email'] ?? user['user_metadata']?['phone'] ?? contact,
+        refreshTokenVal: response['refresh_token'],
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1042,14 +1078,24 @@ class _AddProductSheetState extends State<AddProductSheet> {
       Object? lastError;
       for (var attempt = 1; attempt <= 3 && !success; attempt++) {
         try {
-          final req = http.MultipartRequest('POST', Uri.parse('https://bazarek.onrender.com/api/upload-images'));
+          final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/upload-images'));
           req.headers['Accept'] = 'application/json';
           if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
           for (var i = start; i < end; i++) {
             req.files.add(http.MultipartFile.fromBytes('images', imageBytes[i], filename: imageNames[i]));
           }
-          final response = await req.send().timeout(const Duration(seconds: 90));
-          final body = await response.stream.bytesToString();
+          var response = await req.send().timeout(const Duration(seconds: 90));
+          var body = await response.stream.bytesToString();
+          if (response.statusCode == 401 && await ApiService.refreshSession()) {
+            final retry = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/upload-images'));
+            retry.headers['Accept'] = 'application/json';
+            retry.headers['Authorization'] = 'Bearer ${AuthService.token}';
+            for (var i = start; i < end; i++) {
+              retry.files.add(http.MultipartFile.fromBytes('images', imageBytes[i], filename: imageNames[i]));
+            }
+            response = await retry.send().timeout(const Duration(seconds: 90));
+            body = await response.stream.bytesToString();
+          }
           final data = jsonDecode(body);
           if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در آپلود عکس‌ها.');
           imageUrls.addAll(List<String>.from(data['urls'] ?? []));
@@ -1074,17 +1120,23 @@ class _AddProductSheetState extends State<AddProductSheet> {
     try {
       await _uploadImages();
       if (imageUrls.isEmpty) throw Exception('عکس‌ها آپلود نشدند.');
-      final response = await http.post(Uri.parse('https://bazarek.onrender.com/api/products'), headers: {
-        'Content-Type':'application/json',
-        if (AuthService.token != null) 'Authorization':'Bearer ${AuthService.token}',
-      }, body: jsonEncode({
+      final payload = jsonEncode({
         'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
         'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable,
-      })).timeout(const Duration(seconds: 30));
+      });
+      var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
+        'Content-Type':'application/json',
+        if (AuthService.token != null) 'Authorization':'Bearer ${AuthService.token}',
+      }, body: payload).timeout(const Duration(seconds: 30));
+      if (response.statusCode == 401 && await ApiService.refreshSession()) {
+        response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
+          'Content-Type':'application/json', 'Authorization':'Bearer ${AuthService.token}',
+        }, body: payload).timeout(const Duration(seconds: 30));
+      }
       final data = jsonDecode(response.body);
       if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در انتشار آگهی.');
       if (!mounted) return;
