@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'admin_panel_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -795,6 +796,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
           ],
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.admin_panel_settings_outlined),
+            title: const Text('ورود مدیریت'),
+            subtitle: const Text('پنل مدیریت، کاربران، آگهی‌ها و شکایات'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen())),
+          ),
           const Divider(),
           SwitchListTile(
             value: Theme.of(context).brightness == Brightness.dark,
