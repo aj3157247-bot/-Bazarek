@@ -1322,6 +1322,7 @@ class _BoostScreenState extends State<BoostScreen> {
     final bankName = (payment['bank_name'] ?? bank['name'] ?? '').toString();
     final accountName = (payment['account_name'] ?? bank['account_name'] ?? '').toString();
     final instructions = (payment['instructions'] ?? '').toString();
+    final configured = payment['configured'] != false && card.trim().isNotEmpty;
     final ps = Localizations.localeOf(context).languageCode == 'ps';
     return showDialog<String>(
       context: context,
@@ -1336,21 +1337,25 @@ class _BoostScreenState extends State<BoostScreen> {
               const SizedBox(height: 6),
               if (bankName.isNotEmpty) Text('${ps ? 'بانک' : 'بانک'}: $bankName'),
               if (accountName.isNotEmpty) Text('${ps ? 'د حساب نوم' : 'نام حساب'}: $accountName'),
-              if (card.isNotEmpty) Row(children: [
-                Expanded(child: SelectableText('${ps ? 'شمېره / کارت' : 'شماره کارت / حساب'}: $card', style: const TextStyle(fontWeight: FontWeight.w800))),
-                IconButton(tooltip: ps ? 'کاپي' : 'کپی', onPressed: () async { await Clipboard.setData(ClipboardData(text: card)); if (dialogContext.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ps ? 'شمېره کاپي شوه.' : 'شماره کارت کپی شد.'))); }, icon: const Icon(Icons.copy, size: 20)),
-              ]),
-              if (card.isEmpty) Text(ps ? 'د تادیې معلومات لا نه دي تنظیم شوي.' : 'اطلاعات کارت/حساب هنوز تنظیم نشده است.'),
-              if (instructions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(instructions)),
+              if (card.isNotEmpty) Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Theme.of(context).colorScheme.surface, border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)),
+                child: Row(children: [
+                  Expanded(child: SelectableText('${ps ? 'شمېره / کارت' : 'شماره کارت / حساب'}: $card', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+                  IconButton(tooltip: ps ? 'کاپي' : 'کپی', onPressed: () async { await Clipboard.setData(ClipboardData(text: card)); if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(ps ? 'شمېره کاپي شوه.' : 'شماره کارت کپی شد.'))); }, icon: const Icon(Icons.copy, size: 20)),
+                ]),
+              ),
+              if (card.isEmpty) Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: Colors.red.withOpacity(.08)), child: Text(ps ? 'د تادیې کارت/حساب شمېره لا نه ده تنظیم شوې. د مدیریت سره اړیکه ونیسئ.' : 'شماره کارت/حساب هنوز در سیستم تنظیم نشده است. لطفاً با مدیریت تماس بگیرید.', style: const TextStyle(fontWeight: FontWeight.w700))),
+              if (instructions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(instructions, style: const TextStyle(height: 1.45))),
             ])),
             const SizedBox(height: 10),
-            Text(ps ? '۱) پورته حساب/کارت ته دقیق مبلغ ولېږئ.\n۲) د انتقال رسید یا تعقیبي شمېره واخلئ.\n۳) هماغه شمېره لاندې ولیکئ.\n۴) مدیریت د پیسو له تایید وروسته Boost فعالوي.' : '۱) مبلغ دقیقاً به حساب/کارت بالا انتقال کنید.\n۲) رسید یا شماره پیگیری انتقال را بگیرید.\n۳) همان شماره را در کادر زیر وارد کنید.\n۴) بعد از تأیید پرداخت توسط مدیریت، Boost فعال می‌شود.'),
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Theme.of(context).colorScheme.secondaryContainer), child: Text(ps ? '📌 څنګه پیسې ولېږئ؟\n۱) دقیق مبلغ پورته کارت/حساب ته ولېږئ.\n۲) د انتقال رسید یا تعقیبي شمېره وساتئ.\n۳) د رسید شمېره لاندې ولیکئ.\n۴) غوښتنه ثبت کړئ.\n۵) مدیریت چې تادیه تایید کړي، Boost فعالېږي.' : '📌 چگونه پول بفرستم؟\n۱) مبلغ دقیق را به کارت/حساب بالا انتقال کنید.\n۲) رسید یا شماره پیگیری انتقال را نگه دارید.\n۳) شماره پیگیری را در کادر زیر وارد کنید.\n۴) درخواست را ثبت کنید.\n۵) پس از تأیید پرداخت توسط مدیریت، Boost فعال می‌شود.', style: const TextStyle(height: 1.5))),
             const SizedBox(height: 12),
-            TextField(controller: c, onChanged: (_) => setDialogState(() {}), decoration: InputDecoration(labelText: ps ? 'د رسید / تعقیب شمېره' : 'شماره پیگیری / رسید', border: const OutlineInputBorder())),
+            TextField(controller: c, onChanged: (_) => setDialogState(() {}), decoration: InputDecoration(labelText: ps ? 'د رسید / تعقیب شمېره' : 'شماره پیگیری / رسید', hintText: ps ? 'لکه: 123456789' : 'مثلاً: 123456789', border: const OutlineInputBorder())),
           ])),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(ps ? 'لغوه' : 'لغو')),
-            FilledButton(onPressed: c.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, c.text.trim()), child: Text(ps ? 'ثبت غوښتنه' : 'ثبت درخواست')),
+            FilledButton(onPressed: (!configured || c.text.trim().isEmpty) ? null : () => Navigator.pop(dialogContext, c.text.trim()), child: Text(ps ? 'ثبت غوښتنه' : 'ثبت درخواست')),
           ],
         ),
       ),
@@ -1396,7 +1401,13 @@ class _BoostScreenState extends State<BoostScreen> {
             Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
           ])),
           const SizedBox(height: 22),
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: د Boost د انتخاب پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي. مبلغ ولېږئ، د رسید شمېره ولیکئ، او د مدیریت تایید ته انتظار وباسئ.' : '💳 روش پرداخت: هنگام انتخاب Boost، شماره کارت/حساب بازارک نمایش داده می‌شود. مبلغ را انتقال دهید، شماره رسید را وارد کنید و منتظر تأیید مدیریت بمانید.')),
+          Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Theme.of(context).colorScheme.surfaceContainerHighest, border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(ps ? '💳 د تادیې معلومات' : '💳 اطلاعات پرداخت', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+            const SizedBox(height: 5),
+            Text(ps ? 'د Boost د اخیستلو پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي.' : 'هنگام خرید Boost، اطلاعات کارت/حساب بازارک و روش پرداخت به شما نمایش داده می‌شود.'),
+            const SizedBox(height: 4),
+            Text(ps ? 'د تادیې رسید شمېره له ثبتولو وروسته، مدیریت یې تاییدوي او Boost فعالېږي.' : 'پس از ثبت شماره رسید، مدیریت پرداخت را بررسی می‌کند و سپس Boost فعال می‌شود.', style: const TextStyle(fontSize: 12)),
+          ])),
           const SizedBox(height: 14),
           Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
