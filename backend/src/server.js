@@ -323,10 +323,27 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ویژه/پین کردن آگهی.' }); }
 });
 
+app.get('/api/translate', async (req, res) => {
+  try {
+    const text = String(req.query.text || '').trim().slice(0, 1200);
+    const target = String(req.query.target || 'ps').trim();
+    if (!text) return res.json({ text: '' });
+    if (target !== 'ps') return res.json({ text });
+    const url = new URL('https://api.mymemory.translated.net/get');
+    url.searchParams.set('q', text);
+    url.searchParams.set('langpair', 'fa|ps');
+    const r = await fetch(url);
+    if (!r.ok) return res.json({ text });
+    const d = await r.json();
+    const translated = d?.responseData?.translatedText;
+    res.json({ text: translated && String(translated).trim() ? String(translated).trim() : text });
+  } catch (_) { res.json({ text: String(req.query.text || '') }); }
+});
+
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,is_negotiable,views_count,province').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -413,8 +430,8 @@ app.get('/api/subscriptions', requireUser, async (req,res)=>{try{const db=getSup
 app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
   const plans={
     basic:{price:150,days:30},pro:{price:250,days:30},business:{price:450,days:30},
-    boost_monthly:{price:400,days:30,boost_level:4},
-    boost_yearly:{price:3500,days:365,boost_level:5}
+    boost_monthly:{price:250,days:30,boost_level:4},
+    boost_yearly:{price:2200,days:365,boost_level:5}
   };
   const plan=String(req.body?.plan||'');
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
@@ -452,8 +469,21 @@ app.get('/api/products', requireUser, async (req, res) => {
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('products').select('*').eq('vendor_id', req.user.id).order('created_at', { ascending: false });
     if (error) throw error;
-    res.json(data || []);
-  } catch (e) { res.status(500).json({ error: 'خطا در دریافت محصولات.' }); }
+    const now = Date.now();
+    const { data: subs } = await db.from('seller_subscriptions').select('plan,status,ends_at').eq('user_id', req.user.id).eq('status','active');
+    const globalLevel = (subs || []).reduce((max, sub) => {
+      const end = new Date(sub.ends_at || 0).getTime();
+      if (end <= now) return max;
+      const level = sub.plan === 'boost_yearly' ? 5 : sub.plan === 'boost_monthly' ? 4 : 0;
+      return Math.max(max, level);
+    }, 0);
+    const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
+    res.json((data || []).map(x => {
+      const own = x.boost_level && (!x.boost_until || new Date(x.boost_until).getTime() > now) ? Number(x.boost_level) : 0;
+      const level = Math.max(own, globalLevel);
+      return { ...x, effective_boost_level: level, boost_label: labels[level] || '', global_boost: globalLevel > 0 };
+    }));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت محصولات.' }); }
 });
 
 app.post('/api/products', requireUser, async (req, res) => {
@@ -462,7 +492,7 @@ app.post('/api/products', requireUser, async (req, res) => {
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -471,7 +501,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'is_negotiable'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
