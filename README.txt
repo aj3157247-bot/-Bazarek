@@ -1,25 +1,24 @@
-Bazarek - Boost + Auth + Categories fix
+Bazarek v31 – Boost + Social Pages + Pashto Localization
 
 Changed files only:
 - lib/main.dart
 - backend/src/server.js
 - supabase/migrations/202609090003_boost_system.sql
 
-What this fixes/adds:
-1) One successful login/register is shared across ثبت آگهی, گفتگو, آگهی‌های من and Boost. Auth state is refreshed across the whole app.
-2) آگهی‌های من now loads the user's real ads from backend and shows a 🚀 بوست آگهی button for each ad.
-3) Boost catalog:
-   - ⚡ توربو 24h: 20 AFN, one ad
-   - 🔥 انفجاری 3d: 40 AFN, one ad
-   - 💥 قدرتی 7d: 70 AFN, one ad
-   - 👑 ماهانه: 400 AFN, all active ads
-   - 🏆 سالانه: 3500 AFN, all active ads
-4) Listing ranking is automatic: annual global boost level 5 > monthly level 4 > short-term power level 3 > explosive level 2 > turbo level 1 > normal.
-5) Boosted listings receive special labels such as ⚡ توربو, 🔥 انفجاری, 💥 قدرتی, 👑 فروشنده ویژه, 🏆 فروشنده طلایی.
-6) Categories on Home are tappable. Opening a category shows its subcategories; selecting a subcategory loads all active ads for that exact subcategory.
-7) Backend /api/listings supports subcategory filtering and calculates global boost priority from active boost subscriptions.
-8) The Supabase migration adds boost fields, updates the promotion package catalog, and permits boost_monthly/boost_yearly subscriptions.
+Changes:
+1) Boost UI is split into short-term single-listing Boosts and monthly/yearly all-listings Boosts.
+2) Short-term prices: 24h=10 AFN, 3d=20 AFN, 7d=35 AFN. Each must be activated separately for a selected listing.
+3) Global Boost prices: monthly=250 AFN, yearly=2200 AFN. They apply to all active listings of the seller after admin approval.
+4) Boost ranking remains automatic: higher effective boost level gets higher listing priority.
+5) Added social-pages category with YouTube, TikTok, Instagram, Facebook Page, Telegram, Snapchat, X and other.
+6) Social-page listings can store an external URL and the detail page opens it directly.
+7) Added public /api/translate endpoint using a free translation service fallback, and localized visible user-generated listing text into Pashto when the app language is Pashto. Translation is cached in-app.
+8) Category, subcategory and province labels are localized to Pashto.
+9) Chat and Add Listing screens now react immediately to the shared AuthService session instead of requiring a separate registration per section.
 
-IMPORTANT:
-Run the new SQL migration in Supabase before deploying the backend, then redeploy backend on Render.
-The existing manual payment flow remains: user enters transfer/reference number, then admin approves the order/subscription; ranking activates after approval.
+Deployment:
+- Run the SQL migration in Supabase.
+- Deploy backend/src/server.js to Render.
+- Replace only lib/main.dart in the Flutter project.
+
+No new Flutter dependency is introduced by this version.
