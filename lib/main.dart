@@ -379,6 +379,54 @@ class ApiService {
       throw Exception('اتصال به سرور برقرار نشد.');
     }
   }
+
+  static Future<List<dynamic>> getMyProducts() async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/products'), headers: headers).timeout(const Duration(seconds: 20));
+    final data = jsonDecode(res.body);
+    if (res.statusCode == 200 && data is List) return data;
+    if (res.statusCode == 401 && await refreshSession()) return getMyProducts();
+    throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌های شما.') : 'خطا در دریافت آگهی‌های شما.');
+  }
+
+  static Future<List<dynamic>> getBoostPackages() async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/monetization/packages'), headers: headers).timeout(const Duration(seconds: 20));
+    final data = jsonDecode(res.body);
+    if (res.statusCode == 200 && data is List) return data;
+    if (res.statusCode == 401 && await refreshSession()) return getBoostPackages();
+    throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت بسته‌های بوست.') : 'خطا در دریافت بسته‌های بوست.');
+  }
+
+  static Future<Map<String, dynamic>> createBoostOrder(String listingId, String packageId, String reference) async {
+    final res = await http.post(Uri.parse('${ApiConfig.baseUrl}/promotions/orders'), headers: headers, body: jsonEncode({
+      'listing_id': listingId,
+      'package_id': packageId,
+      'payment_method': 'manual',
+      'payment_reference': reference.trim(),
+    })).timeout(const Duration(seconds: 20));
+    final data = jsonDecode(res.body);
+    if (res.statusCode == 201) return data is Map<String,dynamic> ? data : <String,dynamic>{};
+    if (res.statusCode == 401 && await refreshSession()) return createBoostOrder(listingId, packageId, reference);
+    throw Exception(data is Map ? (data['error'] ?? 'ثبت سفارش بوست ناموفق بود.') : 'ثبت سفارش بوست ناموفق بود.');
+  }
+
+  static Future<Map<String, dynamic>> createGlobalBoost(String plan, String reference) async {
+    final res = await http.post(Uri.parse('${ApiConfig.baseUrl}/subscriptions'), headers: headers, body: jsonEncode({
+      'plan': plan,
+      'payment_reference': reference.trim(),
+    })).timeout(const Duration(seconds: 20));
+    final data = jsonDecode(res.body);
+    if (res.statusCode == 201) return data is Map<String,dynamic> ? data : <String,dynamic>{};
+    if (res.statusCode == 401 && await refreshSession()) return createGlobalBoost(plan, reference);
+    throw Exception(data is Map ? (data['error'] ?? 'ثبت درخواست بوست سراسری ناموفق بود.') : 'ثبت درخواست بوست سراسری ناموفق بود.');
+  }
+
+  static Future<List<dynamic>> getSubscriptions() async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/subscriptions'), headers: headers).timeout(const Duration(seconds: 20));
+    final data = jsonDecode(res.body);
+    if (res.statusCode == 200 && data is List) return data;
+    if (res.statusCode == 401 && await refreshSession()) return getSubscriptions();
+    throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت اشتراک‌ها.') : 'خطا در دریافت اشتراک‌ها.');
+  }
 }
 
 
@@ -629,13 +677,14 @@ class _ProductCard extends StatelessWidget {
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
     final price = NumberFormatHelper.format(item['price']);
+    final boostBadge = item['boost_badge']?.toString() ?? '';
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
         child: SizedBox(
-          height: 118,
+          height: 132,
           child: Row(
             textDirection: TextDirection.rtl,
             children: [
@@ -643,6 +692,17 @@ class _ProductCard extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    if (boostBadge.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        margin: const EdgeInsets.only(bottom: 5),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFFFFB300), Color(0xFFFF6D00)]),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(boostBadge, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                     Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     const Spacer(),
                     Text(price == '0' ? tr(context,'free') : '$price ${tr(context,'afghani')}', style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
@@ -651,7 +711,7 @@ class _ProductCard extends StatelessWidget {
                   ]),
                 ),
               ),
-              SizedBox(width: 120, height: 118, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)) : Container(color: Colors.grey.shade300, child: const Icon(Icons.image, size: 42))),
+              SizedBox(width: 120, height: 132, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)) : Container(color: Colors.grey.shade300, child: const Icon(Icons.image, size: 42))),
             ],
           ),
         ),
@@ -890,16 +950,193 @@ class AddProductScreen extends StatelessWidget {
   }
 }
 
-class MyProductsScreen extends StatelessWidget {
+class MyProductsScreen extends StatefulWidget {
   const MyProductsScreen({super.key});
+
+  @override
+  State<MyProductsScreen> createState() => _MyProductsScreenState();
+}
+
+class _MyProductsScreenState extends State<MyProductsScreen> {
+  List<dynamic> ads = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    if (!AuthService.isLoggedIn) { if (mounted) setState(() { loading = false; }); return; }
+    setState(() { loading = true; error = null; });
+    try {
+      final data = await ApiService.getMyProducts();
+      if (mounted) setState(() { ads = data; loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  Future<void> _openBoost(dynamic ad) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => BoostScreen(listing: ad)));
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AuthService.isLoggedIn) {
+      return Scaffold(appBar: AppBar(title: Text(tr(context, 'my_ads'))), body: const Center(child: Text('برای مدیریت و بوست آگهی‌ها ابتدا وارد حساب شوید.')));
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr(context, 'my_ads')),
+        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [Text(error!, textAlign: TextAlign.center), const SizedBox(height: 12), FilledButton(onPressed: _load, child: const Text('تلاش دوباره'))])))
+              : ads.isEmpty
+                  ? const Center(child: Text('شما هنوز هیچ آگهی ثبت نکرده‌اید.'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: ads.length,
+                      itemBuilder: (_, i) {
+                        final ad = ads[i];
+                        final title = ad['title']?.toString() ?? 'آگهی بدون عنوان';
+                        final active = ad['is_active'] == true || ad['is_active'] == 1;
+                        final image = ad['image_url']?.toString() ?? '';
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(8),
+                            leading: SizedBox(width: 72, height: 72, child: image.isNotEmpty ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_,__,___)=>const Icon(Icons.image)) : const Icon(Icons.image, size: 40)),
+                            title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(active ? 'فعال • آماده برای بوست' : 'غیرفعال'),
+                            trailing: active ? FilledButton.icon(onPressed: () => _openBoost(ad), icon: const Icon(Icons.rocket_launch, size: 18), label: const Text('بوست')) : null,
+                          ),
+                        );
+                      },
+                    ),
+    );
+  }
+}
+
+class BoostScreen extends StatefulWidget {
+  final dynamic listing;
+  const BoostScreen({super.key, this.listing});
+
+  @override
+  State<BoostScreen> createState() => _BoostScreenState();
+}
+
+class _BoostScreenState extends State<BoostScreen> {
+  List<dynamic> packages = [];
+  List<dynamic> subscriptions = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    try {
+      final results = await Future.wait([ApiService.getBoostPackages(), ApiService.getSubscriptions()]);
+      if (mounted) setState(() { packages = results[0]; subscriptions = results[1]; loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  Future<String?> _referenceDialog(String title, String price) async {
+    final c = TextEditingController();
+    return showDialog<String>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('مبلغ $price افغانی را طبق روش پرداخت بازارک انتقال دهید، سپس شماره پیگیری یا رسید را وارد کنید.'),
+        const SizedBox(height: 12),
+        TextField(controller: c, decoration: const InputDecoration(labelText: 'شماره پیگیری / رسید', border: OutlineInputBorder())),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('انصراف')), FilledButton(onPressed: () { if (c.text.trim().isNotEmpty) Navigator.pop(ctx, c.text.trim()); }, child: const Text('ثبت درخواست'))],
+    ));
+  }
+
+  Future<void> _buyPackage(dynamic pkg) async {
+    if (widget.listing == null) return;
+    final ref = await _referenceDialog(pkg['title']?.toString() ?? 'بوست آگهی', NumberFormatHelper.format(pkg['price_afn']));
+    if (ref == null) return;
+    try {
+      await ApiService.createBoostOrder(widget.listing['id'].toString(), pkg['id'].toString(), ref);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('درخواست بوست ثبت شد و پس از تأیید مدیریت فعال می‌شود.')));
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _buyGlobal(String plan, String title, int price) async {
+    final ref = await _referenceDialog(title, NumberFormatHelper.format(price));
+    if (ref == null) return;
+    try {
+      await ApiService.createGlobalBoost(plan, ref);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('درخواست بوست سراسری ثبت شد و پس از تأیید مدیریت فعال می‌شود.')));
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'my_ads'))),
-      body: const Center(child: Text('شما هنوز هیچ آگهی ثبت نکرده‌اید')),
+      appBar: AppBar(title: const Text('🚀 بوست بازارک')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Text(error!, textAlign: TextAlign.center))
+              : ListView(padding: const EdgeInsets.all(16), children: [
+                  const Text('🚀 آگهی‌ات را از بقیه جلو بزن!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  const Text('پول بیشتر یعنی اولویت بیشتر در نمایش آگهی‌ها. بوست‌ها خودکار روی جایگاه آگهی اثر می‌گذارند.'),
+                  if (widget.listing != null) ...[
+                    const SizedBox(height: 18),
+                    Text('برای: ${widget.listing['title'] ?? 'آگهی'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    ...packages.map((p) => _BoostTile(title: p['title']?.toString() ?? '', description: p['description']?.toString() ?? '', price: NumberFormatHelper.format(p['price_afn']), icon: Icons.rocket_launch, onTap: () => _buyPackage(p))),
+                  ],
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  const Text('👑 بوست برای تمام آگهی‌های شما', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  const Text('با این گزینه همه آگهی‌های فعال شما به‌صورت خودکار اولویت بالاتری می‌گیرند.'),
+                  const SizedBox(height: 10),
+                  _BoostTile(title: '👑 ماهانه — همه آگهی‌ها', description: '۳۰ روز برای تمام آگهی‌های فعال شما.', price: '۴۰۰', icon: Icons.workspace_premium, onTap: () => _buyGlobal('monthly_boost','👑 بوست ماهانه',400)),
+                  _BoostTile(title: '🏆 سالانه — همه آگهی‌ها', description: '۳۶۵ روز برای تمام آگهی‌های فعال شما؛ مناسب فروشندگان حرفه‌ای.', price: '۳٬۵۰۰', icon: Icons.emoji_events, onTap: () => _buyGlobal('yearly_boost','🏆 بوست سالانه',3500)),
+                  if (subscriptions.any((s) => s['status'] == 'pending'))
+                    const Padding(padding: EdgeInsets.only(top: 12), child: Text('⏳ یک درخواست بوست سراسری شما در انتظار تأیید مدیریت است.')),
+                ],),
     );
   }
+}
+
+class _BoostTile extends StatelessWidget {
+  final String title, description, price;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _BoostTile({required this.title, required this.description, required this.price, required this.icon, required this.onTap});
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 10),
+    child: ListTile(
+      leading: CircleAvatar(child: Icon(icon)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(description),
+      isThreeLine: true,
+      trailing: FilledButton(onPressed: onTap, child: Text('$price افغانی')),
+    ),
+  );
 }
 
 class ProfileScreen extends StatefulWidget {
