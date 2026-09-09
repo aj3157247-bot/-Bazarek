@@ -420,7 +420,9 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
       swift_code: row?.swift_code || process.env.PAYMENT_SWIFT_CODE || '',
       card_number: row?.card_number || process.env.PAYMENT_CARD_NUMBER || ''
     };
-    res.json({ methods:['bank_transfer','manual'], bank, card_number: bank.card_number, instructions: row?.instructions || 'مبلغ دقیق را انتقال دهید، سپس شماره پیگیری/رسید را در برنامه وارد کنید. بعد از تأیید مدیریت، Boost فعال می‌شود.' });
+    const instructions = row?.instructions || 'مبلغ دقیق را به کارت/حساب بالا انتقال دهید، رسید یا شماره پیگیری را نگه دارید، آن را در برنامه وارد کنید و منتظر تأیید مدیریت بمانید. پس از تأیید، Boost فعال می‌شود.';
+    const configured = Boolean(String(bank.card_number || bank.account_number || '').trim());
+    res.json({ methods:['bank_transfer','manual'], configured, bank, card_number: bank.card_number, account_number: bank.account_number, instructions });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error:'خطا در دریافت اطلاعات پرداخت.' });
