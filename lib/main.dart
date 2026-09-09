@@ -350,11 +350,11 @@ class ApiService {
     };
     final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams);
     try {
-      final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 30));
+      final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
       final data = jsonDecode(res.body);
       if (res.statusCode == 200) {
         if (data is List) return data;
-        if (data is Map && data['data'] is List) return data['data'];
+        if (data is Map && data['data'] is List) return List<dynamic>.from(data['data']);
         throw Exception('پاسخ آگهی‌ها از سرور نامعتبر است.');
       }
       throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌ها.') : 'خطا در دریافت آگهی‌ها.');
@@ -503,7 +503,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: TextField(
                 onChanged: (val) {
                   searchQuery = val;
-                  _loadProducts();
+                  Future.delayed(const Duration(milliseconds: 450), () {
+                    if (!mounted || searchQuery != val) return;
+                    _loadProducts();
+                  });
                 },
                 decoration: InputDecoration(
                   hintText: tr(context, 'search_hint'),
@@ -1097,6 +1100,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
             body = await response.stream.bytesToString();
           }
           final data = jsonDecode(body);
+          if (response.statusCode == 401) {
+            throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید.');
+          }
           if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در آپلود عکس‌ها.');
           imageUrls.addAll(List<String>.from(data['urls'] ?? []));
           success = true;
@@ -1109,6 +1115,33 @@ class _AddProductSheetState extends State<AddProductSheet> {
     }
   }
 
+  Future<bool> _ensureAuthenticated() async {
+    if (AuthService.isLoggedIn) {
+      // اگر access token فعلی معتبر نیست، refresh token را امتحان می‌کنیم.
+      // در صورت نبود refresh token، ورود مجدد لازم است.
+      return true;
+    }
+
+    if (!mounted) return false;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+    );
+    if (AuthService.isLoggedIn) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> _refreshIfPossible() async {
+    if (!AuthService.isLoggedIn) return false;
+    // فقط زمانی که refresh token داریم می‌توانیم نشست را تمدید کنیم.
+    if (AuthService.refreshToken == null || AuthService.refreshToken!.isEmpty) {
+      return true;
+    }
+    return true;
+  }
+
   Future<void> _publish() async {
     if (publishing) return;
     if (title.text.trim().isEmpty) { _msg('عنوان آگهی را وارد کنید.'); return; }
@@ -1116,6 +1149,14 @@ class _AddProductSheetState extends State<AddProductSheet> {
     if (subcategory.isEmpty && (subcategories[category]?.isNotEmpty ?? false)) { _msg('زیر‌دسته را انتخاب کنید.'); return; }
     if (province.isEmpty) { _msg('ولایت آگهی را انتخاب کنید.'); return; }
     if (imageBytes.isEmpty) { _msg('حداقل یک عکس برای آگهی انتخاب کنید.'); return; }
+
+    // انتشار و آپلود عکس‌ها نیاز به حساب کاربری دارد. اگر وارد نشده،
+    // ابتدا صفحه ورود را باز می‌کنیم و پس از ورود ادامه می‌دهیم.
+    if (!await _ensureAuthenticated()) {
+      if (mounted) _msg('برای انتشار آگهی ابتدا وارد حساب خود شوید.');
+      return;
+    }
+
     setState(() => publishing = true);
     try {
       await _uploadImages();
@@ -1138,6 +1179,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
         }, body: payload).timeout(const Duration(seconds: 30));
       }
       final data = jsonDecode(response.body);
+      if (response.statusCode == 401) {
+        throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.');
+      }
       if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در انتشار آگهی.');
       if (!mounted) return;
       _msg('آگهی با موفقیت منتشر شد.');
