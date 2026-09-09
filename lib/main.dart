@@ -1319,6 +1319,14 @@ class _BoostScreenState extends State<BoostScreen> {
     try { payment = await ApiService.getPaymentInfo(); } catch (_) {}
     final bank = payment['bank'] is Map ? Map<String, dynamic>.from(payment['bank']) : <String, dynamic>{};
     final card = (payment['card_number'] ?? bank['card_number'] ?? payment['account_number'] ?? bank['account_number'] ?? '').toString();
+    // شماره کارت را از هر فاصله/کاراکتر قالب‌بندی جدا می‌کنیم تا ترتیب منطقی اعداد
+    // هنگام کپی در محیط‌های RTL تغییر نکند. مقدار Clipboard فقط رقم‌های واقعی است.
+    final cardDigits = card
+        .replaceAll('۰', '0').replaceAll('۱', '1').replaceAll('۲', '2').replaceAll('۳', '3').replaceAll('۴', '4')
+        .replaceAll('۵', '5').replaceAll('۶', '6').replaceAll('۷', '7').replaceAll('۸', '8').replaceAll('۹', '9')
+        .replaceAll('٠', '0').replaceAll('١', '1').replaceAll('٢', '2').replaceAll('٣', '3').replaceAll('٤', '4')
+        .replaceAll('٥', '5').replaceAll('٦', '6').replaceAll('٧', '7').replaceAll('٨', '8').replaceAll('٩', '9')
+        .replaceAll(RegExp(r'[^0-9]'), '');
     final bankName = (payment['bank_name'] ?? bank['name'] ?? '').toString();
     final accountName = (payment['account_name'] ?? bank['account_name'] ?? '').toString();
     final instructions = (payment['instructions'] ?? '').toString();
@@ -1337,50 +1345,35 @@ class _BoostScreenState extends State<BoostScreen> {
               if (bankName.isNotEmpty) Text('${ps ? 'بانک' : 'بانک'}: $bankName'),
               if (accountName.isNotEmpty) Text('${ps ? 'د حساب نوم' : 'نام حساب'}: $accountName'),
               if (card.isNotEmpty) Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            ps ? 'شمېره / کارت' : 'شماره کارت / حساب',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                            textAlign: TextAlign.right,
-                          ),
-                          const SizedBox(height: 4),
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: SelectableText(
-                              card,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 0.5),
-                            ),
-                          ),
-                        ],
-                      ),
+                child: Row(children: [
+                  Expanded(child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: SelectableText(
+                      card,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 0.6),
                     ),
-                    IconButton(
-                      tooltip: ps ? 'کاپي' : 'کپی',
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: card));
-                        if (dialogContext.mounted) {
-                          ScaffoldMessenger.of(dialogContext).showSnackBar(
-                            SnackBar(content: Text(ps ? 'شمېره کاپي شوه.' : 'شماره کارت کپی شد.')),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.copy, size: 20),
-                    ),
-                  ],
-                ),
+                  )),
+                  IconButton(
+                    tooltip: ps ? 'کاپي' : 'کپی',
+                    onPressed: cardDigits.isEmpty ? null : () async {
+                      // عمداً فقط رقم‌ها کپی می‌شوند؛ هیچ فاصله یا کاراکتر RTL داخل Clipboard نمی‌رود.
+                      await Clipboard.setData(ClipboardData(text: cardDigits));
+                      if (dialogContext.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(ps ? 'د کارت شمېره په سمه بڼه کاپي شوه.' : 'شماره کارت بدون فاصله و با ترتیب درست کپی شد.')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy, size: 20),
+                  ),
+                ]),
               ),
               if (card.isEmpty) Text(ps ? 'د تادیې معلومات لا نه دي تنظیم شوي.' : 'اطلاعات کارت/حساب هنوز تنظیم نشده است.'),
               if (instructions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(instructions)),
