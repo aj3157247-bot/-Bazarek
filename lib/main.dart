@@ -539,7 +539,7 @@ class ApiService {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
-      req.files.add(await http.MultipartFile.fromPath('avatar', image.path));
+      req.files.add(http.MultipartFile.fromBytes('avatar', await image.readAsBytes(), filename: image.name));
       final streamed = await req.send().timeout(const Duration(seconds: 30));
       return http.Response.fromStream(streamed);
     }
