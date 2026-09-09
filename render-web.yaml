@@ -1,0 +1,10 @@
+# Deploy the Flutter Web version as a separate Render Web Service.
+# Keep the existing Bazarek backend service unchanged.
+services:
+  - type: web
+    name: bazarek-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile.web
+    dockerContext: .
+    healthCheckPath: /
+    autoDeploy: true
