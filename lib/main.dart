@@ -195,6 +195,42 @@ const List<Map<String, dynamic>> categories = [
   {'id': 'personal', 'title': 'وسایل شخصی', 'icon': Icons.person},
 ];
 
+
+const Map<String, List<Map<String, String>>> subcategories = {
+  'real_estate': [
+    {'id':'house_rent','title':'خانه کرایی'},
+    {'id':'house_mortgage','title':'خانه گروی'},
+    {'id':'house_sale','title':'خانه فروشی'},
+    {'id':'apartment','title':'آپارتمان'},
+    {'id':'land_sale','title':'زمین فروشی'},
+    {'id':'land_rent','title':'زمین کرایی'},
+    {'id':'shop','title':'دکان'},
+    {'id':'office','title':'دفتر'},
+    {'id':'garden','title':'باغ'},
+  ],
+  'vehicles': [
+    {'id':'car','title':'موتر'}, {'id':'motorcycle','title':'موتورسایکل'}, {'id':'rickshaw','title':'رکشا'}, {'id':'parts','title':'پرزه‌جات'},
+  ],
+  'electronics': [
+    {'id':'mobile','title':'موبایل'}, {'id':'laptop','title':'لپ‌تاپ'}, {'id':'computer','title':'کمپیوتر'}, {'id':'tv','title':'تلویزیون'}, {'id':'camera','title':'دوربین'},
+  ],
+  'home_goods': [
+    {'id':'furniture','title':'مبلمان'}, {'id':'appliances','title':'لوازم برقی'}, {'id':'kitchen','title':'لوازم آشپزخانه'},
+  ],
+  'fashion': [
+    {'id':'mens','title':'لباس مردانه'}, {'id':'womens','title':'لباس زنانه'}, {'id':'kids','title':'لباس کودک'}, {'id':'shoes','title':'کفش'},
+  ],
+  'jobs': [
+    {'id':'full_time','title':'کار تمام‌وقت'}, {'id':'part_time','title':'کار نیمه‌وقت'}, {'id':'remote','title':'کار آنلاین'},
+  ],
+  'services': [
+    {'id':'repair','title':'تعمیرات'}, {'id':'transport','title':'ترانسپورت'}, {'id':'education','title':'آموزش'},
+  ],
+  'personal': [
+    {'id':'other','title':'سایر وسایل شخصی'},
+  ],
+};
+
 class ApiConfig {
   static const String baseUrl = 'https://afgbazar.com/api/v1';
 }
@@ -508,18 +544,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : products.isEmpty
                       ? const Center(child: Text('هیچ آگهی یافت نشد'))
-                      : GridView.builder(
+                      : ListView.builder(
                           padding: const EdgeInsets.all(12),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.75,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
                           itemCount: products.length,
-                          itemBuilder: (context, idx) {
-                            return _ProductCard(item: products[idx]);
-                          },
+                          itemBuilder: (context, idx) => _ProductCard(item: products[idx]),
                         ),
             ),
           ],
@@ -537,75 +565,48 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     List<dynamic> images = [];
     try {
-      if (item['image_url'] != null) {
-        images = jsonDecode(item['image_url']);
-      }
+      final raw = item['image_url'];
+      if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
+      if (raw is List) images = raw;
     } catch (_) {}
-
+    final imageUrl = images.isNotEmpty ? images.first.toString() : '';
+    final price = NumberFormatHelper.format(item['price']);
     return Card(
+      margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductDetailScreen(product: item),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: images.isNotEmpty
-                  ? Image.network(
-                      images.first,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 50),
-                    )
-                  : Container(
-                      color: Colors.grey.shade300,
-                      child: const Center(child: Icon(Icons.image, size: 50)),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['title'] ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${item['price'] ?? 0} ${tr(context, 'afghani')}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 14),
-                      Text(
-                        item['province'] ?? '',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ],
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+        child: SizedBox(
+          height: 118,
+          child: Row(
+            textDirection: TextDirection.rtl,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const Spacer(),
+                    Text(price == '0' ? tr(context,'free') : '$price ${tr(context,'afghani')}', style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
+                    const SizedBox(height: 4),
+                    Text('${item['province'] ?? ''}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+                  ]),
+                ),
               ),
-            ),
-          ],
+              SizedBox(width: 120, height: 118, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)) : Container(color: Colors.grey.shade300, child: const Icon(Icons.image, size: 42))),
+            ],
+          ),
         ),
       ),
     );
+  }
+}
+
+class NumberFormatHelper {
+  static String format(dynamic value) {
+    final n = num.tryParse(value?.toString() ?? '') ?? 0;
+    final raw = n.toInt().toString();
+    return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+$)'), (_) => ',');
   }
 }
 
@@ -1000,6 +1001,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final locationText = TextEditingController();
 
   String category = '';
+  String subcategory = '';
   String province = '';
   bool allowChat = true;
   bool showPhone = true;
@@ -1009,6 +1011,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   List<Uint8List> imageBytes = [];
   List<String> imageNames = [];
   List<String> imageUrls = [];
+  bool publishing = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -1019,19 +1022,77 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      final bytes = await image.readAsBytes();
-      setState(() {
-        imageBytes.add(bytes);
-        imageNames.add(image.name);
-      });
+    if (imageBytes.length >= 10) { _msg('حداکثر ۱۰ عکس مجاز است.'); return; }
+    final picked = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000, maxHeight: 2000);
+    if (picked.isEmpty) return;
+    final remaining = 10 - imageBytes.length;
+    for (final image in picked.take(remaining)) {
+      imageBytes.add(await image.readAsBytes());
+      imageNames.add(image.name);
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _uploadImages() async {
-    setState(() => uploading = true);
-    setState(() => uploading = false);
+    if (imageBytes.isEmpty) throw Exception('حداقل یک عکس انتخاب کنید.');
+    imageUrls.clear();
+    for (var start = 0; start < imageBytes.length; start += 3) {
+      final end = (start + 3 > imageBytes.length) ? imageBytes.length : start + 3;
+      var success = false;
+      Object? lastError;
+      for (var attempt = 1; attempt <= 3 && !success; attempt++) {
+        try {
+          final req = http.MultipartRequest('POST', Uri.parse('https://bazarek.onrender.com/api/upload-images'));
+          req.headers['Accept'] = 'application/json';
+          if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+          for (var i = start; i < end; i++) {
+            req.files.add(http.MultipartFile.fromBytes('images', imageBytes[i], filename: imageNames[i]));
+          }
+          final response = await req.send().timeout(const Duration(seconds: 90));
+          final body = await response.stream.bytesToString();
+          final data = jsonDecode(body);
+          if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در آپلود عکس‌ها.');
+          imageUrls.addAll(List<String>.from(data['urls'] ?? []));
+          success = true;
+        } catch (e) {
+          lastError = e;
+          if (attempt < 3) await Future.delayed(Duration(seconds: attempt));
+        }
+      }
+      if (!success) throw Exception(lastError?.toString() ?? 'آپلود عکس‌ها ناموفق بود.');
+    }
+  }
+
+  Future<void> _publish() async {
+    if (publishing) return;
+    if (title.text.trim().isEmpty) { _msg('عنوان آگهی را وارد کنید.'); return; }
+    if (category.isEmpty) { _msg('دسته‌بندی را انتخاب کنید.'); return; }
+    if (subcategory.isEmpty && (subcategories[category]?.isNotEmpty ?? false)) { _msg('زیر‌دسته را انتخاب کنید.'); return; }
+    if (province.isEmpty) { _msg('ولایت آگهی را انتخاب کنید.'); return; }
+    if (imageBytes.isEmpty) { _msg('حداقل یک عکس برای آگهی انتخاب کنید.'); return; }
+    setState(() => publishing = true);
+    try {
+      await _uploadImages();
+      if (imageUrls.isEmpty) throw Exception('عکس‌ها آپلود نشدند.');
+      final response = await http.post(Uri.parse('https://bazarek.onrender.com/api/products'), headers: {
+        'Content-Type':'application/json',
+        if (AuthService.token != null) 'Authorization':'Bearer ${AuthService.token}',
+      }, body: jsonEncode({
+        'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
+        'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
+        'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
+        'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
+        'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
+        'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable,
+      })).timeout(const Duration(seconds: 30));
+      final data = jsonDecode(response.body);
+      if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در انتشار آگهی.');
+      if (!mounted) return;
+      _msg('آگهی با موفقیت منتشر شد.');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) _msg(e.toString().replaceFirst('Exception: ', ''));
+    } finally { if (mounted) setState(() => publishing = false); }
   }
 
   @override
@@ -1049,14 +1110,18 @@ class _AddProductSheetState extends State<AddProductSheet> {
           DropdownButtonFormField<String>(
             value: category.isEmpty ? null : category,
             hint: const Text('انتخاب دسته‌بندی'),
-            items: categories
-                .map((c) => DropdownMenuItem(
-                      value: c['id'] as String,
-                      child: Text(c['title'] as String),
-                    ))
-                .toList(),
-            onChanged: (val) => setState(() => category = val ?? ''),
+            items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['title'] as String))).toList(),
+            onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; }),
           ),
+          if ((subcategories[category] ?? []).isNotEmpty) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: subcategory.isEmpty ? null : subcategory,
+              hint: const Text('انتخاب زیر‌دسته'),
+              items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(c['title']!))).toList(),
+              onChanged: (val) => setState(() => subcategory = val ?? ''),
+            ),
+          ],
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: province.isEmpty ? null : province,
@@ -1109,51 +1174,18 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => isNegotiable = val),
           ),
           const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: _pickImage,
-            icon: const Icon(Icons.add_a_photo),
-            label: const Text('افزودن تصویر'),
-          ),
+          Text('عکس‌ها: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (var i = 0; i < imageBytes.length; i++)
+              Stack(children: [
+                ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.cover)),
+                Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
+              ]),
+            if (imageBytes.length < 10) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
+          ]),
           const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: uploading
-                ? null
-                : () async {
-                    if (title.text.trim().isEmpty) {
-                      _msg('عنوان آگهی را وارد کنید.');
-                      return;
-                    }
-                    if (category.isEmpty) {
-                      _msg('دسته‌بندی را انتخاب کنید.');
-                      return;
-                    }
-                    if (province.isEmpty) {
-                      _msg('ولایت آگهی را انتخاب کنید.');
-                      return;
-                    }
-                    if (imageBytes.isNotEmpty && imageUrls.isEmpty) {
-                      await _uploadImages();
-                    }
-                    if (!mounted) return;
-                    Navigator.pop(context, {
-                      'title': title.text.trim(),
-                      'category': category,
-                      'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
-                      'cost_price': 0,
-                      'stock': int.tryParse(stock.text) ?? 1,
-                      'description': desc.text.trim(),
-                      'image_url': jsonEncode(imageUrls),
-                      'allow_chat': allowChat,
-                      'show_phone': showPhone,
-                      'contact_phone': contactPhone.text.trim(),
-                      'location_text': locationText.text.trim(),
-                      'province': province,
-                      'is_negotiable': isNegotiable,
-                    });
-                  },
-            icon: const Icon(Icons.check),
-            label: const Text('ثبت و انتشار آگهی'),
-          ),
+          FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.publish), label: Text(publishing ? 'در حال انتشار...' : 'ثبت و انتشار آگهی')),
         ],
       ),
     );
