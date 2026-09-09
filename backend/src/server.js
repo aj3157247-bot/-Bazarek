@@ -406,16 +406,25 @@ app.get('/api/admin/stats', requireAdmin, async (_, res) => {
 
 
 app.get('/api/payment-info', requireUser, async (_,res)=>{
-  res.json({
-    methods: ['wallet','bank_transfer'],
-    bank: {
-      name: process.env.PAYMENT_BANK_NAME || 'حساب بانکی بازارک',
-      account_name: process.env.PAYMENT_ACCOUNT_NAME || '',
-      account_number: process.env.PAYMENT_ACCOUNT_NUMBER || '',
-      branch: process.env.PAYMENT_BANK_BRANCH || '',
-      swift_code: process.env.PAYMENT_SWIFT_CODE || ''
-    }
-  });
+  try {
+    const db = getSupabaseAdmin();
+    let row = null;
+    // Canonical Supabase table. Env vars remain a safe fallback for existing deployments.
+    const { data, error } = await db.from('payment_settings').select('*').eq('id', 1).maybeSingle();
+    if (!error) row = data;
+    const bank = {
+      name: row?.bank_name || process.env.PAYMENT_BANK_NAME || 'حساب بانکی بازارک',
+      account_name: row?.account_name || process.env.PAYMENT_ACCOUNT_NAME || '',
+      account_number: row?.account_number || process.env.PAYMENT_ACCOUNT_NUMBER || '',
+      branch: row?.branch || process.env.PAYMENT_BANK_BRANCH || '',
+      swift_code: row?.swift_code || process.env.PAYMENT_SWIFT_CODE || '',
+      card_number: row?.card_number || process.env.PAYMENT_CARD_NUMBER || ''
+    };
+    res.json({ methods:['bank_transfer','manual'], bank, card_number: bank.card_number, instructions: row?.instructions || 'مبلغ دقیق را انتقال دهید، سپس شماره پیگیری/رسید را در برنامه وارد کنید. بعد از تأیید مدیریت، Boost فعال می‌شود.' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error:'خطا در دریافت اطلاعات پرداخت.' });
+  }
 });
 
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
@@ -430,8 +439,8 @@ app.get('/api/subscriptions', requireUser, async (req,res)=>{try{const db=getSup
 app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
   const plans={
     basic:{price:150,days:30},pro:{price:250,days:30},business:{price:450,days:30},
-    boost_monthly:{price:250,days:30,boost_level:4},
-    boost_yearly:{price:2200,days:365,boost_level:5}
+    boost_monthly:{price:300,days:30,boost_level:4},
+    boost_yearly:{price:2500,days:365,boost_level:5}
   };
   const plan=String(req.body?.plan||'');
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
