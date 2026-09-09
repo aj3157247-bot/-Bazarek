@@ -117,6 +117,67 @@ String tr(BuildContext context, String key) {
   return map[key] ?? key;
 }
 
+String localizedProvince(BuildContext context, String value) {
+  if (Localizations.localeOf(context).languageCode != 'ps') return value;
+  const ps = {
+    'کابل':'کابل','هرات':'هرات','بلخ (مزارشریف)':'بلخ (مزار شریف)','قندهار':'کندهار','ننگرهار (جلال‌آباد)':'ننګرهار (جلال اباد)',
+    'پکتیا':'پکتیا','خوست':'خوست','غزنی':'غزني','بامیان':'بامیان','پنجشیر':'پنجشېر','بدخشان':'بدخشان','پروان':'پروان','کاپیسا':'کاپیسا',
+    'میدان وردک':'میدان وردګ','لوگر':'لوګر','دایکندی':'دایکندي','ارزگان':'اروزګان','زابل':'زابل','پکتیکا':'پکتیکا','هلمند':'هلمند',
+    'فراه':'فراه','نیمروز':'نیمروز','بادغیس':'بادغیس','غور':'غور','سرپل':'سرپل','فاریاب':'فاریاب','جوزجان':'جوزجان',
+    'سمنگان':'سمنګان','تخار':'تخار','کندز':'کندز','بغلان':'بغلان','نورستان':'نورستان','کنر':'کونړ','لغمان':'لغمان',
+  };
+  return ps[value] ?? value;
+}
+
+String localizedCategoryTitle(BuildContext context, String id, String fallback) {
+  final lang = Localizations.localeOf(context).languageCode;
+  if (lang == 'ps') {
+    const ps = {
+      'real_estate':'املاک او کور', 'vehicles':'وسایط نقلیه', 'electronics':'برېښنایي وسایل',
+      'home_goods':'د کور وسایل', 'fashion':'کالي او جامې', 'jobs':'استخدام او د کارموندنه',
+      'services':'خدمتونه', 'personal':'شخصي وسایل', 'social_pages':'مجازی پاڼې',
+    };
+    return ps[id] ?? fallback;
+  }
+  return fallback;
+}
+
+String localizedSubcategoryTitle(BuildContext context, String categoryId, String id, String fallback) {
+  if (Localizations.localeOf(context).languageCode != 'ps') return fallback;
+  const ps = {
+    'house_rent':'کرایي کور', 'house_mortgage':'ګروي کور', 'house_sale':'د خرڅلاو کور', 'apartment':'اپارتمان',
+    'land_sale':'د خرڅلاو ځمکه', 'land_rent':'کرایي ځمکه', 'shop':'دوکان', 'office':'دفتر', 'garden':'باغ',
+    'car':'موټر', 'motorcycle':'موټرسایکل', 'rickshaw':'ریکشا', 'parts':'پرزې', 'mobile':'موبایل', 'laptop':'لېپټاپ',
+    'computer':'کمپیوټر', 'tv':'تلویزیون', 'camera':'کمره', 'furniture':'فرنیچر', 'appliances':'برقي وسایل',
+    'kitchen':'د پخلنځي وسایل', 'mens':'د نارینه وو جامې', 'womens':'د ښځو جامې', 'kids':'د ماشومانو جامې', 'shoes':'بوټان',
+    'full_time':'بشپړ وخت کار', 'part_time':'نیمه وخت کار', 'remote':'آنلاین کار', 'repair':'ترمیمات', 'transport':'ترانسپورت',
+    'education':'زده کړه', 'other':'نور شخصي وسایل', 'youtube':'یوټیوب', 'tiktok':'ټیک ټاک', 'instagram':'انسټاګرام',
+    'facebook_page':'فیسبوک پاڼه', 'telegram':'ټیلیګرام چینل', 'snapchat':'سنپ‌چټ', 'x_page':'د X پاڼه', 'other_social':'نورې پاڼې',
+  };
+  return ps[id] ?? fallback;
+}
+
+String psText(BuildContext context, String fa, String ps) => Localizations.localeOf(context).languageCode == 'ps' ? ps : fa;
+
+class LocalizedText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+  final TextAlign? textAlign;
+  const LocalizedText(this.text, {super.key, this.style, this.maxLines, this.overflow, this.textAlign});
+  @override
+  Widget build(BuildContext context) {
+    if (Localizations.localeOf(context).languageCode != 'ps' || text.trim().isEmpty) {
+      return Text(text, style: style, maxLines: maxLines, overflow: overflow, textAlign: textAlign);
+    }
+    return FutureBuilder<String>(
+      future: ApiService.translateText(text, 'ps'),
+      builder: (_, snap) => Text(snap.data ?? text, style: style, maxLines: maxLines, overflow: overflow, textAlign: textAlign),
+    );
+  }
+}
+
 const Map<String, String> _faMap = {
   'app_title': 'بازار بزرگ افغانستان',
   'home': 'خانه',
@@ -148,6 +209,20 @@ const Map<String, String> _faMap = {
   'password': 'رمز عبور (حداقل ۶ کاراکتر)',
   'no_account': 'حساب کاربری ندارید؟ ثبت نام کنید',
   'have_account': 'قبلاً ثبت‌نام کرده‌اید؟ وارد شوید',
+  'categories': 'دسته‌بندی‌ها',
+  'retry': 'تلاش دوباره',
+  'boost': 'بوست آگهی‌ها',
+  'boost_short': 'بوست کوتاه‌مدت — فقط یک آگهی',
+  'boost_global': 'بوست ویژه — تمام آگهی‌های شما',
+  'boost_24_desc': '۲۴ ساعت؛ ارزان‌ترین راه برای بیشتر دیده‌شدن همین آگهی.',
+  'boost_3_desc': '۳ روز؛ آگهی شما با اولویت بیشتر نمایش داده می‌شود.',
+  'boost_7_desc': '۷ روز؛ بالاترین قدرت بوست کوتاه‌مدت برای همین آگهی.',
+  'boost_month_desc': '۳۰ روز؛ تمام آگهی‌های فعال شما اولویت ویژه می‌گیرند.',
+  'boost_year_desc': '۳۶۵ روز؛ بالاترین اولویت برای تمام آگهی‌های فعال شما.',
+  'social_pages': 'صفحات مجازی',
+  'social_link': 'لینک صفحه',
+  'social_link_hint': 'مثلاً https://instagram.com/yourpage',
+  'open_link': 'باز کردن صفحه',
 };
 
 const Map<String, String> _psMap = {
@@ -181,6 +256,20 @@ const Map<String, String> _psMap = {
   'password': 'پټنوم',
   'no_account': 'حساب نه لرئ؟ نوم لیکنه وکړئ',
   'have_account': 'دمخه مو نوم لیکنه کړې؟ ننوځئ',
+  'categories': 'ډلې',
+  'retry': 'بیا هڅه',
+  'boost': 'د اعلان Boost',
+  'boost_short': 'لنډمهاله Boost — یوازې یو اعلان',
+  'boost_global': 'ځانګړی Boost — ستاسو ټول اعلانونه',
+  'boost_24_desc': '۲۴ ساعته؛ د همدې اعلان د ډېر لیدل کېدو ارزانه لاره.',
+  'boost_3_desc': '۳ ورځې؛ ستاسو اعلان په لوړه لومړیتوب ښکاره کېږي.',
+  'boost_7_desc': '۷ ورځې؛ د همدې اعلان لپاره تر ټولو پیاوړی لنډمهاله Boost.',
+  'boost_month_desc': '۳۰ ورځې؛ ستاسو ټول فعال اعلانونه ځانګړی لومړیتوب اخلي.',
+  'boost_year_desc': '۳۶۵ ورځې؛ ستاسو ټولو فعالو اعلانونو ته تر ټولو لوړ لومړیتوب.',
+  'social_pages': 'مجازی پاڼې',
+  'social_link': 'د پاڼې لینک',
+  'social_link_hint': 'لکه https://instagram.com/yourpage',
+  'open_link': 'پاڼه پرانیزئ',
 };
 
 const List<String> provinces = [
@@ -200,6 +289,7 @@ const List<Map<String, dynamic>> categories = [
   {'id': 'jobs', 'title': 'استخدام و کاریابی', 'icon': Icons.work},
   {'id': 'services', 'title': 'خدمات', 'icon': Icons.build},
   {'id': 'personal', 'title': 'وسایل شخصی', 'icon': Icons.person},
+  {'id': 'social_pages', 'title': 'صفحات مجازی', 'icon': Icons.public},
 ];
 
 
@@ -235,6 +325,16 @@ const Map<String, List<Map<String, String>>> subcategories = {
   ],
   'personal': [
     {'id':'other','title':'سایر وسایل شخصی'},
+  ],
+  'social_pages': [
+    {'id':'youtube','title':'یوتیوب'},
+    {'id':'tiktok','title':'تیک‌تاک'},
+    {'id':'instagram','title':'اینستاگرام'},
+    {'id':'facebook_page','title':'صفحه فیسبوک'},
+    {'id':'telegram','title':'کانال تلگرام'},
+    {'id':'snapchat','title':'اسنپ‌چت'},
+    {'id':'x_page','title':'صفحه X'},
+    {'id':'other_social','title':'سایر صفحات'},
   ],
 };
 
@@ -355,6 +455,29 @@ class ApiService {
     } catch (_) {
       return false;
     }
+  }
+
+  static final Map<String, String> _translationCache = {};
+
+  static Future<String> translateText(String text, String targetLanguage) async {
+    final value = text.trim();
+    if (value.isEmpty || targetLanguage != 'ps') return text;
+    final key = '$targetLanguage|$value';
+    if (_translationCache.containsKey(key)) return _translationCache[key]!;
+    try {
+      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/translate').replace(queryParameters: {
+        'text': value, 'target': targetLanguage,
+      }), headers: {'Accept':'application/json'}).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final translated = data['text']?.toString();
+        if (translated != null && translated.trim().isNotEmpty) {
+          _translationCache[key] = translated.trim();
+          return translated.trim();
+        }
+      }
+    } catch (_) {}
+    return text;
   }
 
   static Future<List<dynamic>> getProducts({
@@ -610,7 +733,7 @@ class _HomeScreenState extends State<HomeScreen> {
               alignment: Alignment.centerRight,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-                child: Text('دسته‌بندی‌ها', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                child: Text(tr(context, 'categories'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               ),
             ),
             SizedBox(
@@ -631,7 +754,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                         Icon(c['icon'] as IconData, size: 30),
                         const SizedBox(height: 5),
-                        Text(c['title'] as String, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String), maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                       ]),
                     ),
                   );
@@ -670,7 +793,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       ...categories.map((c) => DropdownMenuItem(
                             value: c['id'] as String,
-                            child: Text(c['title'] as String),
+                            child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)),
                           )),
                     ],
                     onChanged: (val) {
@@ -747,11 +870,11 @@ class _ProductCard extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if (boostLabel.isNotEmpty) Chip(label: Text(boostLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), avatar: const Icon(Icons.auto_awesome, size: 15), visualDensity: VisualDensity.compact),
-                    Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     const Spacer(),
                     Text(price == '0' ? tr(context,'free') : '$price ${tr(context,'afghani')}', style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
                     const SizedBox(height: 4),
-                    Text('${item['province'] ?? ''}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+                    LocalizedText('${localizedProvince(context, item['province']?.toString() ?? '')}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
                   ]),
                 ),
               ),
@@ -815,8 +938,8 @@ class ProductDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product['title'] ?? '',
+                  LocalizedText(
+                    product['title']?.toString() ?? '',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
@@ -834,13 +957,32 @@ class ProductDetailScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  Text(product['description'] ?? 'بدون توضیحات'),
+                  LocalizedText(product['description']?.toString() ?? 'بدون توضیحات'),
                   const Divider(height: 32),
                   ListTile(
                     leading: const Icon(Icons.location_on),
-                    title: Text(product['province'] ?? ''),
-                    subtitle: Text(product['location_text'] ?? ''),
+                    title: Text(localizedProvince(context, product['province']?.toString() ?? '')),
+                    subtitle: LocalizedText(product['location_text']?.toString() ?? ''),
                   ),
+                  if ((product['external_link'] ?? '').toString().trim().isNotEmpty) ...[
+                    const Divider(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          final raw = product['external_link'].toString().trim();
+                          final uri = Uri.tryParse(raw);
+                          if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لینک صفحه معتبر نیست.')));
+                            return;
+                          }
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        },
+                        icon: const Icon(Icons.open_in_new),
+                        label: Text(tr(context, 'open_link')),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -919,80 +1061,42 @@ class ProductDetailScreen extends StatelessWidget {
 
 class ChatListScreen extends StatelessWidget {
   const ChatListScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
-    if (!AuthService.isLoggedIn) {
-      return Scaffold(
-        appBar: AppBar(title: Text(tr(context, 'chat'))),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.lock_outline, size: 64),
-                const SizedBox(height: 16),
-                const Text(
-                  'برای ارسال و دریافت پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 17),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => requireAccount(context),
-                  icon: const Icon(Icons.login),
-                  label: const Text('ورود / ثبت‌نام'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'chat'))),
-      body: const Center(child: Text('لیست پیام‌ها خالی است')),
+    return ValueListenableBuilder<int>(
+      valueListenable: AuthService.authVersion,
+      builder: (context, _, __) {
+        if (!AuthService.isLoggedIn) {
+          return Scaffold(appBar: AppBar(title: Text(tr(context,'chat'))), body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.lock_outline, size: 64), const SizedBox(height: 16),
+            Text(psText(context,'برای ارسال و دریافت پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.','د پیغامونو لېږلو او ترلاسه کولو لپاره لومړی خپل حساب جوړ یا دننه شئ.'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 17)),
+            const SizedBox(height: 20),
+            FilledButton.icon(onPressed: () => requireAccount(context), icon: const Icon(Icons.login), label: Text(psText(context,'ورود / ثبت‌نام','ننوتل / نوم لیکنه'))),
+          ]))));
+        }
+        return Scaffold(appBar: AppBar(title: Text(tr(context,'chat'))), body: Center(child: Text(psText(context,'لیست پیام‌ها خالی است','د پیغامونو لېست تش دی.'))));
+      },
     );
   }
 }
 
 class AddProductScreen extends StatelessWidget {
   const AddProductScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
-    if (!AuthService.isLoggedIn) {
-      return Scaffold(
-        appBar: AppBar(title: Text(tr(context, 'add'))),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.lock_outline, size: 64),
-                const SizedBox(height: 16),
-                const Text(
-                  'برای ثبت آگهی، ابتدا حساب خود را بسازید یا وارد حساب شوید.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 17),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => requireAccount(context),
-                  icon: const Icon(Icons.login),
-                  label: const Text('ورود / ثبت‌نام'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'add'))),
-      body: const AddProductSheet(),
+    return ValueListenableBuilder<int>(
+      valueListenable: AuthService.authVersion,
+      builder: (context, _, __) {
+        if (!AuthService.isLoggedIn) {
+          return Scaffold(appBar: AppBar(title: Text(tr(context,'add'))), body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.lock_outline, size: 64), const SizedBox(height: 16),
+            Text(psText(context,'برای ثبت آگهی، ابتدا حساب خود را بسازید یا وارد حساب شوید.','د اعلان ثبتولو لپاره لومړی خپل حساب جوړ یا دننه شئ.'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 17)),
+            const SizedBox(height: 20),
+            FilledButton.icon(onPressed: () => requireAccount(context), icon: const Icon(Icons.login), label: Text(psText(context,'ورود / ثبت‌نام','ننوتل / نوم لیکنه'))),
+          ]))));
+        }
+        return Scaffold(appBar: AppBar(title: Text(tr(context,'add'))), body: const AddProductSheet());
+      },
     );
   }
 }
@@ -1151,8 +1255,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
 class BoostScreen extends StatefulWidget {
   final dynamic listing;
   const BoostScreen({super.key, this.listing});
-  @override
-  State<BoostScreen> createState() => _BoostScreenState();
+  @override State<BoostScreen> createState() => _BoostScreenState();
 }
 
 class _BoostScreenState extends State<BoostScreen> {
@@ -1162,10 +1265,7 @@ class _BoostScreenState extends State<BoostScreen> {
   String? error;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
     try {
@@ -1184,35 +1284,16 @@ class _BoostScreenState extends State<BoostScreen> {
       builder: (_) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('مبلغ: $price افغانی'),
-              const SizedBox(height: 8),
-              const Text('مبلغ را انتقال دهید و شماره پیگیری/رسید را وارد کنید.'),
-              const SizedBox(height: 12),
-              TextField(
-                controller: c,
-                onChanged: (_) => setDialogState(() {}),
-                decoration: const InputDecoration(
-                  labelText: 'شماره پیگیری / رسید',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${tr(context, 'price')}: $price ${tr(context, 'afghani')}'),
+            const SizedBox(height: 8),
+            Text(Localizations.localeOf(context).languageCode == 'ps' ? 'پیسې ولېږئ او د رسید/تعقیب شمېره ولیکئ.' : 'مبلغ را انتقال دهید و شماره پیگیری/رسید را وارد کنید.'),
+            const SizedBox(height: 12),
+            TextField(controller: c, onChanged: (_) => setDialogState(() {}), decoration: InputDecoration(labelText: Localizations.localeOf(context).languageCode == 'ps' ? 'د رسید شمېره' : 'شماره پیگیری / رسید', border: const OutlineInputBorder())),
+          ]),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('لغو'),
-            ),
-            FilledButton(
-              onPressed: c.text.trim().isEmpty
-                  ? null
-                  : () => Navigator.pop(dialogContext, c.text.trim()),
-              child: const Text('ثبت درخواست'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'لغوه' : 'لغو')),
+            FilledButton(onPressed: c.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, c.text.trim()), child: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'درخواست ثبتول' : 'ثبت درخواست')),
           ],
         ),
       ),
@@ -1221,18 +1302,16 @@ class _BoostScreenState extends State<BoostScreen> {
 
   Future<void> _buyOne(dynamic pkg) async {
     final id = widget.listing?['id']?.toString();
-    if (id == null || id.isEmpty) return;
+    if (id == null || id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'لومړی له «زما اعلانونه» څخه یو اعلان وټاکئ.' : 'برای بوست کوتاه‌مدت ابتدا یک آگهی را از «آگهی‌های من» انتخاب کنید.')));
+      return;
+    }
     final ref = await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: int.tryParse('${pkg['price_afn']}') ?? 0);
     if (ref == null) return;
     try {
       await ApiService.createBoostOrder(id, pkg['id'].toString(), ref);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
-    }
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'د Boost غوښتنه ثبت شوه؛ د تادیې له تایید وروسته فعاله کېږي.' : 'درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.'))); Navigator.pop(context, true); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
   }
 
   Future<void> _buyGlobal(String plan, int price, String title) async {
@@ -1240,79 +1319,48 @@ class _BoostScreenState extends State<BoostScreen> {
     if (ref == null) return;
     try {
       await ApiService.createGlobalBoost(plan, ref);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('درخواست اشتراک ثبت شد؛ پس از تأیید پرداخت برای همه آگهی‌های شما فعال می‌شود.')));
-        _load();
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
-    }
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'ستاسو غوښتنه ثبت شوه؛ د تایید وروسته ستاسو ټول فعال اعلانونه Boost کېږي.' : 'درخواست ثبت شد؛ پس از تأیید پرداخت، روی همه آگهی‌های فعال شما اعمال می‌شود.'))); _load(); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
   }
 
   @override
   Widget build(BuildContext context) {
-    final globalActive = subscriptions.any((s) => ['boost_monthly', 'boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    final globalActive = subscriptions.any((s) => ['boost_monthly','boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+    final shortPackages = packages.where((x) => ['boost24','boost3','boost7'].contains(x['id'])).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('🚀 Boost بازارک')),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : error != null
-              ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(error!, textAlign: TextAlign.center)))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primaryContainer, Theme.of(context).colorScheme.secondaryContainer]),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('🚀 آگهی‌ات را از بقیه جلو بزن!', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-                          SizedBox(height: 6),
-                          Text('هرچه سطح بوست بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    if (widget.listing != null) ...[
-                      Text('⚡ فقط همین آگهی', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      for (final pkg in packages)
-                        Card(
-                          child: ListTile(
-                            leading: Text(pkg['id'] == 'boost24' ? '⚡' : pkg['id'] == 'boost3' ? '🔥' : '💥', style: const TextStyle(fontSize: 30)),
-                            title: Text(pkg['title']?.toString() ?? ''),
-                            subtitle: Text(pkg['description']?.toString() ?? ''),
-                            trailing: FilledButton(onPressed: () => _buyOne(pkg), child: Text('${pkg['price_afn']} افغانی')),
-                          ),
-                        ),
-                      const SizedBox(height: 18),
-                    ],
-                    Text('👑 برای تمام آگهی‌های شما', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Card(
-                      child: ListTile(
-                        leading: const Text('👑', style: TextStyle(fontSize: 30)),
-                        title: const Text('ماهانه — همه آگهی‌ها'),
-                        subtitle: const Text('۳۰ روز؛ تمام آگهی‌های فعال شما با اولویت ویژه نمایش داده می‌شوند.'),
-                        trailing: globalActive ? const Chip(label: Text('فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_monthly', 400, '👑 بوست ماهانه'), child: const Text('۴۰۰ افغانی')),
-                      ),
-                    ),
-                    Card(
-                      child: ListTile(
-                        leading: const Text('🏆', style: TextStyle(fontSize: 30)),
-                        title: const Text('سالانه — همه آگهی‌ها'),
-                        subtitle: const Text('۳۶۵ روز؛ بالاترین سطح اولویت برای تمام آگهی‌های شما.'),
-                        trailing: globalActive ? const Chip(label: Text('فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_yearly', 3500, '🏆 بوست سالانه'), child: const Text('۳۵۰۰ افغانی')),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text('💡 بوست‌های کوتاه‌مدت فقط روی همان آگهی اعمال می‌شوند؛ اشتراک ماهانه و سالانه روی همه آگهی‌های شما اثر می‌گذارد.', style: TextStyle(color: Colors.black54)),
-                  ],
-                ),
+      appBar: AppBar(title: Text(ps ? '🚀 د بازارک Boost' : '🚀 Boost بازارک')),
+      body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(error!, textAlign: TextAlign.center))) : ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primaryContainer, Theme.of(context).colorScheme.secondaryContainer])), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(ps ? '🚀 خپل اعلان له نورو مخکې کړئ!' : '🚀 آگهی‌ات را از بقیه جلو بزن!', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 7),
+            Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
+          ])),
+          const SizedBox(height: 22),
+          Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(ps ? 'یوازې د یوه ټاکلي اعلان لپاره؛ ارزانه او مناسب د چټک پلور لپاره.' : 'فقط برای یک آگهی؛ ارزان و مناسب برای فروش سریع.', style: const TextStyle(color: Colors.black54)),
+          const SizedBox(height: 10),
+          if (shortPackages.isEmpty) Card(child: ListTile(leading: const Icon(Icons.info_outline), title: Text(ps ? 'لنډمهاله Boostونه موجود نه دي.' : 'بوست‌های کوتاه‌مدت موجود نیستند.')))
+          else ...shortPackages.map((pkg) {
+            final id = pkg['id'];
+            final title = ps ? (id == 'boost24' ? '⚡ توربو — ۲۴ ساعته' : id == 'boost3' ? '🔥 انفجاري — ۳ ورځې' : '💥 پیاوړی — ۷ ورځې') : (id == 'boost24' ? '⚡ توربو — ۲۴ ساعت' : id == 'boost3' ? '🔥 انفجاری — ۳ روز' : '💥 قدرتی — ۷ روز');
+            final desc = id == 'boost24' ? tr(context,'boost_24_desc') : id == 'boost3' ? tr(context,'boost_3_desc') : tr(context,'boost_7_desc');
+            return Card(margin: const EdgeInsets.only(bottom: 10), child: ListTile(leading: Text(id == 'boost24' ? '⚡' : id == 'boost3' ? '🔥' : '💥', style: const TextStyle(fontSize: 30)), title: Text(title), subtitle: Text(desc), trailing: FilledButton(onPressed: () => _buyOne(pkg), child: Text('${pkg['price_afn']} ${tr(context,'afghani')}'))));
+          }),
+          const SizedBox(height: 20),
+          Text(ps ? '👑 میاشتنی او کلنی Boost' : '👑 بوست ماهانه و سالانه', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(ps ? 'د پیسو په بدل کې ستاسو ټول فعال اعلانونه Boost کېږي.' : 'یک اشتراک بخرید تا تمام آگهی‌های فعال شما Boost شوند.', style: const TextStyle(color: Colors.black54)),
+          const SizedBox(height: 10),
+          Card(child: ListTile(leading: const Text('👑', style: TextStyle(fontSize: 30)), title: Text(ps ? 'میاشتنی — ټول اعلانونه' : 'ماهانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_month_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_monthly', 250, ps ? '👑 میاشتنی Boost' : '👑 بوست ماهانه'), child: Text('۲۵۰ ${tr(context,'afghani')}')))),
+          Card(child: ListTile(leading: const Text('🏆', style: TextStyle(fontSize: 30)), title: Text(ps ? 'کلنی — ټول اعلانونه' : 'سالانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_year_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_yearly', 2200, ps ? '🏆 کلنی Boost' : '🏆 بوست سالانه'), child: Text('۲۲۰۰ ${tr(context,'afghani')}')))),
+          const SizedBox(height: 8),
+          Text(ps ? '💡 لنډمهاله Boost یوازې پر ټاکلي اعلان لګېږي. میاشتنی او کلنی پلان ستاسو پر ټولو فعالو اعلانونو اغېز کوي.' : '💡 بوست کوتاه‌مدت فقط روی همان آگهی اعمال می‌شود؛ اشتراک ماهانه و سالانه روی تمام آگهی‌های فعال شما اثر می‌گذارد.', style: const TextStyle(color: Colors.black54)),
+        ],
+      ),
     );
   }
 }
@@ -1324,7 +1372,7 @@ class SubcategoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categoryId = category['id']?.toString() ?? '';
-    final categoryTitle = category['title']?.toString() ?? 'دسته‌بندی';
+    final categoryTitle = localizedCategoryTitle(context, categoryId, category['title']?.toString() ?? 'دسته‌بندی');
     final categoryIcon = category['icon'] is IconData ? category['icon'] as IconData : Icons.category;
     final list = subcategories[categoryId] ?? [];
 
@@ -1341,7 +1389,7 @@ class SubcategoryScreen extends StatelessWidget {
         itemBuilder: (_, i) {
           final c = list[i];
           final subcategoryId = c['id']?.toString() ?? '';
-          final subcategoryTitle = c['title']?.toString() ?? '';
+          final subcategoryTitle = localizedSubcategoryTitle(context, categoryId, c['id']?.toString() ?? '', c['title']?.toString() ?? '');
           return ListTile(
             leading: CircleAvatar(child: Icon(categoryIcon)),
             title: Text(subcategoryTitle),
@@ -1389,7 +1437,7 @@ class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
           : error != null
               ? Center(child: Text(error!, textAlign: TextAlign.center))
               : ads.isEmpty
-                  ? Center(child: Text('در «${widget.categoryTitle}» هنوز آگهی فعالی پیدا نشد.'))
+                  ? Center(child: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'په «${widget.categoryTitle}» کې تر اوسه فعال اعلان نشته.' : 'در «${widget.categoryTitle}» هنوز آگهی فعالی پیدا نشد.'))
                   : RefreshIndicator(onRefresh: _load, child: ListView.builder(padding: const EdgeInsets.all(12), itemCount: ads.length, itemBuilder: (_, i) => _ProductCard(item: ads[i]))),
     );
   }
@@ -1447,8 +1495,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.rocket_launch),
-            title: const Text('🚀 Boost آگهی‌ها'),
-            subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'),
+            title: Text('🚀 ${tr(context, 'boost')}'),
+            subtitle: Text(psText(context, 'افزایش نمایش آگهی و اشتراک ویژه', 'د اعلانونو لیدل ډېر کړئ او ځانګړی ګډون واخلئ.')),
             onTap: () async {
               if (!await requireAccount(context)) return;
               if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen()));
@@ -1650,6 +1698,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final desc = TextEditingController();
   final contactPhone = TextEditingController();
   final locationText = TextEditingController();
+  final socialLink = TextEditingController();
 
   String category = '';
   String subcategory = '';
@@ -1779,7 +1828,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
-        'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable,
+        'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'external_link': socialLink.text.trim(),
       });
       var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
         'Content-Type':'application/json',
@@ -1826,7 +1875,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             DropdownButtonFormField<String>(
               value: subcategory.isEmpty ? null : subcategory,
               hint: const Text('انتخاب زیر‌دسته'),
-              items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(c['title']!))).toList(),
+              items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(),
               onChanged: (val) => setState(() => subcategory = val ?? ''),
             ),
           ],
@@ -1837,7 +1886,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             items: provinces
                 .map((p) => DropdownMenuItem(
                       value: p,
-                      child: Text(p),
+                      child: Text(localizedProvince(context, p)),
                     ))
                 .toList(),
             onChanged: (val) => setState(() => province = val ?? ''),
@@ -1854,6 +1903,14 @@ class _AddProductSheetState extends State<AddProductSheet> {
             maxLines: 3,
             decoration: const InputDecoration(labelText: 'توضیحات'),
           ),
+          if (category == 'social_pages') ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: socialLink,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(labelText: tr(context, 'social_link'), hintText: tr(context, 'social_link_hint'), prefixIcon: const Icon(Icons.link)),
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: contactPhone,
