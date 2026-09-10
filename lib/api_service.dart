@@ -172,6 +172,14 @@ class ApiService {
   static Future<Map<String,dynamic>> paymentInfo() async { final r=await http.get(Uri.parse('$baseUrl/payment-info'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت اطلاعات پرداخت.'); return Map<String,dynamic>.from(d); }
   static Future<Map<String,dynamic>> getWallet() async { final r=await http.get(Uri.parse('$baseUrl/wallet'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت کیف پول.'); return Map<String,dynamic>.from(d); }
   static Future<List<Map<String,dynamic>>> monetizationPackages() async { final r=await http.get(Uri.parse('$baseUrl/monetization/packages'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در دریافت بسته‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
+  static Future<String> createHesabPayPayment({required String kind, String listingId='', String packageId='', String plan=''}) async {
+    final body=<String,dynamic>{'kind':kind};
+    if(kind=='promotion'){ body['listing_id']=listingId; body['package_id']=packageId; }
+    if(kind=='subscription'){ body['plan']=plan; }
+    final r=await http.post(Uri.parse('$baseUrl/payments/hesabpay/create'),headers:_headers(auth:true),body:jsonEncode(body));
+    final d=_json(r); if(r.statusCode!=200 || d['url']==null) throw Exception(d['error']??'خطا در ایجاد پرداخت آنلاین.'); return d['url'].toString();
+  }
+
   static Future<Map<String,dynamic>> buyPromotion({required String listingId,required String packageId,String paymentMethod='wallet',String paymentReference=''}) async { final r=await http.post(Uri.parse('$baseUrl/promotions/orders'),headers:_headers(auth:true),body:jsonEncode({'listing_id':listingId,'package_id':packageId,'payment_method':paymentMethod,'payment_reference':paymentReference})); final d=_json(r); if(r.statusCode!=201)throw Exception(d['error']??'خطا در خرید ارتقا.'); return Map<String,dynamic>.from(d); }
   static Future<List<Map<String,dynamic>>> promotionOrders() async { final r=await http.get(Uri.parse('$baseUrl/promotions/orders'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در سفارش‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }
   static Future<List<Map<String,dynamic>>> subscriptions() async { final r=await http.get(Uri.parse('$baseUrl/subscriptions'),headers:_headers(auth:true)); final d=_json(r); if(r.statusCode!=200)throw Exception(d['error']??'خطا در اشتراک‌ها.'); return List<Map<String,dynamic>>.from(d.map((e)=>Map<String,dynamic>.from(e))); }

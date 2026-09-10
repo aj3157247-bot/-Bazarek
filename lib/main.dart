@@ -1418,27 +1418,39 @@ class _BoostScreenState extends State<BoostScreen> {
     );
   }
 
+  Future<void> _payOnline({required String kind, String listingId='', String packageId='', String plan='', required String title}) async {
+    try {
+      final url = await ApiService.createHesabPayPayment(kind: kind, listingId: listingId, packageId: packageId, plan: plan);
+      final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (mounted && !ok) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن صفحه پرداخت ممکن نشد.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
   Future<void> _buyOne(dynamic pkg) async {
     final id = widget.listing?['id']?.toString();
     if (id == null || id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'لومړی له «زما اعلانونه» څخه یو اعلان وټاکئ.' : 'برای بوست کوتاه‌مدت ابتدا یک آگهی را از «آگهی‌های من» انتخاب کنید.')));
       return;
     }
-    final ref = await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: int.tryParse('${pkg['price_afn']}') ?? 0);
-    if (ref == null) return;
-    try {
-      await ApiService.createBoostOrder(id, pkg['id'].toString(), ref);
-      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'د Boost غوښتنه ثبت شوه؛ د تادیې له تایید وروسته فعاله کېږي.' : 'درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.'))); Navigator.pop(context, true); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    final price=int.tryParse('${pkg['price_afn']}') ?? 0;
+    final ps=Localizations.localeOf(context).languageCode=='ps';
+    final method=await showDialog<String>(context: context,builder: (c)=>AlertDialog(title: Text(ps?'د تادیې طریقه':'روش پرداخت'),content: Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),subtitle:Text(ps?'کارت/حساب بازارک او تایید مدیریت':'انتقال به حساب بازارک و تأیید مدیریت'),onTap:()=>Navigator.pop(c,'manual')),ListTile(leading:const Icon(Icons.payment),title:Text(ps?'آنلاین تادیه':'پرداخت آنلاین'),subtitle:const Text('HesabPay'),onTap:()=>Navigator.pop(c,'online'))])));
+    if(method==null)return;
+    if(method=='online'){ await _payOnline(kind:'promotion',listingId:id,packageId:pkg['id'].toString(),title:pkg['title']?.toString()??'Boost'); return; }
+    final ref=await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: price);
+    if(ref==null)return;
+    try { await ApiService.createBoostOrder(id,pkg['id'].toString(),ref); if(mounted){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ps?'د Boost غوښتنه ثبت شوه؛ د تایید وروسته فعاله کېږي.':'درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));Navigator.pop(context,true);} } catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
 
   Future<void> _buyGlobal(String plan, int price, String title) async {
-    final ref = await _referenceDialog(title: title, price: price);
-    if (ref == null) return;
-    try {
-      await ApiService.createGlobalBoost(plan, ref);
-      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'ستاسو غوښتنه ثبت شوه؛ د تایید وروسته ستاسو ټول فعال اعلانونه Boost کېږي.' : 'درخواست ثبت شد؛ پس از تأیید پرداخت، روی همه آگهی‌های فعال شما اعمال می‌شود.'))); _load(); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    final ps=Localizations.localeOf(context).languageCode=='ps';
+    final method=await showDialog<String>(context:context,builder:(c)=>AlertDialog(title:Text(ps?'د تادیې طریقه':'روش پرداخت'),content:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),onTap:()=>Navigator.pop(c,'manual')),ListTile(leading:const Icon(Icons.payment),title:Text(ps?'آنلاین تادیه':'پرداخت آنلاین'),subtitle:const Text('HesabPay'),onTap:()=>Navigator.pop(c,'online'))])));
+    if(method==null)return;
+    if(method=='online'){await _payOnline(kind:'subscription',plan:plan,title:title);return;}
+    final ref=await _referenceDialog(title:title,price:price); if(ref==null)return;
+    try {await ApiService.createGlobalBoost(plan,ref);if(mounted){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ps?'ستاسو غوښتنه ثبت شوه؛ د تایید وروسته فعالېږي.':'درخواست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));_load();}} catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
 
   @override
@@ -1457,7 +1469,7 @@ class _BoostScreenState extends State<BoostScreen> {
             Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
           ])),
           const SizedBox(height: 22),
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: د Boost د انتخاب پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي. مبلغ ولېږئ، د رسید شمېره ولیکئ، او د مدیریت تایید ته انتظار وباسئ.' : '💳 روش پرداخت: هنگام انتخاب Boost، شماره کارت/حساب بازارک نمایش داده می‌شود. مبلغ را انتقال دهید، شماره رسید را وارد کنید و منتظر تأیید مدیریت بمانید.')),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقې: لاسي تادیه د بازارک د کارت/حساب له لارې، یا تادیه آنلاین د HesabPay له لارې.' : '💳 روش‌های پرداخت: پرداخت دستی از طریق کارت/حساب بازارک، یا پرداخت آنلاین با HesabPay.')),
           const SizedBox(height: 14),
           Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
