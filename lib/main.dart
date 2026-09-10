@@ -539,11 +539,7 @@ class ApiService {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
-      req.files.add(http.MultipartFile.fromBytes(
-        'avatar',
-        await image.readAsBytes(),
-        filename: image.name,
-      ));
+      req.files.add(http.MultipartFile.fromBytes('avatar', await image.readAsBytes(), filename: image.name));
       final streamed = await req.send().timeout(const Duration(seconds: 30));
       return http.Response.fromStream(streamed);
     }
@@ -596,6 +592,32 @@ class ApiService {
     final data = jsonDecode(res.body);
     if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت درخواست اشتراک ناموفق بود.') : 'ثبت درخواست اشتراک ناموفق بود.');
     return Map<String,dynamic>.from(data);
+  }
+
+  static Future<List<dynamic>> getNotifications() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/notifications'), headers: headers).timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/notifications'), headers: headers).timeout(const Duration(seconds: 15));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت اعلان‌ها.') : 'خطا در دریافت اعلان‌ها.');
+    return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
+  }
+
+  static Future<void> markNotificationRead(String id) async {
+    var res = await http.patch(Uri.parse('${ApiConfig.baseUrl}/me/notifications/$id/read'), headers: headers);
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.patch(Uri.parse('${ApiConfig.baseUrl}/me/notifications/$id/read'), headers: headers);
+    }
+    if (res.statusCode != 200) throw Exception('خواندن اعلان ناموفق بود.');
+  }
+
+  static Future<void> deleteNotification(String id) async {
+    var res = await http.delete(Uri.parse('${ApiConfig.baseUrl}/me/notifications/$id'), headers: headers);
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.delete(Uri.parse('${ApiConfig.baseUrl}/me/notifications/$id'), headers: headers);
+    }
+    if (res.statusCode != 200) throw Exception('حذف اعلان ناموفق بود.');
   }
 
   static Future<List<dynamic>> getSubscriptions() async {
@@ -1590,6 +1612,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: Text(psText(context, 'اعلان‌ها', 'خبرتیاوې')),
+              subtitle: Text(psText(context, 'پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها', 'د سیسټم او راپورونو خبرتیاوې')),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+            ),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: Text(tr(context, 'logout'), style: const TextStyle(color: Colors.red)),
               onTap: () async {
@@ -1637,6 +1665,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+class NotificationsScreen extends StatefulWidget {
+  const NotificationsScreen({super.key});
+  @override State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  bool loading = true; String? error; List<Map<String,dynamic>> items = [];
+  @override void initState(){super.initState();_load();}
+  Future<void> _load() async {
+    try {
+      final data = await ApiService.getNotifications();
+      if(!mounted)return; setState((){items=data.map((e)=>Map<String,dynamic>.from(e as Map)).toList();loading=false;});
+    }catch(e){if(!mounted)return;setState((){loading=false;error=e.toString().replaceFirst('Exception: ','');});}
+  }
+  Future<void> _read(Map<String,dynamic> n) async {
+    if(n['is_read']==true)return;
+    try{await ApiService.markNotificationRead(n['id'].toString());if(mounted)setState(()=>n['is_read']=true);}catch(_){}
+  }
+  Future<void> _delete(Map<String,dynamic> n) async {
+    try{await ApiService.deleteNotification(n['id'].toString());if(mounted)setState(()=>items.remove(n));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+  }
+  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(psText(context,'اعلان‌ها','خبرتیاوې')),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):error!=null?Center(child:Text(error!)):RefreshIndicator(onRefresh:_load,child:items.isEmpty?ListView(children:[const SizedBox(height:160),Center(child:Text('اعلانی وجود ندارد.'))]):ListView.builder(padding:const EdgeInsets.all(12),itemCount:items.length,itemBuilder:(context,i){final n=items[i];final unread=n['is_read']!=true;return Card(child:ListTile(onTap:()=>_read(n), leading:Icon(unread?Icons.notifications_active:Icons.notifications_none), title:Text(n['title']?.toString()??'اعلان بازارک',style:TextStyle(fontWeight:unread?FontWeight.bold:FontWeight.normal)), subtitle:Text('${n['message']??''}\n${n['created_at']??''}'),isThreeLine:true,trailing:IconButton(onPressed:()=>_delete(n),icon:const Icon(Icons.delete_outline))));})));
 }
 
 class AuthScreen extends StatefulWidget {
