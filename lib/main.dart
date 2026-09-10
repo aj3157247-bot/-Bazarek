@@ -539,7 +539,11 @@ class ApiService {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
-      req.files.add(await http.MultipartFile.fromPath('avatar', image.path));
+      req.files.add(http.MultipartFile.fromBytes(
+        'avatar',
+        await image.readAsBytes(),
+        filename: image.name,
+      ));
       final streamed = await req.send().timeout(const Duration(seconds: 30));
       return http.Response.fromStream(streamed);
     }
@@ -1628,22 +1632,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onChanged: (_) => BazarBuzurgApp.toggleTheme(context),
             title: Text(tr(context, 'dark_mode')),
             secondary: const Icon(Icons.dark_mode),
-          ),
-          ListTile(
-            leading: const Icon(Icons.phone_android),
-            title: Text(psText(context, 'دانلود اپلیکیشن بازارک', 'د بازارک اپلېکېشن ډاونلوډ')),
-            subtitle: Text(psText(context, 'نسخه اندروید بازارک را دریافت کنید', 'د بازارک د Android نسخه ترلاسه کړئ')),
-            trailing: const Icon(Icons.download_outlined),
-            onTap: () async {
-              const apkUrl = 'https://github.com/aj3157247-bot/Bazarek/releases/latest/download/bazarek.apk';
-              final uri = Uri.parse(apkUrl);
-              final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-              if (!ok && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(psText(context, 'لینک دانلود اپلیکیشن باز نشد.', 'د اپلېکېشن د ډاونلوډ لینک پرانیستل شو نه.'))),
-                );
-              }
-            },
           ),
         ],
       ),
