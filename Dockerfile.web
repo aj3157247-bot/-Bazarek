@@ -7,10 +7,19 @@ RUN apt-get update \
 
 ARG FLUTTER_VERSION=3.47.2
 RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git /opt/flutter
+
 ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
 
 WORKDIR /app
 COPY . .
+
+# Render runs Docker build steps as root by default. Flutter's project
+# generation may extract Gradle files and attempt to preserve ownership,
+# which fails in Render's build environment when run as root.
+RUN useradd --create-home --uid 1000 --shell /bin/bash flutteruser \
+    && chown -R flutteruser:flutteruser /opt/flutter /app
+
+USER flutteruser
 
 RUN flutter config --enable-web \
     && flutter pub get \
