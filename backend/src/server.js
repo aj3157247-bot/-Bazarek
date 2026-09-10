@@ -32,24 +32,6 @@ function requireConfig(res) {
 
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
 app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
-
-const HESABPAY_PROD_URL = 'https://api.hesab.com';
-const HESABPAY_SANDBOX_URL = 'https://api-sandbox.hesab.com';
-function hesabPayConfig(){
-  const key=String(process.env.HESABPAY_API_KEY||'').trim();
-  const env=String(process.env.HESABPAY_ENV||'production').toLowerCase()==='sandbox'?'sandbox':'production';
-  return {key, env, base: env==='sandbox'?HESABPAY_SANDBOX_URL:HESABPAY_PROD_URL};
-}
-async function hesabPayRequest(path, body){
-  const c=hesabPayConfig();
-  if(!c.key) throw new Error('HESABPAY_API_KEY تنظیم نشده است.');
-  const r=await fetch(c.base+path,{method:'POST',headers:{'Authorization':`API-KEY ${c.key}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(body)});
-  const text=await r.text(); let data={}; try{data=JSON.parse(text);}catch(_){data={message:text};}
-  if(!r.ok) throw new Error(data.message||data.detail||`HesabPay HTTP ${r.status}`);
-  return data;
-}
-function publicBaseUrl(){ return String(process.env.BAZAREK_PUBLIC_URL||'https://bazarek.onrender.com').replace(/\/$/,''); }
-
 app.get('/api/version', (_, res) => res.json({ version: '2.5.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone'] }));
 
 app.post('/api/auth/register', async (req, res) => {
@@ -500,6 +482,23 @@ app.get('/api/admin/stats', requireAdmin, async (_, res) => {
 });
 
 
+// Future online-payment configuration. Disabled by default so the current
+// manual/bank-transfer payment flow remains unchanged until a real merchant
+// integration is approved and configured.
+app.get('/api/payment-methods', requireUser, async (_, res) => {
+  try {
+    const enabled = String(process.env.HESABPAY_ENABLED || 'false').trim().toLowerCase() === 'true';
+    res.json({
+      manual: true,
+      bank_transfer: true,
+      hesabpay: { enabled, available: enabled && Boolean(String(process.env.HESABPAY_API_KEY || '').trim()) }
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در دریافت روش‌های پرداخت.' });
+  }
+});
+
 app.get('/api/payment-info', requireUser, async (_,res)=>{
   try {
     // Payment settings are managed in Render Environment Variables.
@@ -533,8 +532,7 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
     };
 
     res.json({
-      methods:['bank_transfer','manual','hesabpay'],
-      online_payment:{enabled:Boolean(String(process.env.HESABPAY_API_KEY||'').trim()),provider:'HesabPay',environment:hesabPayConfig().env},
+      methods:['bank_transfer','manual'],
       source:'render_env',
       bank,
       bank_name: bank.name,
@@ -548,83 +546,6 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
     res.status(500).json({ error:'خطا در دریافت اطلاعات پرداخت.' });
   }
 });
-
-
-app.post('/api/payments/hesabpay/create', requireUser, async (req,res)=>{
-  try {
-    const kind=String(req.body?.kind||'promotion');
-    const db=getSupabaseAdmin();
-    let reference='', amount=0, name='', orderId='', table='';
-    if(kind==='promotion'){
-      const listingId=String(req.body?.listing_id||''); const packageId=String(req.body?.package_id||'');
-      if(!listingId||!packageId)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});
-      const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',packageId).eq('is_active',true).maybeSingle(); if(pe)throw pe;
-      const {data:listing,error:le}=await db.from('products').select('id,vendor_id,title').eq('id',listingId).maybeSingle(); if(le)throw le;
-      if(!pkg||!listing)return res.status(404).json({error:'بسته یا آگهی پیدا نشد.'}); if(listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
-      amount=Number(pkg.price_afn||0); if(amount<=0)return res.status(400).json({error:'مبلغ بسته معتبر نیست.'});
-      const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.user.id,listing_id:listingId,package_id:packageId,amount_afn:amount,payment_method:'hesabpay',payment_reference:'',status:'pending'}]).select().single(); if(error)throw error;
-      orderId=String(order.id); table='promotion_orders'; reference=`bazarek:promotion:${orderId}`; name=`بازارک - ${pkg.title||'ارتقای آگهی'}`;
-    } else if(kind==='subscription'){
-      const plans={basic:{price:150,days:30},pro:{price:250,days:30},business:{price:450,days:30},boost_monthly:{price:300,days:30},boost_yearly:{price:2500,days:365}};
-      const plan=String(req.body?.plan||''); const p=plans[plan]; if(!p)return res.status(400).json({error:'پلن نامعتبر است.'}); amount=p.price;
-      const {data:existing}=await db.from('seller_subscriptions').select('id').eq('user_id',req.user.id).eq('plan',plan).eq('status','pending').limit(1); if(existing?.length)return res.status(409).json({error:'یک پرداخت در انتظار تأیید برای این پلن وجود دارد.'});
-      const now=new Date(); const end=new Date(now.getTime()+p.days*86400000);
-      const {data:sub,error}=await db.from('seller_subscriptions').insert([{user_id:req.user.id,plan,price_afn:amount,starts_at:now.toISOString(),ends_at:end.toISOString(),status:'pending',payment_method:'hesabpay',payment_reference:''}]).select().single(); if(error)throw error;
-      orderId=String(sub.id); table='seller_subscriptions'; reference=`bazarek:subscription:${orderId}`; name=`بازارک - اشتراک ${plan}`;
-    } else return res.status(400).json({error:'نوع پرداخت نامعتبر است.'});
-    const session=await hesabPayRequest('/api/v1/payment/create-session',{user_id:reference,items:[{id:orderId,name,price:amount}],redirect_success_url:`${publicBaseUrl()}/api/payments/hesabpay/success`,redirect_failure_url:`${publicBaseUrl()}/api/payments/hesabpay/failure`});
-    if(table==='promotion_orders') await db.from(table).update({checkout_url:String(session.url||''),payment_reference:reference,updated_at:new Date().toISOString()}).eq('id',orderId);
-    else await db.from(table).update({checkout_url:String(session.url||''),payment_reference:reference,updated_at:new Date().toISOString()}).eq('id',orderId);
-    res.json({success:true,url:session.url,order_id:orderId,kind,amount_afn:amount,environment:hesabPayConfig().env});
-  }catch(e){console.error('HesabPay create:',e);res.status(500).json({error:e.message||'خطا در ایجاد پرداخت آنلاین.'});}
-});
-
-async function verifyHesabWebhook(payload){
-  const sig=String(payload?.signature||'').trim(), ts=String(payload?.timestamp||'').trim();
-  if(!sig||!ts)return false;
-  try { const result=await hesabPayRequest('/api/v1/hesab/webhooks/verify-signature',{signature:sig,timestamp:ts}); return result?.success===true || result?.status_code===10; } catch(e){ console.error('HesabPay signature verify:',e.message); return false; }
-}
-
-async function activatePromotionPayment(db, order){
-  if(!order || order.status==='paid') return;
-  const {data:pkg}=await db.from('promotion_packages').select('*').eq('id',order.package_id).maybeSingle();
-  if(!pkg)return;
-  const now=Date.now(); const days=Math.max(Number(pkg.feature_days||0),Number(pkg.pin_days||0));
-  await db.from('promotion_orders').update({status:'paid',updated_at:new Date().toISOString(),paid_at:new Date().toISOString()}).eq('id',order.id);
-  await db.from('products').update({is_featured:Number(pkg.feature_days||0)>0,is_pinned:Number(pkg.pin_days||0)>0,featured_until:Number(pkg.feature_days||0)>0?new Date(now+Number(pkg.feature_days)*86400000).toISOString():null,pinned_until:Number(pkg.pin_days||0)>0?new Date(now+Number(pkg.pin_days)*86400000).toISOString():null,boost_level:Number(pkg.boost_level||0),boost_until:days>0?new Date(now+days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);
-  await db.from('user_notifications').insert([{user_id:order.user_id,type:'payment',title:'پرداخت آنلاین موفق شد',message:`پرداخت آنلاین شما تأیید شد و ارتقای آگهی «${order.listing_id}» فعال گردید.`}]);
-}
-async function activateSubscriptionPayment(db, sub){
-  if(!sub || sub.status==='active') return;
-  const days=sub.plan==='boost_yearly'?365:30; const start=new Date(); const end=new Date(start.getTime()+days*86400000);
-  await db.from('seller_subscriptions').update({status:'active',starts_at:start.toISOString(),ends_at:end.toISOString(),paid_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',sub.id);
-  if(['pro','business'].includes(sub.plan)) await db.from('profiles').update({plan:sub.plan}).eq('id',sub.user_id);
-  await db.from('user_notifications').insert([{user_id:sub.user_id,type:'payment',title:'پرداخت آنلاین موفق شد',message:`پرداخت آنلاین اشتراک «${sub.plan}» تأیید و فعال شد.`}]);
-}
-
-app.post('/api/payments/hesabpay/webhook', async (req,res)=>{
-  try {
-    const payload=req.body||{}; if(!(await verifyHesabWebhook(payload)))return res.status(401).json({error:'امضای Webhook معتبر نیست.'});
-    const ref=String(payload.user_id||''); const parts=ref.split(':'); const kind=parts[1], id=parts[2];
-    if(!id || !['promotion','subscription'].includes(kind))return res.status(400).json({error:'شناسه پرداخت نامعتبر است.'});
-    const success=payload.success===true || String(payload.event||'')==='payment_success' || Number(payload.status_code)===10;
-    const db=getSupabaseAdmin();
-    if(kind==='promotion'){
-      const {data:order,error}=await db.from('promotion_orders').select('*').eq('id',id).maybeSingle(); if(error)throw error;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});
-      const paidAmount=Number(payload.amount||0); if(paidAmount && Math.abs(paidAmount-Number(order.amount_afn))>0.01)return res.status(400).json({error:'مبلغ پرداخت با سفارش مطابقت ندارد.'});
-      await db.from('promotion_orders').update({payment_reference:ref,external_transaction_id:String(payload.transaction_id||''),updated_at:new Date().toISOString()}).eq('id',id);
-      if(success) await activatePromotionPayment(db,{...order,payment_reference:ref}); else await db.from('promotion_orders').update({status:'cancelled',updated_at:new Date().toISOString()}).eq('id',id);
-    } else {
-      const {data:sub,error}=await db.from('seller_subscriptions').select('*').eq('id',id).maybeSingle(); if(error)throw error;if(!sub)return res.status(404).json({error:'اشتراک پیدا نشد.'});
-      const paidAmount=Number(payload.amount||0); if(paidAmount && Math.abs(paidAmount-Number(sub.price_afn))>0.01)return res.status(400).json({error:'مبلغ پرداخت با سفارش مطابقت ندارد.'});
-      await db.from('seller_subscriptions').update({payment_reference:ref,external_transaction_id:String(payload.transaction_id||''),updated_at:new Date().toISOString()}).eq('id',id);
-      if(success) await activateSubscriptionPayment(db,{...sub,payment_reference:ref}); else await db.from('seller_subscriptions').update({status:'cancelled',updated_at:new Date().toISOString()}).eq('id',id);
-    }
-    return res.json({received:true});
-  }catch(e){console.error('HesabPay webhook:',e);res.status(500).json({error:'خطا در پردازش Webhook.'});}
-});
-app.get('/api/payments/hesabpay/success',(_,res)=>res.status(200).send('<html lang="fa" dir="rtl"><meta charset="utf-8"><title>بازارک</title><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>پرداخت شما دریافت شد ✅</h2><p>پس از تأیید نهایی، سرویس خریداری‌شده در بازارک فعال می‌شود.</p><p>می‌توانید به بازارک برگردید.</p></body></html>'));
-app.get('/api/payments/hesabpay/failure',(_,res)=>res.status(200).send('<html lang="fa" dir="rtl"><meta charset="utf-8"><title>بازارک</title><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>پرداخت لغو یا ناموفق بود</h2><p>می‌توانید دوباره از داخل بازارک تلاش کنید.</p></body></html>'));
 
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
 app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
