@@ -1982,7 +1982,33 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   Future<void> _pickImage() async {
     if (imageBytes.length >= 10) { _msg('حداکثر ۱۰ عکس مجاز است.'); return; }
-    final picked = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000, maxHeight: 2000);
+
+    // Web: use file_picker so the browser gives us the actual bytes.
+    // This avoids image_picker Blob URLs, which can fail after selection.
+    if (kIsWeb) {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final remaining = 10 - imageBytes.length;
+      for (final file in result.files.take(remaining)) {
+        final bytes = file.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        imageBytes.add(bytes);
+        imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
+    // Android/iOS: keep the existing image_picker flow unchanged.
+    final picked = await _picker.pickMultiImage(
+      imageQuality: 85,
+      maxWidth: 2000,
+      maxHeight: 2000,
+    );
     if (picked.isEmpty) return;
     final remaining = 10 - imageBytes.length;
     for (final image in picked.take(remaining)) {
@@ -1991,7 +2017,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
     }
     if (mounted) setState(() {});
   }
-
   Future<void> _uploadImages() async {
     if (imageBytes.isEmpty) throw Exception('حداقل یک عکس انتخاب کنید.');
     imageUrls.clear();
