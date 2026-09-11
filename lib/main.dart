@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -550,6 +551,7 @@ class ApiService {
     final url = data['url']?.toString() ?? '';
     if (url.isEmpty) throw Exception('آدرس تصویر پروفایل از سرور دریافت نشد.');
     AuthService.avatarUrl = url;
+    AuthService.authVersion.value++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('avatar_url', url);
     return url;
@@ -1424,23 +1426,21 @@ class _BoostScreenState extends State<BoostScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'لومړی له «زما اعلانونه» څخه یو اعلان وټاکئ.' : 'برای بوست کوتاه‌مدت ابتدا یک آگهی را از «آگهی‌های من» انتخاب کنید.')));
       return;
     }
-    final price=int.tryParse('${pkg['price_afn']}') ?? 0;
-    final ps=Localizations.localeOf(context).languageCode=='ps';
-    final method=await showDialog<String>(context: context,builder: (c)=>AlertDialog(title: Text(ps?'د تادیې طریقه':'روش پرداخت'),content: Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),subtitle:Text(ps?'کارت/حساب بازارک او تایید مدیریت':'انتقال به حساب بازارک و تأیید مدیریت'),onTap:()=>Navigator.pop(c,'manual')),ListTile(leading:const Icon(Icons.payment_outlined),title:Text(ps?'آنلاین تادیه — ژر راځي':'پرداخت آنلاین — به‌زودی'),subtitle:Text(ps?'HesabPay به‌زودی فعالېږي':'HesabPay در آینده فعال می‌شود'),onTap:()=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ps?'د HesabPay آنلاین تادیه به‌زودی فعال شي.':'پرداخت آنلاین HesabPay به‌زودی فعال می‌شود.'))))])));
-    if(method==null)return;
-    if(method!='manual')return;
-    final ref=await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: price);
-    if(ref==null)return;
-    try { await ApiService.createBoostOrder(id,pkg['id'].toString(),ref); if(mounted){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ps?'د Boost غوښتنه ثبت شوه؛ د تایید وروسته فعاله کېږي.':'درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));Navigator.pop(context,true);} } catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    final ref = await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: int.tryParse('${pkg['price_afn']}') ?? 0);
+    if (ref == null) return;
+    try {
+      await ApiService.createBoostOrder(id, pkg['id'].toString(), ref);
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'د Boost غوښتنه ثبت شوه؛ د تادیې له تایید وروسته فعاله کېږي.' : 'درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.'))); Navigator.pop(context, true); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
   }
 
   Future<void> _buyGlobal(String plan, int price, String title) async {
-    final ps=Localizations.localeOf(context).languageCode=='ps';
-    final method=await showDialog<String>(context:context,builder:(c)=>AlertDialog(title:Text(ps?'د تادیې طریقه':'روش پرداخت'),content:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),onTap:()=>Navigator.pop(c,'manual')),ListTile(leading:const Icon(Icons.payment_outlined),title:Text(ps?'آنلاین تادیه — ژر راځي':'پرداخت آنلاین — به‌زودی'),subtitle:Text(ps?'HesabPay به‌زودی فعالېږي':'HesabPay در آینده فعال می‌شود'),onTap:()=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ps?'د HesabPay آنلاین تادیه به‌زودی فعال شي.':'پرداخت آنلاین HesabPay به‌زودی فعال می‌شود.'))))])));
-    if(method==null)return;
-    if(method!='manual')return;
-    final ref=await _referenceDialog(title:title,price:price); if(ref==null)return;
-    try {await ApiService.createGlobalBoost(plan,ref);if(mounted){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ps?'ستاسو غوښتنه ثبت شوه؛ د تایید وروسته فعالېږي.':'درخواست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));_load();}} catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    final ref = await _referenceDialog(title: title, price: price);
+    if (ref == null) return;
+    try {
+      await ApiService.createGlobalBoost(plan, ref);
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'ستاسو غوښتنه ثبت شوه؛ د تایید وروسته ستاسو ټول فعال اعلانونه Boost کېږي.' : 'درخواست ثبت شد؛ پس از تأیید پرداخت، روی همه آگهی‌های فعال شما اعمال می‌شود.'))); _load(); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
   }
 
   @override
@@ -1459,7 +1459,7 @@ class _BoostScreenState extends State<BoostScreen> {
             Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
           ])),
           const SizedBox(height: 22),
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقې: لاسي تادیه د بازارک د کارت/حساب له لارې. د HesabPay آنلاین تادیه به‌زودي فعاله شي.' : '💳 روش‌های پرداخت: پرداخت دستی از طریق کارت/حساب بازارک، یا پرداخت آنلاین با HesabPay.')),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: د Boost د انتخاب پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي. مبلغ ولېږئ، د رسید شمېره ولیکئ، او د مدیریت تایید ته انتظار وباسئ.' : '💳 روش پرداخت: هنگام انتخاب Boost، شماره کارت/حساب بازارک نمایش داده می‌شود. مبلغ را انتقال دهید، شماره رسید را وارد کنید و منتظر تأیید مدیریت بمانید.')),
           const SizedBox(height: 14),
           Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
@@ -1565,6 +1565,21 @@ class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
   }
 }
 
+Future<XFile?> pickProfileImage() async {
+  final picker = ImagePicker();
+  // On Flutter Web, image_picker uses a browser Blob URL. Avoid the optional
+  // resize/compression pipeline here because older web implementations could
+  // revoke that Blob URL before XFile.readAsBytes() finished.
+  if (kIsWeb) {
+    return picker.pickImage(source: ImageSource.gallery);
+  }
+  return picker.pickImage(
+    source: ImageSource.gallery,
+    imageQuality: 85,
+    maxWidth: 1000,
+  );
+}
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -1583,8 +1598,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             UserAccountsDrawerHeader(
               currentAccountPicture: GestureDetector(
                 onTap: () async {
-                  final picker = ImagePicker();
-                  final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1000);
+                  final image = await pickProfileImage();
                   if (image == null) return;
                   try {
                     await ApiService.uploadAvatar(image);
@@ -1607,8 +1621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: Text(psText(context, 'تغییر عکس پروفایل', 'د پروفایل انځور بدلول')),
               subtitle: Text(psText(context, 'یک عکس از گالری انتخاب کنید.', 'له ګالري څخه یو انځور وټاکئ.')),
               onTap: () async {
-                final picker = ImagePicker();
-                final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1000);
+                final image = await pickProfileImage();
                 if (image == null) return;
                 try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
               },
