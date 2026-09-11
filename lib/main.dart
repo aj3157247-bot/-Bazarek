@@ -1044,7 +1044,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               )
             else if (products.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(child: Text(psText(context, 'هنوز هیچ آگهی فعالی ثبت نشده است.', 'تر اوسه کوم فعال اعلان نشته.'))),
               )
