@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'admin_panel_screen.dart';
@@ -566,11 +566,11 @@ class ApiService {
     return Map<String, dynamic>.from(data as Map);
   }
 
-  static Future<String> uploadAvatar(XFile image) async {
+  static Future<String> uploadAvatar(PickedProfileImage image) async {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
-      final bytes = await image.readAsBytes();
+      final bytes = image.bytes;
       final detected = _detectImageType(bytes, image.mimeType, image.name);
       if (detected == null) {
         throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG یا WEBP انتخاب کنید.');
@@ -1606,18 +1606,41 @@ class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
   }
 }
 
-Future<XFile?> pickProfileImage() async {
-  final picker = ImagePicker();
-  // On Flutter Web, image_picker uses a browser Blob URL. Avoid the optional
-  // resize/compression pipeline here because older web implementations could
-  // revoke that Blob URL before XFile.readAsBytes() finished.
+class PickedProfileImage {
+  final Uint8List bytes;
+  final String name;
+  final String? mimeType;
+  const PickedProfileImage({required this.bytes, required this.name, this.mimeType});
+}
+
+Future<PickedProfileImage?> pickProfileImage() async {
+  // Web: use file_picker so we receive the real bytes directly instead of
+  // image_picker's temporary browser Blob URL. This fixes the Web-only
+  // "Could not load Blob from its URL" error.
   if (kIsWeb) {
-    return picker.pickImage(source: ImageSource.gallery);
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return null;
+    final file = result.files.single;
+    final bytes = file.bytes ?? await file.readAsBytes();
+    return PickedProfileImage(bytes: bytes, name: file.name);
   }
-  return picker.pickImage(
+
+  // Android/iOS: keep the existing image_picker flow unchanged.
+  final picker = ImagePicker();
+  final image = await picker.pickImage(
     source: ImageSource.gallery,
     imageQuality: 85,
     maxWidth: 1000,
+  );
+  if (image == null) return null;
+  return PickedProfileImage(
+    bytes: await image.readAsBytes(),
+    name: image.name.isNotEmpty ? image.name : 'avatar.jpg',
+    mimeType: image.mimeType,
   );
 }
 
