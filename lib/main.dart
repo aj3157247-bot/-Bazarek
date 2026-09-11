@@ -154,6 +154,12 @@ String localizedCategoryTitle(BuildContext context, String id, String fallback) 
       'real_estate':'املاک او کور', 'vehicles':'وسایط نقلیه', 'electronics':'برېښنایي وسایل',
       'home_goods':'د کور وسایل', 'fashion':'کالي او جامې', 'jobs':'استخدام او د کارموندنه',
       'services':'خدمتونه', 'personal':'شخصي وسایل', 'social_pages':'مجازی پاڼې',
+      'afghan_stores':'هټۍ او کاروبارونه', 'animals_pets':'کورني حیوانات',
+      'agriculture_livestock':'کرنه او مالداري', 'food_grocery':'خوراکي توکي',
+      'health':'روغتیا او هوساینه', 'education':'زده کړه او روزنه',
+      'kids_family':'د ماشومانو وسایل', 'construction_tools':'ساختمان او وسایل',
+      'wedding_events':'واده او مراسم', 'travel_tickets':'سفر او ټکټونه',
+      'lost_found':'ورک او موندل شوي', 'sports_hobbies':'ورزش او ساعتېري',
     };
     return ps[id] ?? fallback;
   }
@@ -171,6 +177,17 @@ String localizedSubcategoryTitle(BuildContext context, String categoryId, String
     'full_time':'بشپړ وخت کار', 'part_time':'نیمه وخت کار', 'remote':'آنلاین کار', 'repair':'ترمیمات', 'transport':'ترانسپورت',
     'education':'زده کړه', 'other':'نور شخصي وسایل', 'youtube':'یوټیوب', 'tiktok':'ټیک ټاک', 'instagram':'انسټاګرام',
     'facebook_page':'فیسبوک پاڼه', 'telegram':'ټیلیګرام چینل', 'snapchat':'سنپ‌چټ', 'x_page':'د X پاڼه', 'other_social':'نورې پاڼې',
+    'cats':'پیشوګانې', 'dogs':'سپي', 'birds':'مرغان', 'ornamental_fish':'زینتي کبان', 'pet_supplies':'د حیواناتو وسایل',
+    'cattle':'غوا او غویي', 'sheep_goats':'پسونه او وزې', 'horses':'آسونه', 'poultry':'چرګان او مرغان', 'farm_equipment':'کرنیز وسایل',
+    'grocery':'خوراکي توکي', 'fruit_vegetables':'مېوې او سبزي', 'water_drinks':'اوبه او څښاک', 'bakery':'نانوایي او شیریني',
+    'pharmacy':'درمل او روغتیا', 'medical_equipment':'طبي وسایل', 'fitness_wellness':'روغتیا او فټنس',
+    'courses':'کورسونه', 'books':'کتابونه', 'school_supplies':'د ښوونځي وسایل', 'tutoring':'خصوصي زده کړه',
+    'baby_gear':'د ماشومانو وسایل', 'toys':'لوبې او اسباب‌بازي', 'strollers':'کالسکه او څوکۍ', 'kids_furniture':'د ماشومانو فرنیچر',
+    'building_materials':'ساختماني مواد', 'tools':'وسایل او ابزار', 'generators':'جنراتورونه', 'solar':'لمریز سیستمونه',
+    'wedding_dresses':'د واده کالي', 'wedding_services':'د واده خدمات', 'halls':'تالارونه', 'photography':'عکاسي او ویډیو',
+    'air_tickets':'د الوتنې ټکټونه', 'bus_tickets':'د بس ټکټونه', 'hotels':'هوټل او استوګنه', 'tours':'سفرونه او سیاحت',
+    'lost_items':'اشیای گمشده', 'found_items':'اشیای پیدا شده', 'documents':'اسناد پیدا شده',
+    'sports_equipment':'وسایل ورزشي', 'gaming':'گیم و کنسول', 'bicycles':'بایسکل', 'music':'آلات موسیقي',
   };
   return ps[id] ?? fallback;
 }
@@ -309,6 +326,17 @@ const List<Map<String, dynamic>> categories = [
   {'id': 'personal', 'title': 'وسایل شخصی', 'icon': Icons.person},
   {'id': 'social_pages', 'title': 'صفحات مجازی', 'icon': Icons.public},
   {'id': 'afghan_stores', 'title': 'فروشگاه‌ها و کسب‌وکارها', 'icon': Icons.storefront},
+  {'id': 'animals_pets', 'title': 'حیوانات خانگی', 'icon': Icons.pets},
+  {'id': 'agriculture_livestock', 'title': 'زراعت و مالداری', 'icon': Icons.agriculture},
+  {'id': 'food_grocery', 'title': 'مواد غذایی', 'icon': Icons.local_grocery_store},
+  {'id': 'health', 'title': 'صحت و تندرستی', 'icon': Icons.health_and_safety},
+  {'id': 'education', 'title': 'تعلیم و آموزش', 'icon': Icons.school},
+  {'id': 'kids_family', 'title': 'وسایل اطفال و خانواده', 'icon': Icons.child_friendly},
+  {'id': 'construction_tools', 'title': 'ساختمان و ابزار', 'icon': Icons.construction},
+  {'id': 'wedding_events', 'title': 'عروسی و مراسم', 'icon': Icons.celebration},
+  {'id': 'travel_tickets', 'title': 'سفر و تکت', 'icon': Icons.flight_takeoff},
+  {'id': 'lost_found', 'title': 'گمشده و پیدا شده', 'icon': Icons.find_in_page},
+  {'id': 'sports_hobbies', 'title': 'ورزش و سرگرمی', 'icon': Icons.sports_soccer},
 ];
 
 
@@ -357,6 +385,42 @@ const Map<String, List<Map<String, String>>> subcategories = {
     {'id':'furniture_stores','title':'فروشگاه‌های مبلمان'}, {'id':'cosmetics_stores','title':'فروشگاه‌های آرایشی و بهداشتی'},
     {'id':'supermarkets','title':'سوپرمارکت و مواد غذایی'}, {'id':'car_parts_stores','title':'فروشگاه‌های پرزه‌جات موتر'},
     {'id':'children_stores','title':'فروشگاه‌های کودک'}, {'id':'other_stores','title':'سایر فروشگاه‌ها'},
+  ],
+  'animals_pets': [
+    {'id':'cats','title':'پیشک / گربه'}, {'id':'dogs','title':'سگ'}, {'id':'birds','title':'پرنده‌های خانگی'},
+    {'id':'ornamental_fish','title':'ماهی زینتی'}, {'id':'pet_supplies','title':'غذا و لوازم حیوانات'},
+  ],
+  'agriculture_livestock': [
+    {'id':'cattle','title':'گاو و گوساله'}, {'id':'sheep_goats','title':'گوسفند و بز'}, {'id':'horses','title':'اسب'},
+    {'id':'poultry','title':'مرغ و پرنده'}, {'id':'farm_equipment','title':'ماشین‌آلات و ابزار زراعت'},
+  ],
+  'food_grocery': [
+    {'id':'grocery','title':'مواد غذایی'}, {'id':'fruit_vegetables','title':'میوه و سبزی'}, {'id':'water_drinks','title':'آب و نوشیدنی'},
+    {'id':'bakery','title':'نان و شیرینی'},
+  ],
+  'health': [
+    {'id':'pharmacy','title':'محصولات صحی'}, {'id':'medical_equipment','title':'تجهیزات طبی'}, {'id':'fitness_wellness','title':'ورزش و تندرستی'},
+  ],
+  'education': [
+    {'id':'courses','title':'کورس و آموزش'}, {'id':'books','title':'کتاب و جزوه'}, {'id':'school_supplies','title':'لوازم مکتب'}, {'id':'tutoring','title':'استاد خصوصی'},
+  ],
+  'kids_family': [
+    {'id':'baby_gear','title':'لوازم نوزاد'}, {'id':'toys','title':'اسباب‌بازی'}, {'id':'strollers','title':'کالسکه و چوکی طفل'}, {'id':'kids_furniture','title':'اثاثیه اطفال'},
+  ],
+  'construction_tools': [
+    {'id':'building_materials','title':'مصالح ساختمانی'}, {'id':'tools','title':'ابزار و ماشین‌آلات'}, {'id':'generators','title':'جنراتور'}, {'id':'solar','title':'سیستم‌های سولری'},
+  ],
+  'wedding_events': [
+    {'id':'wedding_dresses','title':'لباس عروسی'}, {'id':'wedding_services','title':'خدمات عروسی'}, {'id':'halls','title':'تالار و محل مراسم'}, {'id':'photography','title':'عکاسی و فیلمبرداری'},
+  ],
+  'travel_tickets': [
+    {'id':'air_tickets','title':'تکت هواپیما'}, {'id':'bus_tickets','title':'تکت بس'}, {'id':'hotels','title':'هوتل و اقامت'}, {'id':'tours','title':'تور و گردشگری'},
+  ],
+  'lost_found': [
+    {'id':'lost_items','title':'اشیای گمشده'}, {'id':'found_items','title':'اشیای پیدا شده'}, {'id':'documents','title':'اسناد پیدا شده'},
+  ],
+  'sports_hobbies': [
+    {'id':'sports_equipment','title':'تجهیزات ورزشی'}, {'id':'gaming','title':'گیم و کنسول'}, {'id':'bicycles','title':'بایسکل'}, {'id':'music','title':'آلات موسیقی'},
   ],
 };
 
@@ -923,7 +987,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            if (!isLoading && loadError == null && selectedCategory.isEmpty && selectedProvince.isEmpty && searchQuery.trim().isEmpty) ...[
+              _SpecialBoostSection(products: products),
+              const SizedBox(height: 8),
+            ],
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -953,6 +1020,154 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+class _SpecialBoostSection extends StatelessWidget {
+  final List<dynamic> products;
+  const _SpecialBoostSection({required this.products});
+
+  @override
+  Widget build(BuildContext context) {
+    final special = products.where((item) {
+      final featured = item['is_featured'] == true || item['is_featured'] == 1;
+      final pinned = item['is_pinned'] == true || item['is_pinned'] == 1;
+      final level = int.tryParse('${item['effective_boost_level'] ?? item['boost_level'] ?? 0}') ?? 0;
+      return featured || pinned || level > 0;
+    }).take(8).toList();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 2, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer,
+            Theme.of(context).colorScheme.surfaceContainerHighest,
+          ],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Text('🚀', style: TextStyle(fontSize: 23)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'آگهی‌های ویژه و بوست‌شده',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (AuthService.isLoggedIn)
+                TextButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())),
+                  icon: const Icon(Icons.rocket_launch, size: 18),
+                  label: const Text('بوست آگهی'),
+                ),
+            ],
+          ),
+          Text(
+            special.isEmpty
+                ? 'با بوست کردن آگهی، آن را در این بخش برجسته‌تر کن و شانس دیده‌شدن را بالا ببر.'
+                : 'آگهی‌هایی که با ویژه‌سازی، پین یا بوست بیشتر دیده می‌شوند.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          if (special.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withOpacity(.75),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 28),
+                  const SizedBox(width: 10),
+                  const Expanded(child: Text('هنوز آگهی ویژه‌ای اینجا نیست؛ اولین آگهی ویژه بازارک را تو بساز!')),
+                  if (AuthService.isLoggedIn)
+                    FilledButton(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())),
+                      child: const Text('شروع'),
+                    ),
+                ],
+              ),
+            )
+          else
+            SizedBox(
+              height: 205,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: special.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final item = special[index];
+                  List<dynamic> images = [];
+                  try {
+                    final raw = item['image_url'];
+                    if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
+                    if (raw is List) images = raw;
+                  } catch (_) {}
+                  final imageUrl = images.isNotEmpty ? images.first.toString() : '';
+                  final label = item['boost_label']?.toString().trim() ?? '';
+                  final price = NumberFormatHelper.format(item['price']);
+                  return SizedBox(
+                    width: 190,
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      clipBehavior: Clip.antiAlias,
+                      elevation: 3,
+                      child: InkWell(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              height: 105,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  imageUrl.isNotEmpty
+                                      ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported)))
+                                      : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 38)),
+                                  Positioned(
+                                    top: 7,
+                                    right: 7,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                      decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(10)),
+                                      child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(9, 7, 9, 5),
+                              child: LocalizedText(item['title']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 9),
+                              child: Text(price == '0' ? tr(context, 'free') : '$price ${tr(context, 'afghani')}', style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
