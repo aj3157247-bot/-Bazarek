@@ -294,6 +294,7 @@ const List<Map<String, dynamic>> categories = [
   {'id': 'services', 'title': 'خدمات', 'icon': Icons.build},
   {'id': 'personal', 'title': 'وسایل شخصی', 'icon': Icons.person},
   {'id': 'social_pages', 'title': 'صفحات مجازی', 'icon': Icons.public},
+  {'id': 'afghan_stores', 'title': 'فروشگاه‌ها و کسب‌وکارها', 'icon': Icons.storefront},
 ];
 
 
@@ -331,14 +332,17 @@ const Map<String, List<Map<String, String>>> subcategories = {
     {'id':'other','title':'سایر وسایل شخصی'},
   ],
   'social_pages': [
-    {'id':'youtube','title':'یوتیوب'},
-    {'id':'tiktok','title':'تیک‌تاک'},
-    {'id':'instagram','title':'اینستاگرام'},
-    {'id':'facebook_page','title':'صفحه فیسبوک'},
-    {'id':'telegram','title':'کانال تلگرام'},
-    {'id':'snapchat','title':'اسنپ‌چت'},
-    {'id':'x_page','title':'صفحه X'},
-    {'id':'other_social','title':'سایر صفحات'},
+    {'id':'youtube','title':'یوتیوب'}, {'id':'tiktok','title':'تیک‌تاک'}, {'id':'instagram','title':'اینستاگرام'},
+    {'id':'facebook_page','title':'صفحه فیسبوک'}, {'id':'telegram','title':'کانال تلگرام'}, {'id':'snapchat','title':'اسنپ‌چت'},
+    {'id':'x_page','title':'صفحه X'}, {'id':'other_social','title':'سایر صفحات'},
+  ],
+  'afghan_stores': [
+    {'id':'clothing_stores','title':'فروشگاه‌های لباس'}, {'id':'shoe_stores','title':'فروشگاه‌های کفش'},
+    {'id':'gold_stores','title':'طلافروشی و جواهرات'}, {'id':'mobile_stores','title':'فروشگاه‌های موبایل و لوازم جانبی'},
+    {'id':'electronics_stores','title':'فروشگاه‌های لوازم برقی'}, {'id':'home_stores','title':'فروشگاه‌های لوازم خانه'},
+    {'id':'furniture_stores','title':'فروشگاه‌های مبلمان'}, {'id':'cosmetics_stores','title':'فروشگاه‌های آرایشی و بهداشتی'},
+    {'id':'supermarkets','title':'سوپرمارکت و مواد غذایی'}, {'id':'car_parts_stores','title':'فروشگاه‌های پرزه‌جات موتر'},
+    {'id':'children_stores','title':'فروشگاه‌های کودک'}, {'id':'other_stores','title':'سایر فروشگاه‌ها'},
   ],
 };
 
@@ -537,20 +541,45 @@ class ApiService {
     return Map<String, dynamic>.from(data as Map);
   }
 
+class _DetectedImageType {
+  final String mime;
+  final String ext;
+  const _DetectedImageType(this.mime, this.ext);
+}
+
+_DetectedImageType? _detectImageType(Uint8List b, String? reportedMime, String reportedName) {
+  final m = (reportedMime ?? '').toLowerCase().trim();
+  if (m == 'image/jpeg') return const _DetectedImageType('image/jpeg', 'jpg');
+  if (m == 'image/png') return const _DetectedImageType('image/png', 'png');
+  if (m == 'image/webp') return const _DetectedImageType('image/webp', 'webp');
+  if (m == 'image/gif') return const _DetectedImageType('image/gif', 'gif');
+  final n = reportedName.toLowerCase();
+  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return const _DetectedImageType('image/jpeg', 'jpg');
+  if (n.endsWith('.png')) return const _DetectedImageType('image/png', 'png');
+  if (n.endsWith('.webp')) return const _DetectedImageType('image/webp', 'webp');
+  if (n.endsWith('.gif')) return const _DetectedImageType('image/gif', 'gif');
+  if (b.length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return const _DetectedImageType('image/jpeg', 'jpg');
+  if (b.length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) return const _DetectedImageType('image/png', 'png');
+  if (b.length >= 12 && String.fromCharCodes(b.sublist(0,4)) == 'RIFF' && String.fromCharCodes(b.sublist(8,12)) == 'WEBP') return const _DetectedImageType('image/webp', 'webp');
+  if (b.length >= 6) { final sig = String.fromCharCodes(b.sublist(0,6)); if (sig == 'GIF87a' || sig == 'GIF89a') return const _DetectedImageType('image/gif', 'gif'); }
+  return null;
+}
+
   static Future<String> uploadAvatar(XFile image) async {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
       final bytes = await image.readAsBytes();
-      final mime = image.mimeType;
-      final filename = image.name.isNotEmpty ? image.name : 'avatar.jpg';
+      final detected = _detectImageType(bytes, image.mimeType, image.name);
+      if (detected == null) {
+        throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG یا WEBP انتخاب کنید.');
+      }
+      final mime = detected.mime;
+      final filename = 'avatar-${DateTime.now().millisecondsSinceEpoch}.${detected.ext}';
+      req.headers['X-Image-Mime-Type'] = mime;
+      req.headers['X-Image-Extension'] = detected.ext;
       req.files.add(http.MultipartFile.fromBytes(
-        'avatar',
-        bytes,
-        filename: filename,
-        contentType: mime != null && mime.startsWith('image/')
-            ? MediaType.parse(mime)
-            : null,
+        'avatar', bytes, filename: filename, contentType: MediaType.parse(mime),
       ));
       final streamed = await req.send().timeout(const Duration(seconds: 30));
       return http.Response.fromStream(streamed);
