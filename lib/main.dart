@@ -1988,6 +1988,87 @@ class _BoostScreenState extends State<BoostScreen> {
   }
 }
 
+class CategoriesScreen extends StatelessWidget {
+  const CategoriesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final columns = width >= 1000 ? 5 : width >= 700 ? 4 : 3;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(psText(context, 'همه دسته‌بندی‌ها', 'ټولې کټګورۍ')),
+      ),
+      body: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.95,
+        ),
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          final id = category['id']?.toString() ?? '';
+          final title = localizedCategoryTitle(
+            context,
+            id,
+            category['title']?.toString() ?? 'دسته‌بندی',
+          );
+          final icon = category['icon'] is IconData
+              ? category['icon'] as IconData
+              : Icons.category;
+
+          return Card(
+            elevation: 0,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SubcategoryScreen(category: category),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 27,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer,
+                      child: Icon(
+                        icon,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class SubcategoryScreen extends StatelessWidget {
   final Map<String, dynamic> category;
   const SubcategoryScreen({super.key, required this.category});
