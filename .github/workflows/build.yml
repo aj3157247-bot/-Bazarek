@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -21,24 +20,28 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: '3.47.2'
+
+      # Resolve dependencies before creating missing platform folders.
+      # Then run pub get again so GeneratedPluginRegistrant is rebuilt from
+      # the real dependency set, including file_picker.
+      - name: Install dependencies
+        run: flutter pub get
 
       - name: Repair Flutter Project Structure
         run: flutter create . --platforms=android,web
 
+      - name: Refresh generated plugin registration
+        run: flutter pub get
+
       - name: Ensure Android Internet Permission
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i '/<manifest[^>]*>/a\    <uses-permission android:name="android.permission.INTERNET"/>' "$MANIFEST"
           fi
-
           echo "=== Android Manifest ==="
           cat "$MANIFEST"
-
-      - name: Install Dependencies
-        run: flutter pub get
 
       - name: Generate Bazarek App Icon
         run: dart run flutter_launcher_icons
