@@ -943,7 +943,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: tr(context, 'categories'),
                           icon: Icons.grid_view_rounded,
                           actionText: 'مشاهده همه',
-                          onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
+                          onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoriesScreen())),
                         ),
                         const SizedBox(height: 10),
                         SizedBox(
@@ -955,7 +955,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             itemBuilder: (_, i) {
                               if (i == visibleCategories.length) {
                                 return _MoreCategoryTile(
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
+                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoriesScreen())),
                                 );
                               }
                               final c = visibleCategories[i];
