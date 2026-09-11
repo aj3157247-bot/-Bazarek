@@ -149,14 +149,29 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
   try {
     if (!req.file) return res.status(400).json({ error: 'تصویر پروفایل انتخاب نشده است.' });
 
+    // Browsers can send an image as application/octet-stream. Do not reject it
+    // just because the multipart MIME type is missing; determine the type from
+    // the filename first and from the file signature as a final fallback.
     const originalName = String(req.file.originalname || '').trim();
-    const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
-    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
-    const contentType = String(req.file.mimetype || '').startsWith('image/')
-      ? req.file.mimetype
-      : mimeByExt[safeExt] || '';
-    if (!contentType) return res.status(400).json({ error: 'نوع فایل تصویر قابل تشخیص نیست.' });
+    let ext = (originalName.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const mime = String(req.file.mimetype || '').toLowerCase();
+    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif' };
+    let contentType = mime.startsWith('image/') ? mime : (mimeByExt[ext] || '');
+
+    // Magic-byte detection handles browsers/platforms that provide neither a
+    // useful MIME type nor a useful filename extension.
+    if (!contentType && req.file.buffer) {
+      const b = req.file.buffer;
+      if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) { contentType = 'image/jpeg'; ext = 'jpg'; }
+      else if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) { contentType = 'image/png'; ext = 'png'; }
+      else if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') { contentType = 'image/webp'; ext = 'webp'; }
+      else if (b.length >= 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a')) { contentType = 'image/gif'; ext = 'gif'; }
+    }
+    if (!contentType || !contentType.startsWith('image/')) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
+
+    if (!['jpg','jpeg','png','webp','gif','heic','heif'].includes(ext)) {
+      ext = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1] || 'jpg';
+    }
 
     const db = getSupabaseAdmin();
     const buckets = await db.storage.listBuckets();
@@ -165,21 +180,19 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
       const { error } = await db.storage.createBucket(AVATAR_BUCKET, {
         public: true,
         fileSizeLimit: '10MB',
-        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'],
       });
       if (error && !String(error.message || '').toLowerCase().includes('already')) throw error;
     } else {
-      // If the bucket was created as private previously, getPublicUrl() would not
-      // produce an image that the Web/APK can load. Keep this bucket public.
       const { error } = await db.storage.updateBucket(AVATAR_BUCKET, {
         public: true,
         fileSizeLimit: '10MB',
-        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'],
       });
       if (error) console.warn('Could not update avatar bucket settings:', error.message);
     }
 
-    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.${safeExt}`;
+    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, req.file.buffer, {
       contentType,
       cacheControl: '31536000',
@@ -188,7 +201,7 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
     if (error) throw error;
 
     const { data } = db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
-    if (!data?.publicUrl) throw new Error('آدرس عمومی تصویر ساخته نشد.');
+    if (!data?.publicUrl) throw new Error('آدرس تصویر عمومی ساخته نشد.');
 
     const { error: profileError } = await db.from('profiles').update({
       avatar_url: data.publicUrl,
@@ -200,9 +213,7 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
   } catch (e) {
     console.error('Profile avatar upload error:', e);
     const detail = String(e?.message || '').trim();
-    res.status(500).json({
-      error: detail ? `خطا در آپلود تصویر پروفایل: ${detail}` : 'خطا در آپلود تصویر پروفایل.',
-    });
+    res.status(500).json({ error: detail ? `خطا در آپلود تصویر پروفایل: ${detail}` : 'خطا در آپلود تصویر پروفایل.' });
   }
 });
 
