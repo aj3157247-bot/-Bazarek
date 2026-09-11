@@ -33,17 +33,8 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Configure Android WebView permission
-        run: |
-          python3 - <<'PY2'
-          from pathlib import Path
-          p = Path('android/app/src/main/AndroidManifest.xml')
-          s = p.read_text()
-          permission = '    <uses-permission android:name="android.permission.INTERNET" />\n'
-          if 'android.permission.INTERNET' not in s:
-              s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + permission)
-              p.write_text(s)
-          PY2
+      - name: Generate App Launcher Icons
+        run: dart run flutter_launcher_icons
 
       - name: Verify Android Manifest
         run: test -f android/app/src/main/AndroidManifest.xml
