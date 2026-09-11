@@ -11,10 +11,23 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'admin_panel_screen.dart';
+import 'apk_webview_stub.dart' if (dart.library.io) 'apk_webview.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const BazarBuzurgApp());
+  runApp(const BazarekEntryApp());
+}
+
+class BazarekEntryApp extends StatelessWidget {
+  const BazarekEntryApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb) {
+      return const BazarekWebViewApp();
+    }
+    return const BazarBuzurgApp();
+  }
 }
 
 class BazarBuzurgApp extends StatefulWidget {
