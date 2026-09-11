@@ -14,24 +14,17 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Set up Flutter 3.47.2
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
+          channel: stable
+          cache: true
 
-      # Resolve dependencies before creating missing platform folders.
-      # Then run pub get again so GeneratedPluginRegistrant is rebuilt from
-      # the real dependency set, including file_picker.
       - name: Install dependencies
-        run: flutter pub get
-
-      - name: Repair Flutter Project Structure
-        run: flutter create . --platforms=android,web
-
-      - name: Refresh generated plugin registration
         run: flutter pub get
 
       - name: Ensure Android Internet Permission
@@ -40,8 +33,6 @@ jobs:
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i '/<manifest[^>]*>/a\    <uses-permission android:name="android.permission.INTERNET"/>' "$MANIFEST"
           fi
-          echo "=== Android Manifest ==="
-          cat "$MANIFEST"
 
       - name: Generate Bazarek App Icon
         run: dart run flutter_launcher_icons
@@ -55,7 +46,7 @@ jobs:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Build Web
+      - name: Build Web from the exact same source
         run: flutter build web --release --base-href /
 
       - name: Upload Web
