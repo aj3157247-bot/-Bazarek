@@ -155,14 +155,17 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
     const originalName = String(req.file.originalname || '').trim();
     let ext = (originalName.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const mime = String(req.file.mimetype || '').toLowerCase();
-    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif' };
-    let contentType = mime.startsWith('image/') ? mime : (mimeByExt[ext] || '');
+    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif' };
+    const clientMime = String(req.headers['x-image-mime-type'] || '').toLowerCase();
+    let contentType = mime.startsWith('image/') ? mime : (clientMime.startsWith('image/') ? clientMime : (mimeByExt[ext] || ''));
 
     // Magic-byte detection handles browsers/platforms that provide neither a
     // useful MIME type nor a useful filename extension.
     if (!contentType && req.file.buffer) {
       const b = req.file.buffer;
-      if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) { contentType = 'image/jpeg'; ext = 'jpg'; }
+      if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp' && ['avif','avis'].includes(b.toString('ascii', 8, 12))) { contentType = 'image/avif'; ext = 'avif'; }
+      else if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp' && ['heic','heix','hevc','hevx','heif','mif1'].includes(b.toString('ascii', 8, 12))) { contentType = 'image/heic'; ext = 'heic'; }
+      else if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) { contentType = 'image/jpeg'; ext = 'jpg'; }
       else if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) { contentType = 'image/png'; ext = 'png'; }
       else if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') { contentType = 'image/webp'; ext = 'webp'; }
       else if (b.length >= 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a')) { contentType = 'image/gif'; ext = 'gif'; }
@@ -180,14 +183,14 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
       const { error } = await db.storage.createBucket(AVATAR_BUCKET, {
         public: true,
         fileSizeLimit: '10MB',
-        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'],
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/avif'],
       });
       if (error && !String(error.message || '').toLowerCase().includes('already')) throw error;
     } else {
       const { error } = await db.storage.updateBucket(AVATAR_BUCKET, {
         public: true,
         fileSizeLimit: '10MB',
-        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'],
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/avif'],
       });
       if (error) console.warn('Could not update avatar bucket settings:', error.message);
     }
