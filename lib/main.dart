@@ -1436,7 +1436,7 @@ class _BoostScreenState extends State<BoostScreen> {
     }
     final price=int.tryParse('${pkg['price_afn']}') ?? 0;
     final ps=Localizations.localeOf(context).languageCode=='ps';
-    final method=await showDialog<String>(context: context,builder: (c)=>AlertDialog(title: Text(ps?'د تادیې طریقه':'روش پرداخت'),content: Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),subtitle:Text(ps?'کارت/حساب بازارک او تایید مدیریت':'انتقال به حساب بازارک و تأیید مدیریت'),onTap:()=>Navigator.pop(c,'manual')),ListTile(leading:const Icon(Icons.payment),title:Text(ps?'آنلاین تادیه':'پرداخت آنلاین'),subtitle:const Text('HesabPay'),onTap:()=>Navigator.pop(c,'online'))])));
+    final method=await showDialog<String>(context: context,builder: (c)=>AlertDialog(title: Text(ps?'د تادیې طریقه':'روش پرداخت'),content: Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),subtitle:Text(ps?'کارت/حساب بازارک او تایید مدیریت':'انتقال به حساب بازارک و تأیید مدیریت'),onTap:()=>Navigator.pop(c,'manual')),ListTile(enabled:false,leading:const Icon(Icons.payment),title:Text(ps?'آنلاین تادیه — ژر راځي':'پرداخت آنلاین — به‌زودی'),subtitle:Text(ps?'HesabPay به‌زودی فعالېږي':'HesabPay به‌زودی فعال می‌شود'))])));
     if(method==null)return;
     if(method=='online'){ await _payOnline(kind:'promotion',listingId:id,packageId:pkg['id'].toString(),title:pkg['title']?.toString()??'Boost'); return; }
     final ref=await _referenceDialog(title: pkg['title']?.toString() ?? 'بوست آگهی', price: price);
@@ -1446,7 +1446,7 @@ class _BoostScreenState extends State<BoostScreen> {
 
   Future<void> _buyGlobal(String plan, int price, String title) async {
     final ps=Localizations.localeOf(context).languageCode=='ps';
-    final method=await showDialog<String>(context:context,builder:(c)=>AlertDialog(title:Text(ps?'د تادیې طریقه':'روش پرداخت'),content:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),onTap:()=>Navigator.pop(c,'manual')),ListTile(leading:const Icon(Icons.payment),title:Text(ps?'آنلاین تادیه':'پرداخت آنلاین'),subtitle:const Text('HesabPay'),onTap:()=>Navigator.pop(c,'online'))])));
+    final method=await showDialog<String>(context:context,builder:(c)=>AlertDialog(title:Text(ps?'د تادیې طریقه':'روش پرداخت'),content:Column(mainAxisSize:MainAxisSize.min,children:[ListTile(leading:const Icon(Icons.account_balance),title:Text(ps?'لاسي تادیه':'پرداخت دستی'),onTap:()=>Navigator.pop(c,'manual')),ListTile(enabled:false,leading:const Icon(Icons.payment),title:Text(ps?'آنلاین تادیه — ژر راځي':'پرداخت آنلاین — به‌زودی'),subtitle:Text(ps?'HesabPay به‌زودی فعالېږي':'HesabPay به‌زودی فعال می‌شود'))])));
     if(method==null)return;
     if(method=='online'){await _payOnline(kind:'subscription',plan:plan,title:title);return;}
     final ref=await _referenceDialog(title:title,price:price); if(ref==null)return;
@@ -1469,7 +1469,7 @@ class _BoostScreenState extends State<BoostScreen> {
             Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
           ])),
           const SizedBox(height: 22),
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقې: لاسي تادیه د بازارک د کارت/حساب له لارې، یا تادیه آنلاین د HesabPay له لارې.' : '💳 روش‌های پرداخت: پرداخت دستی از طریق کارت/حساب بازارک، یا پرداخت آنلاین با HesabPay.')),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: لاسي تادیه د بازارک د کارت/حساب له لارې. HesabPay آنلاین تادیه ژر/په راتلونکې کې فعالېږي.' : '💳 روش پرداخت: فعلاً فقط پرداخت دستی از طریق کارت/حساب بازارک فعال است. پرداخت آنلاین HesabPay به‌زودی/در آینده فعال می‌شود.')),
           const SizedBox(height: 14),
           Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
