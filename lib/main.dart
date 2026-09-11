@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1625,7 +1626,10 @@ Future<PickedProfileImage?> pickProfileImage() async {
     );
     if (result == null || result.files.isEmpty) return null;
     final file = result.files.single;
-    final bytes = file.bytes ?? await file.readAsBytes();
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
+    }
     return PickedProfileImage(bytes: bytes, name: file.name);
   }
 
