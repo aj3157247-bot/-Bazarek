@@ -148,23 +148,62 @@ app.patch('/api/me', requireUser, async (req, res) => {
 app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'تصویر پروفایل انتخاب نشده است.' });
-    if (!req.file.mimetype.startsWith('image/')) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
-    const db=getSupabaseAdmin();
-    const buckets=await db.storage.listBuckets();
-    if(!buckets.data?.some(b=>b.name===AVATAR_BUCKET)){
-      const {error}=await db.storage.createBucket(AVATAR_BUCKET,{public:true,fileSizeLimit:'10MB',allowedMimeTypes:['image/jpeg','image/png','image/webp']});
-      if(error && !String(error.message||'').toLowerCase().includes('already')) throw error;
+
+    const originalName = String(req.file.originalname || '').trim();
+    const ext = (originalName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
+    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+    const contentType = String(req.file.mimetype || '').startsWith('image/')
+      ? req.file.mimetype
+      : mimeByExt[safeExt] || '';
+    if (!contentType) return res.status(400).json({ error: 'نوع فایل تصویر قابل تشخیص نیست.' });
+
+    const db = getSupabaseAdmin();
+    const buckets = await db.storage.listBuckets();
+    const exists = buckets.data?.some(b => b.name === AVATAR_BUCKET);
+    if (!exists) {
+      const { error } = await db.storage.createBucket(AVATAR_BUCKET, {
+        public: true,
+        fileSizeLimit: '10MB',
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      });
+      if (error && !String(error.message || '').toLowerCase().includes('already')) throw error;
+    } else {
+      // If the bucket was created as private previously, getPublicUrl() would not
+      // produce an image that the Web/APK can load. Keep this bucket public.
+      const { error } = await db.storage.updateBucket(AVATAR_BUCKET, {
+        public: true,
+        fileSizeLimit: '10MB',
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      });
+      if (error) console.warn('Could not update avatar bucket settings:', error.message);
     }
-    const ext=(req.file.originalname.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
-    const safeExt=['jpg','jpeg','png','webp'].includes(ext) ? ext : 'jpg';
-    const path=`${req.user.id}/avatar-${Date.now()}.${safeExt}`;
-    const {error}=await db.storage.from(AVATAR_BUCKET).upload(path,req.file.buffer,{contentType:req.file.mimetype,upsert:false});
-    if(error)throw error;
-    const {data}=db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
-    const {error:profileError}=await db.from('profiles').update({avatar_url:data.publicUrl,updated_at:new Date().toISOString()}).eq('id',req.user.id);
-    if(profileError)throw profileError;
-    res.status(201).json({url:data.publicUrl});
-  } catch(e){console.error(e);res.status(500).json({error:'خطا در آپلود تصویر پروفایل.'});}
+
+    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.${safeExt}`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, req.file.buffer, {
+      contentType,
+      cacheControl: '31536000',
+      upsert: false,
+    });
+    if (error) throw error;
+
+    const { data } = db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    if (!data?.publicUrl) throw new Error('آدرس عمومی تصویر ساخته نشد.');
+
+    const { error: profileError } = await db.from('profiles').update({
+      avatar_url: data.publicUrl,
+      updated_at: new Date().toISOString(),
+    }).eq('id', req.user.id);
+    if (profileError) throw profileError;
+
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) {
+    console.error('Profile avatar upload error:', e);
+    const detail = String(e?.message || '').trim();
+    res.status(500).json({
+      error: detail ? `خطا در آپلود تصویر پروفایل: ${detail}` : 'خطا در آپلود تصویر پروفایل.',
+    });
+  }
 });
 
 app.post('/api/conversations', requireUser, async (req, res) => {
@@ -483,23 +522,6 @@ app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   } catch (e) { res.status(500).json({ error: 'خطا در دریافت آمار.' }); }
 });
 
-
-// Future online-payment configuration. Disabled by default so the current
-// manual/bank-transfer payment flow remains unchanged until a real merchant
-// integration is approved and configured.
-app.get('/api/payment-methods', requireUser, async (_, res) => {
-  try {
-    const enabled = String(process.env.HESABPAY_ENABLED || 'false').trim().toLowerCase() === 'true';
-    res.json({
-      manual: true,
-      bank_transfer: true,
-      hesabpay: { enabled, available: enabled && Boolean(String(process.env.HESABPAY_API_KEY || '').trim()) }
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'خطا در دریافت روش‌های پرداخت.' });
-  }
-});
 
 app.get('/api/payment-info', requireUser, async (_,res)=>{
   try {
