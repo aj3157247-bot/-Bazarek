@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -540,7 +541,17 @@ class ApiService {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
-      req.files.add(http.MultipartFile.fromBytes('avatar', await image.readAsBytes(), filename: image.name));
+      final bytes = await image.readAsBytes();
+      final mime = image.mimeType;
+      final filename = image.name.isNotEmpty ? image.name : 'avatar.jpg';
+      req.files.add(http.MultipartFile.fromBytes(
+        'avatar',
+        bytes,
+        filename: filename,
+        contentType: mime != null && mime.startsWith('image/')
+            ? MediaType.parse(mime)
+            : null,
+      ));
       final streamed = await req.send().timeout(const Duration(seconds: 30));
       return http.Response.fromStream(streamed);
     }
