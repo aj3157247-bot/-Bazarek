@@ -157,6 +157,8 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
     const mime = String(req.file.mimetype || '').toLowerCase();
     const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif' };
     const clientMime = String(req.headers['x-image-mime-type'] || '').toLowerCase();
+    const clientExt = String(req.headers['x-image-extension'] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!ext && clientExt) ext = clientExt;
     let contentType = mime.startsWith('image/') ? mime : (clientMime.startsWith('image/') ? clientMime : (mimeByExt[ext] || ''));
 
     // Magic-byte detection handles browsers/platforms that provide neither a
@@ -172,7 +174,7 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
     }
     if (!contentType || !contentType.startsWith('image/')) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
 
-    if (!['jpg','jpeg','png','webp','gif','heic','heif'].includes(ext)) {
+    if (!['jpg','jpeg','png','webp','gif','heic','heif','avif'].includes(ext)) {
       ext = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1] || 'jpg';
     }
 
