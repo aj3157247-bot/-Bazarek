@@ -186,13 +186,32 @@ String localizedSubcategoryTitle(BuildContext context, String categoryId, String
     'building_materials':'ساختماني مواد', 'tools':'وسایل او ابزار', 'generators':'جنراتورونه', 'solar':'لمریز سیستمونه',
     'wedding_dresses':'د واده کالي', 'wedding_services':'د واده خدمات', 'halls':'تالارونه', 'photography':'عکاسي او ویډیو',
     'air_tickets':'د الوتنې ټکټونه', 'bus_tickets':'د بس ټکټونه', 'hotels':'هوټل او استوګنه', 'tours':'سفرونه او سیاحت',
-    'lost_items':'اشیای گمشده', 'found_items':'اشیای پیدا شده', 'documents':'اسناد پیدا شده',
-    'sports_equipment':'وسایل ورزشي', 'gaming':'گیم و کنسول', 'bicycles':'بایسکل', 'music':'آلات موسیقي',
+    'lost_items':'ورک شوي توکي', 'found_items':'موندل شوي توکي', 'documents':'موندل شوي اسناد',
+    'sports_equipment':'ورزشي وسایل', 'gaming':'لوبې او کنسول', 'bicycles':'بایسکل', 'music':'د موسیقۍ وسایل',
   };
   return ps[id] ?? fallback;
 }
 
 String psText(BuildContext context, String fa, String ps) => Localizations.localeOf(context).languageCode == 'ps' ? ps : fa;
+String localizedBoostLabel(BuildContext context, String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return '';
+  if (value.contains('توربو')) return boostBadgeText(context, 1);
+  if (value.contains('انفجاری')) return boostBadgeText(context, 2);
+  if (value.contains('قدرتی')) return boostBadgeText(context, 3);
+  if (value.contains('فروشنده ویژه')) return boostBadgeText(context, 4);
+  if (value.contains('فروشنده طلایی')) return boostBadgeText(context, 5);
+  return value;
+}
+
+String boostBadgeText(BuildContext context, int level) {
+  if (level >= 5) return psText(context, '🏆 فروشنده طلایی', '🏆 زرین پلورونکی');
+  if (level == 4) return psText(context, '👑 فروشنده ویژه', '👑 ځانګړی پلورونکی');
+  if (level == 3) return psText(context, '💥 قدرتی', '💥 پیاوړی');
+  if (level == 2) return psText(context, '🔥 انفجاری', '🔥 چاودېدونکی');
+  if (level == 1) return psText(context, '⚡ توربو', '⚡ توربو');
+  return '';
+}
 
 class LocalizedText extends StatelessWidget {
   final String text;
@@ -258,6 +277,19 @@ const Map<String, String> _faMap = {
   'social_link': 'لینک صفحه',
   'social_link_hint': 'مثلاً https://instagram.com/yourpage',
   'open_link': 'باز کردن صفحه',
+  'saved': 'علاقه‌مندی‌ها',
+  'saved_empty': 'هنوز آگهی‌ای ذخیره نکرده‌اید.',
+  'boost_home_title': 'آگهی‌ات را ویژه کن!',
+  'boost_home_desc': 'با ویژه‌سازی، آگهی‌ات بیشتر دیده می‌شود و سریع‌تر مشتری پیدا می‌کنی.',
+  'boost_home_button': 'ویژه‌سازی آگهی',
+  'download_app': 'اپلیکیشن بازارک را دریافت کنید',
+  'download_app_desc': 'سریع‌تر، راحت‌تر و همیشه همراه شما',
+  'download': 'دانلود اپلیکیشن',
+  'fresh_ads': 'جدیدترین آگهی‌ها',
+  'special_ads': 'آگهی‌های ویژه',
+  'view_all': 'مشاهده همه',
+  'publish_success': 'آگهی با موفقیت منتشر شد.',
+  'publish_error': 'خطا در انتشار آگهی.',
 };
 
 const Map<String, String> _psMap = {
@@ -305,6 +337,19 @@ const Map<String, String> _psMap = {
   'social_link': 'د پاڼې لینک',
   'social_link_hint': 'لکه https://instagram.com/yourpage',
   'open_link': 'پاڼه پرانیزئ',
+  'saved': 'علاقه‌مندي',
+  'saved_empty': 'تر اوسه مو کوم اعلان نه دی خوندي کړی.',
+  'boost_home_title': 'خپل اعلان ځانګړی کړئ!',
+  'boost_home_desc': 'د ځانګړي کولو له لارې ستاسو اعلان ډېر لیدل کېږي او ژر پېرودونکي پیدا کوي.',
+  'boost_home_button': 'اعلان ځانګړی کړئ',
+  'download_app': 'د بازارک اپلېکېشن ترلاسه کړئ',
+  'download_app_desc': 'چټک، اسانه او تل ستاسو ملګری',
+  'download': 'اپلېکېشن ډاونلوډ کړئ',
+  'fresh_ads': 'تازه اعلانونه',
+  'special_ads': 'ځانګړي اعلانونه',
+  'view_all': 'ټول وګورئ',
+  'publish_success': 'اعلان په بریالیتوب خپور شو.',
+  'publish_error': 'د اعلان په خپرولو کې ستونزه رامنځته شوه.',
 };
 
 const List<String> provinces = [
@@ -765,9 +810,9 @@ class _MainLayoutState extends State<MainLayout> {
 
   final List<Widget> _pages = const [
     HomeScreen(),
-    ChatListScreen(),
+    SavedAdsScreen(),
     AddProductScreen(),
-    MyProductsScreen(),
+    ChatListScreen(),
     ProfileScreen(),
   ];
 
@@ -784,7 +829,7 @@ class _MainLayoutState extends State<MainLayout> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (idx) async {
-          if ((idx == 1 || idx == 2) && !AuthService.isLoggedIn) {
+          if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
             await requireAccount(context);
             return;
           }
@@ -799,9 +844,9 @@ class _MainLayoutState extends State<MainLayout> {
             label: tr(context, 'home'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.chat_outlined),
-            selectedIcon: const Icon(Icons.chat),
-            label: tr(context, 'chat'),
+            icon: const Icon(Icons.favorite_border_rounded),
+            selectedIcon: const Icon(Icons.favorite_rounded),
+            label: tr(context, 'saved'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.add_circle_outline),
@@ -809,9 +854,9 @@ class _MainLayoutState extends State<MainLayout> {
             label: tr(context, 'add'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.list_alt),
-            selectedIcon: const Icon(Icons.list),
-            label: tr(context, 'my_ads'),
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            selectedIcon: const Icon(Icons.chat_bubble_rounded),
+            label: tr(context, 'chat'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.person_outline),
@@ -888,7 +933,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isWide = MediaQuery.sizeOf(context).width >= 800;
-    final visibleCategories = categories.take(6).toList();
+    final visibleCategories = categories.take(4).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FC),
@@ -907,12 +952,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _BazarekTopBar(
+                          selectedProvince: selectedProvince,
+                          onProvinceChanged: (val) {
+                            setState(() => selectedProvince = val ?? '');
+                            _loadProducts();
+                          },
                           onLanguage: () {
                             final current = Localizations.localeOf(context).languageCode;
                             BazarBuzurgApp.setLocale(context, Locale(current == 'fa' ? 'ps' : 'fa'));
                           },
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         _BazarekSearchBar(
                           controller: _searchController,
                           onChanged: (val) {
@@ -923,26 +973,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             });
                           },
                         ),
-                        const SizedBox(height: 12),
-                        _BazarekFilterRow(
-                          selectedProvince: selectedProvince,
-                          selectedCategory: selectedCategory,
-                          onProvinceChanged: (val) {
-                            setState(() => selectedProvince = val ?? '');
-                            _loadProducts();
-                          },
-                          onCategoryChanged: (val) {
-                            setState(() => selectedCategory = val ?? '');
-                            _loadProducts();
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        const _BazarekHeroBanner(),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 10),
                         _SectionHeader(
                           title: tr(context, 'categories'),
                           icon: Icons.grid_view_rounded,
-                          actionText: 'مشاهده همه',
+                          actionText: tr(context, 'view_all'),
                           onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoriesScreen())),
                         ),
                         const SizedBox(height: 10),
@@ -963,15 +998,19 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 14),
+                        const _BoostHomeBanner(),
+                        const SizedBox(height: 14),
                         _SpecialBoostSection(products: products),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 14),
+                        const _DownloadAppBanner(),
+                        const SizedBox(height: 14),
                         _SectionHeader(
                           title: selectedCategory.isEmpty && selectedProvince.isEmpty && searchQuery.trim().isEmpty
-                              ? 'جدیدترین آگهی‌ها'
-                              : 'نتایج آگهی‌ها',
+                              ? tr(context, 'fresh_ads')
+                              : (Localizations.localeOf(context).languageCode == 'ps' ? 'د اعلانونو پایلې' : 'نتایج آگهی‌ها'),
                           icon: Icons.local_fire_department_rounded,
-                          actionText: products.isEmpty ? null : '${products.length} آگهی',
+                          actionText: products.isEmpty ? null : '${products.length} ${Localizations.localeOf(context).languageCode == 'ps' ? 'اعلان' : 'آگهی'}',
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -998,7 +1037,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 12),
                         Text(loadError!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
-                        FilledButton.icon(onPressed: _loadProducts, icon: const Icon(Icons.refresh), label: const Text('تلاش دوباره')),
+                        FilledButton.icon(onPressed: _loadProducts, icon: const Icon(Icons.refresh), label: Text(tr(context, 'retry'))),
                       ],
                     ),
                   ),
@@ -1007,28 +1046,21 @@ class _HomeScreenState extends State<HomeScreen> {
             else if (products.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Text('هنوز هیچ آگهی فعالی ثبت نشده است.')),
+                child: Center(child: Text(psText(context, 'هنوز هیچ آگهی فعالی ثبت نشده است.', 'تر اوسه کوم فعال اعلان نشته.'))),
               )
             else
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(isWide ? 28 : 16, 0, isWide ? 28 : 16, 28),
-                sliver: SliverLayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.crossAxisExtent;
-                    final columns = width >= 1050 ? 4 : width >= 700 ? 3 : 2;
-                    return SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => _ProductCard(item: products[index]),
-                        childCount: products.length,
-                      ),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: isWide ? 0.86 : 0.72,
-                      ),
-                    );
-                  },
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(isWide ? 28 : 16, 0, isWide ? 28 : 16, 28),
+                  child: SizedBox(
+                    height: 255,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: products.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (_, index) => SizedBox(width: isWide ? 260 : 235, child: _ProductCard(item: products[index])),
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -1039,8 +1071,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _BazarekTopBar extends StatelessWidget {
+  final String selectedProvince;
+  final ValueChanged<String?> onProvinceChanged;
   final VoidCallback onLanguage;
-  const _BazarekTopBar({required this.onLanguage});
+  const _BazarekTopBar({required this.selectedProvince, required this.onProvinceChanged, required this.onLanguage});
 
   @override
   Widget build(BuildContext context) {
@@ -1063,18 +1097,18 @@ class _BazarekTopBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('بازارک', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: theme.colorScheme.primary)),
-              Text('خرید و فروش آسان', style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+              Text(psText(context, 'خرید و فروش آسان', 'د اسانه پېر او پلور'), style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
             ],
           ),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.black.withOpacity(.07))),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.location_on_outlined, size: 18), const SizedBox(width: 5), Text(selectedProvinceLabel(context), style: const TextStyle(fontWeight: FontWeight.w700)), const SizedBox(width: 2), const Icon(Icons.keyboard_arrow_down_rounded, size: 18)]),
+          child: PopupMenuButton<String>(onSelected: onProvinceChanged, itemBuilder: (context) => [PopupMenuItem<String>(value: '', child: Text(tr(context, 'all_provinces'))), ...provinces.map((p) => PopupMenuItem<String>(value: p, child: Text(localizedProvince(context, p))))], child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.location_on_outlined, size: 18), const SizedBox(width: 5), Text(selectedProvince.isEmpty ? tr(context, 'all_provinces') : localizedProvince(context, selectedProvince), style: const TextStyle(fontWeight: FontWeight.w700)), const SizedBox(width: 2), const Icon(Icons.keyboard_arrow_down_rounded, size: 18)])),
         ),
         const SizedBox(width: 6),
         IconButton(
-          tooltip: 'زبان',
+          tooltip: psText(context, 'زبان', 'ژبه'),
           onPressed: onLanguage,
           icon: const Icon(Icons.language_rounded),
         ),
@@ -1082,7 +1116,6 @@ class _BazarekTopBar extends StatelessWidget {
     );
   }
 
-  String selectedProvinceLabel(BuildContext context) => 'کابل';
 }
 
 class _BazarekSearchBar extends StatelessWidget {
@@ -1098,7 +1131,7 @@ class _BazarekSearchBar extends StatelessWidget {
       onChanged: onChanged,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'جستجو در بین هزاران آگهی...',
+        hintText: tr(context, 'search_hint'),
         prefixIcon: const Icon(Icons.search_rounded, size: 29),
         suffixIcon: const Icon(Icons.mic_none_rounded),
         filled: true,
@@ -1240,6 +1273,84 @@ class _BazarekHeroBanner extends StatelessWidget {
   }
 }
 
+class _BoostHomeBanner extends StatelessWidget {
+  const _BoostHomeBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () async {
+        if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()));
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(colors: [Color(0xFF173C91), Color(0xFF0B72E7)]),
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 14, offset: Offset(0, 6))],
+        ),
+        child: Row(children: [
+          const Text('🚀', style: TextStyle(fontSize: 28)),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(tr(context, 'boost_home_title'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 3),
+            Text(tr(context, 'boost_home_desc'), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3)),
+          ])),
+          const SizedBox(width: 8),
+          FilledButton(onPressed: () async { if (!AuthService.isLoggedIn) { await requireAccount(context); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())); }, style: FilledButton.styleFrom(backgroundColor: Color(0xFFFFC928), foregroundColor: Color(0xFF17213C), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10)), child: Text(tr(context, 'boost_home_button'), textAlign: TextAlign.center)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _DownloadAppBanner extends StatelessWidget {
+  const _DownloadAppBanner();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(color: const Color(0xFFEAF3FF), borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.blue.withOpacity(.10))),
+      child: Row(children: [
+        Container(width: 42, height: 42, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.shopping_bag_rounded, color: Colors.white)),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(tr(context, 'download_app'), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)), const SizedBox(height: 2), Text(tr(context, 'download_app_desc'), style: const TextStyle(fontSize: 10, color: Colors.black54))])),
+        FilledButton(onPressed: () { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'لینک دانلود اپلیکیشن به‌زودی فعال می‌شود.', 'د اپلېکېشن د ډاونلوډ لینک به ژر فعال شي.')))); }, child: Text(tr(context, 'download'))),
+      ]),
+    );
+  }
+}
+
+class SavedAdsScreen extends StatefulWidget {
+  const SavedAdsScreen({super.key});
+  @override State<SavedAdsScreen> createState() => _SavedAdsScreenState();
+}
+class _SavedAdsScreenState extends State<SavedAdsScreen> {
+  List<dynamic> ads = [];
+  bool loading = true;
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    setState(() => loading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ids = prefs.getStringList('saved_ad_ids') ?? [];
+      final all = await ApiService.getProducts();
+      ads = all.where((a) => ids.contains(a['id']?.toString())).toList();
+    } catch (_) { ads = []; }
+    if (mounted) setState(() => loading = false);
+  }
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(tr(context, 'saved'))),
+    body: loading ? const Center(child: CircularProgressIndicator()) : ads.isEmpty ? Center(child: Text(tr(context, 'saved_empty'))) : ListView.separated(
+      padding: const EdgeInsets.all(12), itemCount: ads.length, separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) => SizedBox(height: 280, child: _ProductCard(item: ads[i])),
+    ),
+  );
+}
+
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -1374,7 +1485,7 @@ class _SpecialCard extends StatelessWidget {
       if (raw is List) images = raw;
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
-    final label = item['boost_label']?.toString().trim() ?? '';
+    final label = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
     return SizedBox(
       width: 220,
       child: Card(
@@ -1413,7 +1524,7 @@ class _ProductCard extends StatelessWidget {
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
     final price = NumberFormatHelper.format(item['price']);
-    final boostLabel = item['boost_label']?.toString().trim() ?? '';
+    final boostLabel = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
     final location = '${localizedProvince(context, item['province']?.toString() ?? '')}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}';
 
     return Card(
@@ -1432,7 +1543,7 @@ class _ProductCard extends StatelessWidget {
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
-              Positioned(top: 8, left: 8, child: Container(width: 31, height: 31, decoration: BoxDecoration(color: Colors.white.withOpacity(.92), shape: BoxShape.circle), child: const Icon(Icons.favorite_border_rounded, size: 18))),
+              Positioned(top: 8, left: 8, child: _SaveAdButton(item: item)),
             ]),
           ),
           Expanded(
@@ -1454,6 +1565,24 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
+
+class _SaveAdButton extends StatefulWidget {
+  final dynamic item;
+  const _SaveAdButton({required this.item});
+  @override State<_SaveAdButton> createState() => _SaveAdButtonState();
+}
+class _SaveAdButtonState extends State<_SaveAdButton> {
+  bool saved = false;
+  @override void initState() { super.initState(); _read(); }
+  Future<void> _read() async { final p = await SharedPreferences.getInstance(); final id = widget.item['id']?.toString(); if (mounted) setState(() => saved = id != null && (p.getStringList('saved_ad_ids') ?? []).contains(id)); }
+  Future<void> _toggle() async {
+    final id = widget.item['id']?.toString(); if (id == null) return;
+    final p = await SharedPreferences.getInstance(); final ids = p.getStringList('saved_ad_ids') ?? [];
+    if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; }
+    await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {});
+  }
+  @override Widget build(BuildContext context) => Material(child: InkWell(onTap: _toggle, borderRadius: BorderRadius.circular(20), child: Container(width: 31, height: 31, decoration: BoxDecoration(color: Colors.white.withOpacity(.92), shape: BoxShape.circle), child: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 18, color: saved ? Colors.red : null))));
+}
 
 class NumberFormatHelper {
   static String format(dynamic value) {
@@ -1565,7 +1694,7 @@ class ProductDetailScreen extends StatelessWidget {
                     var phone = product['contact_phone']?.toString().trim() ?? '';
                     if (phone.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('شماره تماس ثبت نشده است.')),
+                        SnackBar(content: Text(psText(context, 'شماره تماس ثبت نشده است.', 'د اړیکې شمېره نه ده ثبت شوې.'))),
                       );
                       return;
                     }
@@ -1585,13 +1714,13 @@ class ProductDetailScreen extends StatelessWidget {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
                       } else if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('امکان تماس با $phone وجود ندارد.')),
+                          SnackBar(content: Text(psText(context, 'امکان تماس با $phone وجود ندارد.', 'له $phone سره اړیکه نه شي نیول کېدای.'))),
                         );
                       }
                     } catch (_) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('باز کردن تماس تلفنی ناموفق بود.')),
+                          SnackBar(content: Text(psText(context, 'باز کردن تماس تلفنی ناموفق بود.', 'تلیفوني اړیکه پرانیستل شوه نه.'))),
                         );
                       }
                     }
@@ -1710,12 +1839,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
 
   String _boostText(dynamic ad) {
     final level = int.tryParse('${ad['boost_level'] ?? 0}') ?? 0;
-    if (level >= 5) return '🏆 فروشنده طلایی';
-    if (level == 4) return '👑 فروشنده ویژه';
-    if (level == 3) return '💥 قدرتی';
-    if (level == 2) return '🔥 انفجاری';
-    if (level == 1) return '⚡ توربو';
-    return '';
+    return boostBadgeText(context, level);
   }
 
   @override
@@ -1729,14 +1853,14 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
             children: [
               const Icon(Icons.lock_outline, size: 56),
               const SizedBox(height: 12),
-              const Text('برای دیدن آگهی‌های خود، ابتدا وارد حساب شوید.'),
+              Text(psText(context, 'برای دیدن آگهی‌های خود، ابتدا وارد حساب شوید.', 'د خپلو اعلانونو د لیدلو لپاره لومړی خپل حساب ته ننوځئ.')),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () async {
                   await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
                   if (mounted) _load();
                 },
-                child: const Text('ورود / ثبت‌نام'),
+                child: Text(psText(context, 'ورود / ثبت‌نام', 'ننوتل / نوم لیکنه')),
               ),
             ],
           ),
@@ -1754,7 +1878,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
           : error != null
               ? Center(child: Text(error!, textAlign: TextAlign.center))
               : ads.isEmpty
-                  ? const Center(child: Text('شما هنوز هیچ آگهی ثبت نکرده‌اید.'))
+                  ? Center(child: Text(psText(context, 'شما هنوز هیچ آگهی ثبت نکرده‌اید.', 'تاسو تر اوسه کوم اعلان نه دی ثبت کړی.')))
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.builder(
@@ -1791,7 +1915,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                         if (mounted) _load();
                                       },
                                       icon: const Icon(Icons.rocket_launch),
-                                      label: Text(badge.isEmpty ? '🚀 بوست آگهی' : '🚀 تقویت بوست'),
+                                      label: Text(badge.isEmpty ? psText(context, '🚀 بوست آگهی', '🚀 اعلان Boost کړئ') : psText(context, '🚀 تقویت بوست', '🚀 Boost پیاوړی کړئ')),
                                     ),
                                   ),
                                 ),
@@ -2663,9 +2787,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (response.statusCode == 401) {
         throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.');
       }
-      if (response.statusCode != 201) throw Exception(data['error'] ?? 'خطا در انتشار آگهی.');
+      if (response.statusCode != 201) throw Exception(data['error'] ?? tr(context, 'publish_error'));
       if (!mounted) return;
-      _msg('آگهی با موفقیت منتشر شد.');
+      _msg(tr(context, 'publish_success'));
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) _msg(e.toString().replaceFirst('Exception: ', ''));
@@ -2681,20 +2805,20 @@ class _AddProductSheetState extends State<AddProductSheet> {
         children: [
           TextField(
             controller: title,
-            decoration: const InputDecoration(labelText: 'عنوان آگهی'),
+            decoration: InputDecoration(labelText: psText(context, 'عنوان آگهی', 'د اعلان سرلیک')),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: category.isEmpty ? null : category,
-            hint: const Text('انتخاب دسته‌بندی'),
-            items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['title'] as String))).toList(),
+            hint: Text(psText(context, 'انتخاب دسته‌بندی', 'کټګوري وټاکئ')),
+            items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(),
             onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; }),
           ),
           if ((subcategories[category] ?? []).isNotEmpty) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: subcategory.isEmpty ? null : subcategory,
-              hint: const Text('انتخاب زیر‌دسته'),
+              hint: Text(psText(context, 'انتخاب زیر‌دسته', 'فرعي کټګوري وټاکئ')),
               items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(),
               onChanged: (val) => setState(() => subcategory = val ?? ''),
             ),
@@ -2702,7 +2826,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: province.isEmpty ? null : province,
-            hint: const Text('انتخاب ولایت'),
+            hint: Text(psText(context, 'انتخاب ولایت', 'ولایت وټاکئ')),
             items: provinces
                 .map((p) => DropdownMenuItem(
                       value: p,
@@ -2715,13 +2839,13 @@ class _AddProductSheetState extends State<AddProductSheet> {
           TextField(
             controller: price,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'قیمت (افغانی)'),
+            decoration: InputDecoration(labelText: psText(context, 'قیمت (افغانی)', 'بیه (افغانۍ)')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: desc,
             maxLines: 3,
-            decoration: const InputDecoration(labelText: 'توضیحات'),
+            decoration: InputDecoration(labelText: psText(context, 'توضیحات', 'تشریحات')),
           ),
           if (category == 'social_pages') ...[
             const SizedBox(height: 12),
@@ -2735,31 +2859,31 @@ class _AddProductSheetState extends State<AddProductSheet> {
           TextField(
             controller: contactPhone,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'شماره تماس'),
+            decoration: InputDecoration(labelText: psText(context, 'شماره تماس', 'د اړیکې شمېره')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: locationText,
-            decoration: const InputDecoration(labelText: 'آدرس / آدرس دقیق'),
+            decoration: InputDecoration(labelText: psText(context, 'آدرس / آدرس دقیق', 'پته / دقیقه پته')),
           ),
           const SizedBox(height: 12),
           SwitchListTile(
-            title: const Text('امکان چت مستقیم'),
+            title: Text(psText(context, 'امکان چت مستقیم', 'مستقیمې خبرې اترې')),
             value: allowChat,
             onChanged: (val) => setState(() => allowChat = val),
           ),
           SwitchListTile(
-            title: const Text('نمایش شماره تماس'),
+            title: Text(psText(context, 'نمایش شماره تماس', 'د اړیکې شمېره ښکاره کول')),
             value: showPhone,
             onChanged: (val) => setState(() => showPhone = val),
           ),
           SwitchListTile(
-            title: const Text('قیمت توافقی'),
+            title: Text(psText(context, 'قیمت توافقی', 'توافقي بیه')),
             value: isNegotiable,
             onChanged: (val) => setState(() => isNegotiable = val),
           ),
           const SizedBox(height: 12),
-          Text('عکس‌ها: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (var i = 0; i < imageBytes.length; i++)
