@@ -8,8 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -17,40 +19,31 @@ jobs:
           distribution: zulu
           java-version: '17'
 
-      - name: Set up Flutter 3.47.2
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
-          cache: true
 
-      - name: Install dependencies
+      # The repository does not commit generated Android platform files.
+      # Generate them BEFORE pub get so plugin registration is clean.
+      - name: Generate Flutter platform files
+        run: flutter create . --platforms=android,web
+
+      - name: Install Dependencies
         run: flutter pub get
 
-      - name: Ensure Android Internet Permission
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            sed -i '/<manifest[^>]*>/a\    <uses-permission android:name="android.permission.INTERNET"/>' "$MANIFEST"
-          fi
-
-      - name: Generate Bazarek App Icon
-        run: dart run flutter_launcher_icons
+      - name: Verify Android Manifest
+        run: test -f android/app/src/main/AndroidManifest.xml
 
       - name: Build APK
         run: flutter build apk --release
 
+      - name: Build Web
+        run: flutter build web --release --base-href /
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: bazarek-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Build Web from the exact same source
-        run: flutter build web --release --base-href /
-
-      - name: Upload Web
-        uses: actions/upload-artifact@v4
-        with:
-          name: bazarek-web
-          path: build/web
