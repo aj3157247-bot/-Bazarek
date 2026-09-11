@@ -1619,15 +1619,12 @@ Future<PickedProfileImage?> pickProfileImage() async {
   // image_picker's temporary browser Blob URL. This fixes the Web-only
   // "Could not load Blob from its URL" error.
   if (kIsWeb) {
-    final files = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.image,
-      allowMultiple: false,
-      withData: true,
     );
-    if (files.isEmpty) return null;
-    final file = files.first;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
     return PickedProfileImage(bytes: bytes, name: file.name);
@@ -1989,13 +1986,12 @@ class _AddProductSheetState extends State<AddProductSheet> {
       final files = await FilePicker.pickFiles(
         type: FileType.image,
         allowMultiple: true,
-        withData: true,
       );
       if (files.isEmpty) return;
       final remaining = 10 - imageBytes.length;
       for (final file in files.take(remaining)) {
-        final bytes = file.bytes;
-        if (bytes == null || bytes.isEmpty) continue;
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) continue;
         imageBytes.add(bytes);
         imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
       }
