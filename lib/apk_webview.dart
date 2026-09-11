@@ -93,7 +93,7 @@ class _BazarekWebViewAppState extends State<BazarekWebViewApp> {
       controller: _controller.platform,
       displayWithHybridComposition: true,
     );
-    _webView = WebViewWidget.fromPlatformCreationParams(widgetParams);
+    _webView = WebViewWidget.fromPlatformCreationParams(params: widgetParams);
 
     _controller.loadRequest(Uri.parse(_bazarekWebUrl));
   }
