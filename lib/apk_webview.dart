@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 const _bazarekWebUrl = 'https://bazarek-web.onrender.com/';
 
@@ -26,8 +25,7 @@ class _BazarekWebViewAppState extends State<BazarekWebViewApp> {
   void initState() {
     super.initState();
 
-    final controllerParams = AndroidWebViewControllerCreationParams();
-    _controller = WebViewController.fromPlatformCreationParams(controllerParams)
+    _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
       ..setUserAgent(
@@ -89,11 +87,7 @@ class _BazarekWebViewAppState extends State<BazarekWebViewApp> {
         ),
       );
 
-    final widgetParams = AndroidWebViewWidgetCreationParams(
-      controller: _controller.platform,
-      displayWithHybridComposition: true,
-    );
-    _webView = WebViewWidget.fromPlatformCreationParams(params: widgetParams);
+    _webView = WebViewWidget(controller: _controller);
 
     _controller.loadRequest(Uri.parse(_bazarekWebUrl));
   }
