@@ -30,6 +30,26 @@ jobs:
       - name: Generate Flutter platform files
         run: flutter create . --platforms=android,web
 
+      - name: Configure Android WebView shell
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          text = p.read_text(encoding='utf-8')
+          permissions = [
+              'android.permission.INTERNET',
+              'android.permission.CAMERA',
+              'android.permission.ACCESS_FINE_LOCATION',
+              'android.permission.ACCESS_COARSE_LOCATION',
+          ]
+          for permission in permissions:
+              line = f'    <uses-permission android:name=\"{permission}\"/>\n'
+              if permission not in text:
+                  text = text.replace('<application', line + '    <application', 1)
+          text = text.replace('android:label=\"${applicationName}\"', 'android:label=\"بازارک\"')
+          p.write_text(text, encoding='utf-8')
+          PY
+
       - name: Install Dependencies
         run: flutter pub get
 
