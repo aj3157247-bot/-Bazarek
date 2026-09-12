@@ -798,6 +798,158 @@ class ApiService {
 }
 
 
+
+class SavedAdsScreen extends StatefulWidget {
+  const SavedAdsScreen({super.key});
+
+  @override
+  State<SavedAdsScreen> createState() => _SavedAdsScreenState();
+}
+
+class _SavedAdsScreenState extends State<SavedAdsScreen> {
+  List<dynamic> _saved = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+  }
+
+  Future<void> _loadSaved() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ids = prefs.getStringList('saved_ad_ids') ?? <String>[];
+      if (ids.isEmpty) {
+        if (mounted) setState(() { _saved = []; _loading = false; });
+        return;
+      }
+
+      final all = await ApiService.getProducts();
+      final wanted = ids.toSet();
+      final result = all.where((item) => wanted.contains(item['id']?.toString())).toList();
+
+      // Keep the user's saved order where possible and remove listings that no longer exist.
+      final byId = <String, dynamic>{
+        for (final item in result) item['id'].toString(): item,
+      };
+      final ordered = <dynamic>[];
+      for (final id in ids) {
+        final item = byId[id];
+        if (item != null) ordered.add(item);
+      }
+      final existingIds = ordered.map((e) => e['id'].toString()).toSet();
+      await prefs.setStringList('saved_ad_ids', ids.where(existingIds.contains).toList());
+
+      if (mounted) setState(() { _saved = ordered; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() {
+        _error = psText(context,
+          'دریافت آگهی‌های ذخیره‌شده ممکن نشد. لطفاً دوباره تلاش کنید.',
+          'خوندي شوي اعلانونه ترلاسه نه شول. مهرباني وکړئ بیا هڅه وکړئ.');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _remove(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final ids = prefs.getStringList('saved_ad_ids') ?? <String>[];
+    ids.remove(id);
+    await prefs.setStringList('saved_ad_ids', ids);
+    if (mounted) {
+      setState(() {
+        _saved.removeWhere((item) => item['id']?.toString() == id);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPs = Localizations.localeOf(context).languageCode == 'ps';
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr(context, 'saved')),
+        actions: [
+          IconButton(onPressed: _loadSaved, icon: const Icon(Icons.refresh_rounded)),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_rounded, size: 52),
+                        const SizedBox(height: 12),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 14),
+                        FilledButton.icon(
+                          onPressed: _loadSaved,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: Text(tr(context, 'retry')),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : _saved.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.favorite_border_rounded,
+                                size: 64, color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(height: 14),
+                            Text(
+                              tr(context, 'saved_empty'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadSaved,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 28),
+                        itemCount: _saved.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final item = _saved[index];
+                          final id = item['id']?.toString() ?? '';
+                          return Stack(
+                            children: [
+                              _DivarStyleListing(item: item),
+                              Positioned(
+                                left: 0,
+                                top: 8,
+                                child: IconButton(
+                                  tooltip: isPs ? 'لرې کول' : 'حذف از علاقه‌مندی‌ها',
+                                  onPressed: id.isEmpty ? null : () => _remove(id),
+                                  icon: const Icon(Icons.favorite_rounded, color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+    );
+  }
+}
+
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
