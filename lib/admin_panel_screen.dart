@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -115,9 +116,17 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   String? loadError;
   Map<String, dynamic> stats = {}, money = {};
   List<Map<String, dynamic>> users = [], products = [], reports = [], warnings = [], securityEvents = [];
+  Timer? _clockTimer;
 
-  @override void initState() { super.initState(); tabs = TabController(length: 7, vsync: this); _loadAll(); }
-  @override void dispose() { tabs.dispose(); super.dispose(); }
+  @override void initState() {
+    super.initState();
+    tabs = TabController(length: 7, vsync: this);
+    _loadAll();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+  @override void dispose() { _clockTimer?.cancel(); tabs.dispose(); super.dispose(); }
 
   Future<void> _loadAll() async {
     setState(() { loading = true; loadError = null; });
@@ -203,6 +212,48 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
     amount.dispose(); desc.dispose();
   }
 
+  String _dateTimeText(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) return '';
+    final dt = DateTime.tryParse(value.toString())?.toLocal();
+    if (dt == null) return value.toString();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}/${two(dt.month)}/${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  String _remainingTime(dynamic until) {
+    if (until == null || until.toString().trim().isEmpty) return '';
+    final end = DateTime.tryParse(until.toString())?.toLocal();
+    if (end == null) return '';
+    final diff = end.difference(DateTime.now());
+    if (diff.inSeconds <= 0) return 'منقضی شده';
+    final days = diff.inDays;
+    final hours = diff.inHours.remainder(24);
+    final minutes = diff.inMinutes.remainder(60);
+    if (days > 0) return '$days روز و $hours ساعت باقی‌مانده';
+    if (hours > 0) return '$hours ساعت و $minutes دقیقه باقی‌مانده';
+    return '$minutes دقیقه باقی‌مانده';
+  }
+
+  String _boostTiming(Map<String, dynamic> p) {
+    final until = p['boost_until'];
+    final featuredUntil = p['featured_until'];
+    final pinnedUntil = p['pinned_until'];
+    final parts = <String>[];
+    final boost = _remainingTime(until);
+    final featured = _remainingTime(featuredUntil);
+    final pinned = _remainingTime(pinnedUntil);
+    if (boost.isNotEmpty) parts.add('ویژه‌سازی: $boost');
+    if (featured.isNotEmpty && featured != boost) parts.add('ویژه: $featured');
+    if (pinned.isNotEmpty && pinned != boost) parts.add('پین: $pinned');
+    return parts.join(' • ');
+  }
+
+  String _subscriptionTiming(Map<String, dynamic> s) {
+    final end = _remainingTime(s['ends_at']);
+    if (end.isEmpty) return '';
+    return 'پایان اشتراک: $end';
+  }
+
   Future<void> _promotion(Map<String, dynamic> p) async {
     final feature = TextEditingController(text: p['is_featured'] == true ? '7' : '0'); final pin = TextEditingController(text: p['is_pinned'] == true ? '7' : '0');
     final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('ویژه / پین آگهی'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: feature, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'روزهای ویژه')), const SizedBox(height: 12), TextField(controller: pin, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'روزهای پین'))]), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ذخیره'))]));
@@ -285,7 +336,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   Widget _dashboardCard(IconData icon, String title, String subtitle, int index) => Card(child: InkWell(onTap: () => _go(index), borderRadius: BorderRadius.circular(16), child: ListTile(leading: Icon(icon, size: 36), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(subtitle), trailing: const Icon(Icons.chevron_left))));
   Widget _stat(String title, dynamic value, IconData icon) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [Icon(icon, size: 32), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title), const SizedBox(height: 4), Text('$value', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold))]))])));
 
-  Widget _products() => _searchableList(products, 'آگهی‌ای وجود ندارد', (p) => Card(child: ListTile(leading: _productImage(p), onTap: () => _showListing(p), title: Text(p['title']?.toString() ?? 'بدون عنوان', maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text('${p['price'] ?? 0} افغانی • ${p['province'] ?? ''}\n${p['is_active'] == true ? 'فعال' : 'غیرفعال'}${p['is_featured'] == true ? ' • ویژه' : ''}${p['is_pinned'] == true ? ' • پین' : ''}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (v) { if (v == 'view') _showListing(p); if (v == 'status') _run(() => _AdminApi.patch('/admin/products/${p['id']}/status', widget.token, {'is_active': p['is_active'] != true}), success: p['is_active'] == true ? 'آگهی غیرفعال شد.' : 'آگهی فعال شد.'); if (v == 'promotion') _promotion(p); if (v == 'delete') _confirmDelete(p); }, itemBuilder: (_) => [const PopupMenuItem(value: 'view', child: Text('مشاهده آگهی')), PopupMenuItem(value: 'status', child: Text(p['is_active'] == true ? 'غیرفعال کردن' : 'فعال کردن')), const PopupMenuItem(value: 'promotion', child: Text('ویژه / پین')), const PopupMenuItem(value: 'delete', child: Text('حذف آگهی'))]))));
+  Widget _products() => _searchableList(products, 'آگهی‌ای وجود ندارد', (p) => Card(child: ListTile(leading: _productImage(p), onTap: () => _showListing(p), title: Text(p['title']?.toString() ?? 'بدون عنوان', maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text('${p['price'] ?? 0} افغانی • ${p['province'] ?? ''}\n${p['is_active'] == true ? 'فعال' : 'غیرفعال'}${p['is_featured'] == true ? ' • ویژه' : ''}${p['is_pinned'] == true ? ' • پین' : ''}${_boostTiming(p).isNotEmpty ? '\n${_boostTiming(p)}' : ''}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (v) { if (v == 'view') _showListing(p); if (v == 'status') _run(() => _AdminApi.patch('/admin/products/${p['id']}/status', widget.token, {'is_active': p['is_active'] != true}), success: p['is_active'] == true ? 'آگهی غیرفعال شد.' : 'آگهی فعال شد.'); if (v == 'promotion') _promotion(p); if (v == 'delete') _confirmDelete(p); }, itemBuilder: (_) => [const PopupMenuItem(value: 'view', child: Text('مشاهده آگهی')), PopupMenuItem(value: 'status', child: Text(p['is_active'] == true ? 'غیرفعال کردن' : 'فعال کردن')), const PopupMenuItem(value: 'promotion', child: Text('ویژه / پین')), const PopupMenuItem(value: 'delete', child: Text('حذف آگهی'))]))));
 
   Widget _users() => _searchableList(users, 'کاربری وجود ندارد', (u) => Card(child: ListTile(leading: CircleAvatar(child: Text((_person(u).isEmpty ? 'ک' : _person(u)).characters.first)), title: Text(_person(u)), subtitle: Text('${u['phone'] ?? ''}\n${u['city'] ?? ''}${u['is_blocked'] == true ? '\n🚫 مسدود: ${u['block_reason'] ?? ''}' : ''}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (v) { if (v == 'block') _blockUser(u); if (v == 'warn') _warnUser(u); if (v == 'wallet') _creditWallet(u); }, itemBuilder: (_) => [PopupMenuItem(value: 'block', child: Text(u['is_blocked'] == true ? 'رفع مسدودی' : 'مسدود کردن')), const PopupMenuItem(value: 'warn', child: Text('ارسال هشدار')), const PopupMenuItem(value: 'wallet', child: Text('شارژ کیف پول'))]))));
 
@@ -311,9 +362,9 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       Card(child: ListTile(title: const Text('در انتظار تأیید'), subtitle: Text('${NumberFormatLike.afn(money['pending_afn'])} افغانی'), leading: const Icon(Icons.hourglass_top))),
       const Padding(padding: EdgeInsets.fromLTRB(4, 12, 4, 6), child: Text('سفارش‌های ارتقا', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold))),
       if (orders.isEmpty) const Card(child: ListTile(title: Text('سفارشی وجود ندارد'))),
-      ...orders.take(100).map((o) => Card(child: ListTile(onTap: () { final l = o['listing']; if (l is Map) _showListing(Map<String, dynamic>.from(l)); }, leading: o['listing'] is Map ? _productImage(Map<String, dynamic>.from(o['listing']), height: 58, width: 58) : const Icon(Icons.campaign), title: Text('${o['package']?['title'] ?? o['package_id'] ?? 'ارتقا'} • ${o['amount_afn'] ?? 0} افغانی'), subtitle: Text('کاربر: ${_person(o['user'] is Map ? Map<String, dynamic>.from(o['user']) : null)}\nآگهی: ${o['listing']?['title'] ?? o['listing_id'] ?? '-'}\nرسید/پیگیری: ${o['payment_reference'] ?? '-'}\n${o['created_at'] ?? '-'}'), isThreeLine: true, trailing: o['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _orderStatus(o, v), itemBuilder: (_) => const [PopupMenuItem(value: 'paid', child: Text('تأیید پرداخت')), PopupMenuItem(value: 'rejected', child: Text('رد پرداخت')), PopupMenuItem(value: 'cancelled', child: Text('لغو سفارش'))]) : Chip(label: Text(o['status']?.toString() ?? '-'))))),
+      ...orders.take(100).map((o) => Card(child: ListTile(onTap: () { final l = o['listing']; if (l is Map) _showListing(Map<String, dynamic>.from(l)); }, leading: o['listing'] is Map ? _productImage(Map<String, dynamic>.from(o['listing']), height: 58, width: 58) : const Icon(Icons.campaign), title: Text('${o['package']?['title'] ?? o['package_id'] ?? 'ارتقا'} • ${o['amount_afn'] ?? 0} افغانی'), subtitle: Text('کاربر: ${_person(o['user'] is Map ? Map<String, dynamic>.from(o['user']) : null)}\nآگهی: ${o['listing']?['title'] ?? o['listing_id'] ?? '-'}\nرسید/پیگیری: ${o['payment_reference'] ?? '-'}\nثبت سفارش: ${o['created_at'] ?? '-'}${o['status'] == 'paid' && o['updated_at'] != null ? '\nتأیید و شروع: ${_dateTimeText(o['updated_at'])}' : ''}${o['listing'] is Map && _boostTiming(Map<String, dynamic>.from(o['listing'])).isNotEmpty ? '\n${_boostTiming(Map<String, dynamic>.from(o['listing']))}' : ''}${o['listing'] is Map && Map<String, dynamic>.from(o['listing'])['boost_until'] != null ? '\nپایان Boost: ${_dateTimeText(Map<String, dynamic>.from(o['listing'])['boost_until'])}' : ''}'), isThreeLine: true, trailing: o['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _orderStatus(o, v), itemBuilder: (_) => const [PopupMenuItem(value: 'paid', child: Text('تأیید پرداخت')), PopupMenuItem(value: 'rejected', child: Text('رد پرداخت')), PopupMenuItem(value: 'cancelled', child: Text('لغو سفارش'))]) : Chip(label: Text(o['status']?.toString() ?? '-'))))),
       const Padding(padding: EdgeInsets.fromLTRB(4, 18, 4, 6), child: Text('اشتراک‌ها', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold))),
-      ...subs.take(100).map((s) => Card(child: ListTile(title: Text('${s['plan'] ?? '-'} • ${s['price_afn'] ?? 0} افغانی • ${s['status'] ?? ''}'), subtitle: Text('کاربر: ${_person(s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null)}\nرسید/پیگیری: ${s['payment_reference'] ?? '-'}'), isThreeLine: true, trailing: s['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _subscriptionStatus(s, v), itemBuilder: (_) => const [PopupMenuItem(value: 'active', child: Text('تأیید و فعال‌سازی')), PopupMenuItem(value: 'rejected', child: Text('رد درخواست')), PopupMenuItem(value: 'cancelled', child: Text('لغو'))]) : null))),
+      ...subs.take(100).map((s) => Card(child: ListTile(title: Text('${s['plan'] ?? '-'} • ${s['price_afn'] ?? 0} افغانی • ${s['status'] ?? ''}'), subtitle: Text('کاربر: ${_person(s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null)}\nرسید/پیگیری: ${s['payment_reference'] ?? '-'}${s['status'] == 'active' && _subscriptionTiming(s).isNotEmpty ? '\n${_subscriptionTiming(s)}' : ''}'), isThreeLine: true, trailing: s['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _subscriptionStatus(s, v), itemBuilder: (_) => const [PopupMenuItem(value: 'active', child: Text('تأیید و فعال‌سازی')), PopupMenuItem(value: 'rejected', child: Text('رد درخواست')), PopupMenuItem(value: 'cancelled', child: Text('لغو'))]) : Chip(label: Text(s['status']?.toString() ?? '-'))))),
       const Padding(padding: EdgeInsets.fromLTRB(4, 18, 4, 6), child: Text('تراکنش‌های کیف پول', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold))),
       if (tx.isEmpty) const Card(child: ListTile(title: Text('تراکنش فعال وجود ندارد'))),
       ...tx.take(100).map((t) => Card(child: ListTile(title: Text('${t['type'] ?? '-'} • ${t['amount_afn'] ?? 0} افغانی'), subtitle: Text('کاربر: ${_person(t['user'] is Map ? Map<String, dynamic>.from(t['user']) : null)}\n${t['description'] ?? ''}\n${t['created_at'] ?? ''}'), isThreeLine: true, trailing: IconButton(tooltip: 'بایگانی', onPressed: () => _archiveTransaction(t), icon: const Icon(Icons.archive_outlined))))),

@@ -910,10 +910,29 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) setState(() {
         products = [];
-        loadError = e.toString().replaceFirst('Exception: ', '');
+        loadError = _friendlyNetworkError(e);
         isLoading = false;
       });
     }
+  }
+
+  String _friendlyNetworkError(Object error) {
+    final raw = error.toString().toLowerCase();
+    final networkFailure = raw.contains('failed to fetch') ||
+        raw.contains('clientexception') ||
+        raw.contains('socketexception') ||
+        raw.contains('connection refused') ||
+        raw.contains('connection reset') ||
+        raw.contains('network is unreachable') ||
+        raw.contains('no internet') ||
+        raw.contains('network error') ||
+        raw.contains('timed out');
+    if (networkFailure) {
+      return Localizations.localeOf(context).languageCode == 'ps'
+          ? 'مهرباني وکړئ خپل انټرنېټي اتصال وګورئ او بیا هڅه وکړئ.'
+          : 'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.';
+    }
+    return error.toString().replaceFirst('Exception: ', '');
   }
 
   double _priceValue(dynamic item) => double.tryParse('${item['price'] ?? 0}'.replaceAll(',', '')) ?? 0;
@@ -1252,34 +1271,6 @@ class _SaveButtonState extends State<_SaveButton> {
   Future<void> _toggle() async { final id = widget.item['id']?.toString(); if (id == null) return; final p = await SharedPreferences.getInstance(); final ids = p.getStringList('saved_ad_ids') ?? []; if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; } await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {}); }
   @override Widget build(BuildContext context) => IconButton(onPressed: _toggle, visualDensity: VisualDensity.compact, icon: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: saved ? Colors.red : Colors.black45, size: 21));
 }
-
-class SavedAdsScreen extends StatefulWidget {
-  const SavedAdsScreen({super.key});
-  @override State<SavedAdsScreen> createState() => _SavedAdsScreenState();
-}
-class _SavedAdsScreenState extends State<SavedAdsScreen> {
-  List<dynamic> ads = [];
-  bool loading = true;
-  @override void initState() { super.initState(); _load(); }
-  Future<void> _load() async {
-    setState(() => loading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final ids = prefs.getStringList('saved_ad_ids') ?? [];
-      final all = await ApiService.getProducts();
-      ads = all.where((a) => ids.contains(a['id']?.toString())).toList();
-    } catch (_) { ads = []; }
-    if (mounted) setState(() => loading = false);
-  }
-  @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(tr(context, 'saved'))),
-    body: loading ? const Center(child: CircularProgressIndicator()) : ads.isEmpty ? Center(child: Text(tr(context, 'saved_empty'))) : ListView.separated(
-      padding: const EdgeInsets.all(12), itemCount: ads.length, separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, i) => SizedBox(height: 280, child: _ProductCard(item: ads[i])),
-    ),
-  );
-}
-
 
 class _SectionHeader extends StatelessWidget {
   final String title;
