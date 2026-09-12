@@ -22,6 +22,82 @@ const supabaseAuth = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_U
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
+
+// Expire time-based Boosts automatically. The UI also checks the *_until timestamps,
+// so an expired Boost stops ranking immediately; this worker keeps the database flags
+// in sync as well (and acts as a fallback if the database scheduler is unavailable).
+async function expireTimeBasedBoosts() {
+  try {
+    const db = getSupabaseAdmin();
+    const now = new Date().toISOString();
+
+    const { data: expiredBoosts, error: boostError } = await db
+      .from('products')
+      .select('id')
+      .not('boost_until', 'is', null)
+      .lte('boost_until', now)
+      .limit(500);
+    if (boostError) throw boostError;
+
+    if (expiredBoosts?.length) {
+      const ids = expiredBoosts.map(x => x.id).filter(Boolean);
+      const { error } = await db
+        .from('products')
+        .update({
+          boost_level: 0,
+          boost_until: null,
+          updated_at: now,
+        })
+        .in('id', ids);
+      if (error) throw error;
+    }
+
+    const { data: expiredFeatured, error: featuredError } = await db
+      .from('products')
+      .select('id')
+      .eq('is_featured', true)
+      .not('featured_until', 'is', null)
+      .lte('featured_until', now)
+      .limit(500);
+    if (featuredError) throw featuredError;
+    if (expiredFeatured?.length) {
+      const ids = expiredFeatured.map(x => x.id).filter(Boolean);
+      const { error } = await db
+        .from('products')
+        .update({ is_featured: false, featured_until: null, updated_at: now })
+        .in('id', ids);
+      if (error) throw error;
+    }
+
+    const { data: expiredPinned, error: pinnedError } = await db
+      .from('products')
+      .select('id')
+      .eq('is_pinned', true)
+      .not('pinned_until', 'is', null)
+      .lte('pinned_until', now)
+      .limit(500);
+    if (pinnedError) throw pinnedError;
+    if (expiredPinned?.length) {
+      const ids = expiredPinned.map(x => x.id).filter(Boolean);
+      const { error } = await db
+        .from('products')
+        .update({ is_pinned: false, pinned_until: null, updated_at: now })
+        .in('id', ids);
+      if (error) throw error;
+    }
+
+    // Monthly/yearly seller Boost subscriptions also expire automatically.
+    const { error: subscriptionError } = await db
+      .from('seller_subscriptions')
+      .update({ status: 'expired' })
+      .eq('status', 'active')
+      .lte('ends_at', now);
+    if (subscriptionError) throw subscriptionError;
+  } catch (e) {
+    console.error('Boost expiry worker error:', e?.message || e);
+  }
+}
+
 function requireConfig(res) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     res.status(503).json({ error: 'اتصال Supabase روی سرور تنظیم نشده است.' });
@@ -750,4 +826,10 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Run once on startup, then every 30 seconds. This guarantees expired Boosts are
+// cleaned up automatically even when the optional Supabase pg_cron job is unavailable.
+expireTimeBasedBoosts();
+setInterval(expireTimeBasedBoosts, 30 * 1000);
+
 app.listen(PORT, () => console.log(`Bazarek backend running on ${PORT}`));
