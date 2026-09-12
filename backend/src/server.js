@@ -722,7 +722,7 @@ app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{
     const packageIds=[...new Set((orders||[]).map(x=>x.package_id).filter(Boolean))];
     const [{data:profiles},{data:listings},{data:packages}]=await Promise.all([
       userIds.length?db.from('profiles').select('id,full_name,shop_name,phone,city').in('id',userIds):Promise.resolve({data:[]}),
-      listingIds.length?db.from('products').select('id,title,price,category,subcategory,province,image_url,is_active,vendor_id').in('id',listingIds):Promise.resolve({data:[]}),
+      listingIds.length?db.from('products').select('id,title,price,category,subcategory,province,image_url,is_active,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,updated_at').in('id',listingIds):Promise.resolve({data:[]}),
       packageIds.length?db.from('promotion_packages').select('id,title,description,feature_days,pin_days,boost_level').in('id',packageIds):Promise.resolve({data:[]})
     ]);
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
