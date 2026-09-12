@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -153,15 +151,13 @@ class _BazarekWebViewAppState extends State<BazarekWebViewApp>
         return captured?.path == null ? <String>[] : <String>[captured!.path];
       }
 
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: params.mode == FileSelectorMode.openMultiple,
+      final files = await FilePicker.pickFiles(
         type: FileType.image,
       );
-      return result?.files
-              .map((file) => file.path)
-              .whereType<String>()
-              .toList() ??
-          <String>[];
+      return files
+          .map((file) => file.path)
+          .whereType<String>()
+          .toList();
     } catch (_) {
       return <String>[];
     }
