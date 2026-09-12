@@ -3,6 +3,46 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+
+String _adminFriendlyError(Object error) {
+  final raw = error.toString().toLowerCase();
+  final networkFailure = raw.contains('failed to fetch') ||
+      raw.contains('clientexception') ||
+      raw.contains('socketexception') ||
+      raw.contains('connection refused') ||
+      raw.contains('connection reset') ||
+      raw.contains('network is unreachable') ||
+      raw.contains('no internet') ||
+      raw.contains('network error') ||
+      raw.contains('timed out') ||
+      raw.contains('timeout') ||
+      raw.contains('failed host lookup') ||
+      raw.contains('connection closed') ||
+      raw.contains('connection terminated');
+  return networkFailure
+      ? 'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.'
+      : error.toString().replaceFirst('Exception: ', '');
+}
+
+class _AdminOfflineError extends StatelessWidget {
+  final VoidCallback onRetry;
+  final String? message;
+  const _AdminOfflineError({required this.onRetry, this.message});
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.cloud_off_rounded, size: 52),
+        const SizedBox(height: 14),
+        Text(message ?? 'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 14),
+        FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('تلاش دوباره')),
+      ]),
+    ),
+  );
+}
+
 class _AdminApi {
   static const baseUrl = 'https://bazarek.onrender.com/api';
   static Map<String, String> headers([String? token]) => {
@@ -81,7 +121,7 @@ class _AdminLoginScreenState extends State<_AdminLoginScreen> {
       final token = await _AdminApi.login(email.text.trim(), password.text);
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => _AdminDashboard(token: token)));
-    } catch (e) { _message(e.toString().replaceFirst('Exception: ', '')); }
+    } catch (e) { _message(_adminFriendlyError(e)); }
     finally { if (mounted) setState(() => loading = false); }
   }
 
@@ -153,13 +193,13 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { loading = false; loadError = e.toString().replaceFirst('Exception: ', ''); });
+      setState(() { loading = false; loadError = _adminFriendlyError(e); });
     }
   }
 
   Future<void> _run(Future<void> Function() action, {String success = 'عملیات با موفقیت انجام شد.'}) async {
     try { await action(); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success), backgroundColor: Colors.green)); await _loadAll(); }
-    catch (e) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red)); }
+    catch (e) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_adminFriendlyError(e)), backgroundColor: Colors.red)); }
   }
 
   String _person(Map<String, dynamic>? p, {String fallback = 'ناشناس'}) {
@@ -409,5 +449,5 @@ class _AdminListViewState extends State<_AdminListView> {
 class _ErrorState extends StatelessWidget {
   final String error; final VoidCallback retry;
   const _ErrorState({required this.error, required this.retry});
-  @override Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.cloud_off, size: 56), const SizedBox(height: 12), Text(error, textAlign: TextAlign.center), const SizedBox(height: 16), FilledButton.icon(onPressed: retry, icon: const Icon(Icons.refresh), label: const Text('تلاش دوباره'))])));
+  @override Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.cloud_off, size: 56), const SizedBox(height: 12), Text(_adminFriendlyError(error), textAlign: TextAlign.center), const SizedBox(height: 16), FilledButton.icon(onPressed: retry, icon: const Icon(Icons.refresh), label: const Text('تلاش دوباره'))])));
 }

@@ -193,6 +193,64 @@ String localizedSubcategoryTitle(BuildContext context, String categoryId, String
 }
 
 String psText(BuildContext context, String fa, String ps) => Localizations.localeOf(context).languageCode == 'ps' ? ps : fa;
+
+String friendlyNetworkError(BuildContext context, Object error) {
+  final raw = error.toString().toLowerCase();
+  final networkFailure = raw.contains('failed to fetch') ||
+      raw.contains('clientexception') ||
+      raw.contains('socketexception') ||
+      raw.contains('connection refused') ||
+      raw.contains('connection reset') ||
+      raw.contains('network is unreachable') ||
+      raw.contains('no internet') ||
+      raw.contains('network error') ||
+      raw.contains('timed out') ||
+      raw.contains('timeout') ||
+      raw.contains('failed host lookup') ||
+      raw.contains('connection closed') ||
+      raw.contains('connection terminated');
+  if (networkFailure) {
+    return Localizations.localeOf(context).languageCode == 'ps'
+        ? 'مهرباني وکړئ د انټرنېټ له وصلېدو ډاډ ترلاسه کړئ او بیا هڅه وکړئ.'
+        : 'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.';
+  }
+  return error.toString().replaceFirst('Exception: ', '');
+}
+
+class OfflineErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+  final String? message;
+  const OfflineErrorView({super.key, required this.onRetry, this.message});
+  @override
+  Widget build(BuildContext context) {
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 52),
+            const SizedBox(height: 14),
+            Text(
+              message ?? (ps
+                  ? 'مهرباني وکړئ د انټرنېټ له وصلېدو ډاډ ترلاسه کړئ او بیا هڅه وکړئ.'
+                  : 'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(tr(context, 'retry')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 String localizedBoostLabel(BuildContext context, String raw) {
   final value = raw.trim();
   if (value.isEmpty) return '';
@@ -849,9 +907,7 @@ class _SavedAdsScreenState extends State<SavedAdsScreen> {
       if (mounted) setState(() { _saved = ordered; _loading = false; });
     } catch (e) {
       if (mounted) setState(() {
-        _error = psText(context,
-          'دریافت آگهی‌های ذخیره‌شده ممکن نشد. لطفاً دوباره تلاش کنید.',
-          'خوندي شوي اعلانونه ترلاسه نه شول. مهرباني وکړئ بیا هڅه وکړئ.');
+        _error = friendlyNetworkError(context, e);
         _loading = false;
       });
     }
@@ -1068,24 +1124,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _friendlyNetworkError(Object error) {
-    final raw = error.toString().toLowerCase();
-    final networkFailure = raw.contains('failed to fetch') ||
-        raw.contains('clientexception') ||
-        raw.contains('socketexception') ||
-        raw.contains('connection refused') ||
-        raw.contains('connection reset') ||
-        raw.contains('network is unreachable') ||
-        raw.contains('no internet') ||
-        raw.contains('network error') ||
-        raw.contains('timed out');
-    if (networkFailure) {
-      return Localizations.localeOf(context).languageCode == 'ps'
-          ? 'مهرباني وکړئ خپل انټرنېټي اتصال وګورئ او بیا هڅه وکړئ.'
-          : 'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.';
-    }
-    return error.toString().replaceFirst('Exception: ', '');
-  }
+  String _friendlyNetworkError(Object error) => friendlyNetworkError(context, error);
 
   double _priceValue(dynamic item) => double.tryParse('${item['price'] ?? 0}'.replaceAll(',', '')) ?? 0;
 
@@ -1184,11 +1223,7 @@ class _HomeScreenState extends State<HomeScreen> {
             else if (loadError != null)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.cloud_off_rounded, size: 48), const SizedBox(height: 12),
-                  Text(loadError!, textAlign: TextAlign.center), const SizedBox(height: 12),
-                  FilledButton.icon(onPressed: _loadProducts, icon: const Icon(Icons.refresh_rounded), label: Text(tr(context, 'retry'))),
-                ]))),
+                child: OfflineErrorView(onRetry: _loadProducts, message: loadError),
               )
             else if (products.isEmpty)
               SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(psText(context, 'هنوز هیچ آگهی فعالی ثبت نشده است.', 'تر اوسه کوم فعال اعلان نشته.'), textAlign: TextAlign.center))))
@@ -1908,7 +1943,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final data = await ApiService.getMyProducts();
       if (mounted) setState(() { ads = data; loading = false; error = null; });
     } catch (e) {
-      if (mounted) setState(() { ads = []; loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+      if (mounted) setState(() { ads = []; loading = false; error = friendlyNetworkError(context, e); });
     }
   }
 
@@ -1951,7 +1986,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
-              ? Center(child: Text(error!, textAlign: TextAlign.center))
+              ? OfflineErrorView(onRetry: _load, message: error)
               : ads.isEmpty
                   ? Center(child: Text(psText(context, 'شما هنوز هیچ آگهی ثبت نکرده‌اید.', 'تاسو تر اوسه کوم اعلان نه دی ثبت کړی.')))
                   : RefreshIndicator(
@@ -2037,7 +2072,7 @@ class _BoostScreenState extends State<BoostScreen> {
       final s = await ApiService.getSubscriptions();
       if (mounted) setState(() { packages = p; subscriptions = s; loading = false; error = null; });
     } catch (e) {
-      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
     }
   }
 
@@ -2131,7 +2166,7 @@ class _BoostScreenState extends State<BoostScreen> {
     try {
       await ApiService.createBoostOrder(id, pkg['id'].toString(), ref);
       if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'د Boost غوښتنه ثبت شوه؛ د تادیې له تایید وروسته فعاله کېږي.' : 'درخواست بوست ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.'))); Navigator.pop(context, true); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
   }
 
   Future<void> _buyGlobal(String plan, int price, String title) async {
@@ -2140,7 +2175,7 @@ class _BoostScreenState extends State<BoostScreen> {
     try {
       await ApiService.createGlobalBoost(plan, ref);
       if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'ستاسو غوښتنه ثبت شوه؛ د تایید وروسته ستاسو ټول فعال اعلانونه Boost کېږي.' : 'درخواست ثبت شد؛ پس از تأیید پرداخت، روی همه آگهی‌های فعال شما اعمال می‌شود.'))); _load(); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
   }
 
   @override
@@ -2150,7 +2185,7 @@ class _BoostScreenState extends State<BoostScreen> {
     final shortPackages = packages.where((x) => ['boost24','boost3','boost7'].contains(x['id'])).toList();
     return Scaffold(
       appBar: AppBar(title: Text(ps ? '🚀 د بازارک Boost' : '🚀 Boost بازارک')),
-      body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(error!, textAlign: TextAlign.center))) : ListView(
+      body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? OfflineErrorView(onRetry: _load, message: error) : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primaryContainer, Theme.of(context).colorScheme.secondaryContainer])), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2327,7 +2362,7 @@ class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
       final d = await ApiService.getProducts(category: widget.categoryId, subcategory: widget.subcategoryId);
       if (mounted) setState(() { ads = d; loading = false; error = null; });
     } catch (e) {
-      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
     }
   }
 
@@ -2338,7 +2373,7 @@ class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
-              ? Center(child: Text(error!, textAlign: TextAlign.center))
+              ? OfflineErrorView(onRetry: _load, message: error)
               : ads.isEmpty
                   ? Center(child: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'په «${widget.categoryTitle}» کې تر اوسه فعال اعلان نشته.' : 'در «${widget.categoryTitle}» هنوز آگهی فعالی پیدا نشد.'))
                   : RefreshIndicator(onRefresh: _load, child: ListView.builder(padding: const EdgeInsets.all(12), itemCount: ads.length, itemBuilder: (_, i) => _ProductCard(item: ads[i]))),
@@ -2409,7 +2444,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (mounted) setState(() {});
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'عکس پروفایل با موفقیت تغییر کرد.', 'ستاسو د پروفایل انځور بدل شو.'))));
                   } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
                   }
                 },
                 child: CircleAvatar(
@@ -2427,7 +2462,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () async {
                 final image = await pickProfileImage();
                 if (image == null) return;
-                try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+                try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
               },
             ),
             ListTile(
@@ -2506,16 +2541,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final data = await ApiService.getNotifications();
       if(!mounted)return; setState((){items=data.map((e)=>Map<String,dynamic>.from(e as Map)).toList();loading=false;});
-    }catch(e){if(!mounted)return;setState((){loading=false;error=e.toString().replaceFirst('Exception: ','');});}
+    }catch(e){if(!mounted)return;setState((){loading=false;error=friendlyNetworkError(context, e);});}
   }
   Future<void> _read(Map<String,dynamic> n) async {
     if(n['is_read']==true)return;
     try{await ApiService.markNotificationRead(n['id'].toString());if(mounted)setState(()=>n['is_read']=true);}catch(_){}
   }
   Future<void> _delete(Map<String,dynamic> n) async {
-    try{await ApiService.deleteNotification(n['id'].toString());if(mounted)setState(()=>items.remove(n));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    try{await ApiService.deleteNotification(n['id'].toString());if(mounted)setState(()=>items.remove(n));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context, e))));}
   }
-  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(psText(context,'اعلان‌ها','خبرتیاوې')),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):error!=null?Center(child:Text(error!)):RefreshIndicator(onRefresh:_load,child:items.isEmpty?ListView(children:[const SizedBox(height:160),Center(child:Text('اعلانی وجود ندارد.'))]):ListView.builder(padding:const EdgeInsets.all(12),itemCount:items.length,itemBuilder:(context,i){final n=items[i];final unread=n['is_read']!=true;return Card(child:ListTile(onTap:()=>_read(n), leading:Icon(unread?Icons.notifications_active:Icons.notifications_none), title:Text(n['title']?.toString()??'اعلان بازارک',style:TextStyle(fontWeight:unread?FontWeight.bold:FontWeight.normal)), subtitle:Text('${n['message']??''}\n${n['created_at']??''}'),isThreeLine:true,trailing:IconButton(onPressed:()=>_delete(n),icon:const Icon(Icons.delete_outline))));})));
+  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(psText(context,'اعلان‌ها','خبرتیاوې')),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:loading?const Center(child:CircularProgressIndicator()):error!=null?OfflineErrorView(onRetry:_load,message:error):RefreshIndicator(onRefresh:_load,child:items.isEmpty?ListView(children:[const SizedBox(height:160),Center(child:Text('اعلانی وجود ندارد.'))]):ListView.builder(padding:const EdgeInsets.all(12),itemCount:items.length,itemBuilder:(context,i){final n=items[i];final unread=n['is_read']!=true;return Card(child:ListTile(onTap:()=>_read(n), leading:Icon(unread?Icons.notifications_active:Icons.notifications_none), title:Text(n['title']?.toString()??'اعلان بازارک',style:TextStyle(fontWeight:unread?FontWeight.bold:FontWeight.normal)), subtitle:Text('${n['message']??''}\n${n['created_at']??''}'),isThreeLine:true,trailing:IconButton(onPressed:()=>_delete(n),icon:const Icon(Icons.delete_outline))));})));
 }
 
 class AuthScreen extends StatefulWidget {
@@ -2875,7 +2910,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       _msg(tr(context, 'publish_success'));
       Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) _msg(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) _msg(friendlyNetworkError(context, e));
     } finally { if (mounted) setState(() => publishing = false); }
   }
 
