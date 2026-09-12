@@ -1,14 +1,12 @@
-Bazarek Automatic Boost Expiry - v36
+Bazarek Fix 37
 
-Changes:
-1. Boost duration starts ONLY when admin approves the promotion order (status=paid).
-2. 24h / 3d / 7d listing Boosts automatically expire at their exact boost_until time.
-3. Featured and pinned flags are also automatically cleared when their *_until time is reached.
-4. Monthly/yearly seller Boost subscriptions automatically become expired after ends_at.
-5. Backend runs an automatic cleanup every 30 seconds as a fallback.
-6. Supabase migration adds a database function and, when pg_cron is enabled, a 1-minute scheduler.
+1) Admin panel now shows Boost remaining time and exact approval/start time; it refreshes the countdown every 30 seconds.
+2) Admin monetization endpoint now returns Boost/Featured/Pinned timestamps for each promotion order.
+3) Home page no longer exposes raw browser errors such as "ClientException: Failed to fetch" when internet is unavailable. It shows a friendly Persian/Pashto connection message instead.
 
-Apply the SQL migration manually in Supabase SQL Editor:
-supabase/migrations/202609120001_automatic_boost_expiry.sql
+Changed files only:
+- lib/main.dart
+- lib/admin_panel_screen.dart
+- backend/src/server.js
 
-No Flutter/UI files are changed because the APK is a WebView shell and the Boost timing is a backend/database behavior shared by the website and APK.
+The existing automatic Boost expiry worker from Fix 36 is preserved in server.js.
