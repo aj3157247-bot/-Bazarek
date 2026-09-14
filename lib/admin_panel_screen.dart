@@ -288,10 +288,30 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
     return parts.join(' • ');
   }
 
+  String _subscriptionPlanTitle(dynamic plan) {
+    switch (plan?.toString()) {
+      case 'boost_weekly': return '⚡ توربو هفتگی';
+      case 'boost_monthly': return '👑 توربو ماهانه';
+      case 'boost_yearly': return '🏆 توربو سالانه';
+      case 'basic': return 'اشتراک پایه';
+      case 'pro': return 'اشتراک حرفه‌ای';
+      case 'business': return 'اشتراک تجاری';
+      default: return plan?.toString() ?? '-';
+    }
+  }
+
   String _subscriptionTiming(Map<String, dynamic> s) {
-    final end = _remainingTime(s['ends_at']);
-    if (end.isEmpty) return '';
-    return 'پایان اشتراک: $end';
+    final status = s['status']?.toString() ?? '';
+    if (status == 'pending') return 'شروع توربو: بعد از تأیید مدیریت';
+    final start = _dateTimeText(s['starts_at']);
+    final endDate = _dateTimeText(s['ends_at']);
+    final remaining = _remainingTime(s['ends_at']);
+    if (start.isEmpty && endDate.isEmpty) return '';
+    final parts = <String>[];
+    if (start.isNotEmpty) parts.add('شروع توربو: $start');
+    if (endDate.isNotEmpty) parts.add('پایان توربو: $endDate');
+    if (remaining.isNotEmpty) parts.add(remaining);
+    return parts.join(' • ');
   }
 
   Future<void> _promotion(Map<String, dynamic> p) async {
@@ -404,7 +424,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       if (orders.isEmpty) const Card(child: ListTile(title: Text('سفارشی وجود ندارد'))),
       ...orders.take(100).map((o) => Card(child: ListTile(onTap: () { final l = o['listing']; if (l is Map) _showListing(Map<String, dynamic>.from(l)); }, leading: o['listing'] is Map ? _productImage(Map<String, dynamic>.from(o['listing']), height: 58, width: 58) : const Icon(Icons.campaign), title: Text('${o['package']?['title'] ?? o['package_id'] ?? 'ارتقا'} • ${o['amount_afn'] ?? 0} افغانی'), subtitle: Text('کاربر: ${_person(o['user'] is Map ? Map<String, dynamic>.from(o['user']) : null)}\nآگهی: ${o['listing']?['title'] ?? o['listing_id'] ?? '-'}\nرسید/پیگیری: ${o['payment_reference'] ?? '-'}\nثبت سفارش: ${o['created_at'] ?? '-'}${o['status'] == 'paid' && o['updated_at'] != null ? '\nتأیید و شروع: ${_dateTimeText(o['updated_at'])}' : ''}${o['listing'] is Map && _boostTiming(Map<String, dynamic>.from(o['listing'])).isNotEmpty ? '\n${_boostTiming(Map<String, dynamic>.from(o['listing']))}' : ''}${o['listing'] is Map && Map<String, dynamic>.from(o['listing'])['boost_until'] != null ? '\nپایان Boost: ${_dateTimeText(Map<String, dynamic>.from(o['listing'])['boost_until'])}' : ''}'), isThreeLine: true, trailing: o['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _orderStatus(o, v), itemBuilder: (_) => const [PopupMenuItem(value: 'paid', child: Text('تأیید پرداخت')), PopupMenuItem(value: 'rejected', child: Text('رد پرداخت')), PopupMenuItem(value: 'cancelled', child: Text('لغو سفارش'))]) : Chip(label: Text(o['status']?.toString() ?? '-'))))),
       const Padding(padding: EdgeInsets.fromLTRB(4, 18, 4, 6), child: Text('اشتراک‌ها', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold))),
-      ...subs.take(100).map((s) => Card(child: ListTile(title: Text('${s['plan'] ?? '-'} • ${s['price_afn'] ?? 0} افغانی • ${s['status'] ?? ''}'), subtitle: Text('کاربر: ${_person(s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null)}\nرسید/پیگیری: ${s['payment_reference'] ?? '-'}${s['status'] == 'active' && _subscriptionTiming(s).isNotEmpty ? '\n${_subscriptionTiming(s)}' : ''}'), isThreeLine: true, trailing: s['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _subscriptionStatus(s, v), itemBuilder: (_) => const [PopupMenuItem(value: 'active', child: Text('تأیید و فعال‌سازی')), PopupMenuItem(value: 'rejected', child: Text('رد درخواست')), PopupMenuItem(value: 'cancelled', child: Text('لغو'))]) : Chip(label: Text(s['status']?.toString() ?? '-'))))),
+      ...subs.take(100).map((s) => Card(child: ListTile(title: Text('${_subscriptionPlanTitle(s['plan'])} • ${s['price_afn'] ?? 0} افغانی • ${s['status'] ?? ''}'), subtitle: Text('کاربر: ${_person(s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null)}\nرسید/پیگیری: ${s['payment_reference'] ?? '-'}\n${_subscriptionTiming(s)}'), isThreeLine: true, trailing: s['status'] == 'pending' ? PopupMenuButton<String>(onSelected: (v) => _subscriptionStatus(s, v), itemBuilder: (_) => const [PopupMenuItem(value: 'active', child: Text('تأیید و فعال‌سازی')), PopupMenuItem(value: 'rejected', child: Text('رد درخواست')), PopupMenuItem(value: 'cancelled', child: Text('لغو'))]) : Chip(label: Text(s['status']?.toString() ?? '-'))))),
       const Padding(padding: EdgeInsets.fromLTRB(4, 18, 4, 6), child: Text('تراکنش‌های کیف پول', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold))),
       if (tx.isEmpty) const Card(child: ListTile(title: Text('تراکنش فعال وجود ندارد'))),
       ...tx.take(100).map((t) => Card(child: ListTile(title: Text('${t['type'] ?? '-'} • ${t['amount_afn'] ?? 0} افغانی'), subtitle: Text('کاربر: ${_person(t['user'] is Map ? Map<String, dynamic>.from(t['user']) : null)}\n${t['description'] ?? ''}\n${t['created_at'] ?? ''}'), isThreeLine: true, trailing: IconButton(tooltip: 'بایگانی', onPressed: () => _archiveTransaction(t), icon: const Icon(Icons.archive_outlined))))),

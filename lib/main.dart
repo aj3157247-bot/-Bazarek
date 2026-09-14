@@ -326,11 +326,9 @@ const Map<String, String> _faMap = {
   'boost': 'بوست آگهی‌ها',
   'boost_short': 'بوست کوتاه‌مدت — فقط یک آگهی',
   'boost_global': 'بوست ویژه — تمام آگهی‌های شما',
-  'boost_24_desc': '۲۴ ساعت؛ ارزان‌ترین راه برای بیشتر دیده‌شدن همین آگهی.',
-  'boost_3_desc': '۳ روز؛ آگهی شما با اولویت بیشتر نمایش داده می‌شود.',
-  'boost_7_desc': '۷ روز؛ بالاترین قدرت بوست کوتاه‌مدت برای همین آگهی.',
-  'boost_month_desc': '۳۰ روز؛ تمام آگهی‌های فعال شما اولویت ویژه می‌گیرند.',
-  'boost_year_desc': '۳۶۵ روز؛ بالاترین اولویت برای تمام آگهی‌های فعال شما.',
+  'boost_week_desc': '۷ روز؛ همه آگهی‌های فعال شما با نشان توربو و اولویت بیشتر نمایش داده می‌شوند.',
+  'boost_month_desc': '۳۰ روز؛ همه آگهی‌های فعال شما با نشان توربو و اولویت بیشتر نمایش داده می‌شوند.',
+  'boost_year_desc': '۳۶۵ روز؛ همه آگهی‌های فعال شما با نشان توربو و بالاترین اولویت نمایش داده می‌شوند.',
   'social_pages': 'صفحات مجازی',
   'social_link': 'لینک صفحه',
   'social_link_hint': 'مثلاً https://instagram.com/yourpage',
@@ -386,11 +384,9 @@ const Map<String, String> _psMap = {
   'boost': 'د اعلان Boost',
   'boost_short': 'لنډمهاله Boost — یوازې یو اعلان',
   'boost_global': 'ځانګړی Boost — ستاسو ټول اعلانونه',
-  'boost_24_desc': '۲۴ ساعته؛ د همدې اعلان د ډېر لیدل کېدو ارزانه لاره.',
-  'boost_3_desc': '۳ ورځې؛ ستاسو اعلان په لوړه لومړیتوب ښکاره کېږي.',
-  'boost_7_desc': '۷ ورځې؛ د همدې اعلان لپاره تر ټولو پیاوړی لنډمهاله Boost.',
-  'boost_month_desc': '۳۰ ورځې؛ ستاسو ټول فعال اعلانونه ځانګړی لومړیتوب اخلي.',
-  'boost_year_desc': '۳۶۵ ورځې؛ ستاسو ټولو فعالو اعلانونو ته تر ټولو لوړ لومړیتوب.',
+  'boost_week_desc': '۷ ورځې؛ ستاسو ټول فعال اعلانونه د توربو نښان او لوړ لومړیتوب سره ښودل کېږي.',
+  'boost_month_desc': '۳۰ ورځې؛ ستاسو ټول فعال اعلانونه د توربو نښان او لوړ لومړیتوب سره ښودل کېږي.',
+  'boost_year_desc': '۳۶۵ ورځې؛ ستاسو ټول فعال اعلانونه د توربو نښان او تر ټولو لوړ لومړیتوب سره ښودل کېږي.',
   'social_pages': 'مجازی پاڼې',
   'social_link': 'د پاڼې لینک',
   'social_link_hint': 'لکه https://instagram.com/yourpage',
@@ -787,7 +783,9 @@ class ApiService {
     final data = jsonDecode(res.body);
     if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت بسته‌های بوست.') : 'خطا در دریافت بسته‌های بوست.');
     final list = data is List ? data : List<dynamic>.from(data['data'] ?? const []);
-    return list.where((x) => ['boost24','boost3','boost7'].contains(x['id'])).toList();
+    // Legacy per-listing Boost packages remain in the API for backward compatibility,
+    // but the current monetization flow uses seller-wide weekly/monthly/yearly plans.
+    return const <dynamic>[];
   }
 
   static Future<Map<String,dynamic>> createBoostOrder(String listingId, String packageId, String reference) async {
@@ -1419,6 +1417,7 @@ class _DivarStyleListing extends StatelessWidget {
             imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty) Positioned(right: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFF8A00), borderRadius: BorderRadius.circular(8)), child: Text(boost, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))))
+            if (item['turbo_active'] == true) Positioned(left: 7, bottom: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.58), borderRadius: BorderRadius.circular(8)), child: Text(psText(context, '⚡ توربو', '⚡ توربو'), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))))
           ]))),
           const SizedBox(width: 13),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1653,6 +1652,8 @@ class _ProductCard extends StatelessWidget {
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
+              if (item['turbo_active'] == true)
+                Positioned(left: 8, bottom: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.58), borderRadius: BorderRadius.circular(9)), child: Text(psText(context, '⚡ توربو', '⚡ توربو'), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)))),
               Positioned(top: 8, left: 8, child: _SaveAdButton(item: item)),
             ]),
           ),
@@ -1948,8 +1949,20 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   }
 
   String _boostText(dynamic ad) {
-    final level = int.tryParse('${ad['boost_level'] ?? 0}') ?? 0;
+    if (ad['turbo_active'] == true) return psText(context, '⚡ توربو', '⚡ توربو');
+    final level = int.tryParse('${ad['effective_boost_level'] ?? ad['boost_level'] ?? 0}') ?? 0;
     return boostBadgeText(context, level);
+  }
+
+  String _turboTimeText(dynamic ad) {
+    if (ad['turbo_active'] != true) return '';
+    final end = DateTime.tryParse('${ad['turbo_until']}')?.toLocal();
+    if (end == null) return '';
+    String two(int n) => n.toString().padLeft(2, '0');
+    final endText = '${end.year}/${two(end.month)}/${two(end.day)} ${two(end.hour)}:${two(end.minute)}';
+    final start = DateTime.tryParse('${ad['turbo_starts_at']}')?.toLocal();
+    final startText = start == null ? '' : '${start.year}/${two(start.month)}/${two(start.day)} ${two(start.hour)}:${two(start.minute)}';
+    return startText.isEmpty ? psText(context, 'تر ختم: $endText', 'تر ختم: $endText') : psText(context, 'توربو: $startText تر $endText', 'توربو: $startText تر $endText');
   }
 
   @override
@@ -2013,6 +2026,14 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                       child: Chip(label: Text(badge), avatar: const Icon(Icons.auto_awesome, size: 18)),
+                                    ),
+                                  ),
+                                if (_turboTimeText(ad).isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                                      child: Text(_turboTimeText(ad), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),
                                     ),
                                   ),
                                 Padding(
@@ -2178,11 +2199,39 @@ class _BoostScreenState extends State<BoostScreen> {
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
   }
 
+  String _dateTimeForUser(dynamic value) {
+    final dt = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (dt == null) return '';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}/${two(dt.month)}/${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  String _boostPlanTitle(BuildContext context, String plan) {
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    switch (plan) {
+      case 'boost_weekly': return ps ? '⚡ توربو اوونیز' : '⚡ توربو هفتگی';
+      case 'boost_monthly': return ps ? '👑 توربو میاشتنی' : '👑 توربو ماهانه';
+      case 'boost_yearly': return ps ? '🏆 توربو کلنی' : '🏆 توربو سالانه';
+      default: return ps ? '⚡ توربو' : '⚡ توربو';
+    }
+  }
+
+  Widget _globalBoostPlanCard(BuildContext context, bool ps, String plan, String title, String desc, int price) {
+    final active = subscriptions.any((s) => s['plan'] == plan && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+    final pending = subscriptions.any((s) => s['plan'] == plan && s['status'] == 'pending');
+    return Card(child: ListTile(
+      leading: Text(plan == 'boost_weekly' ? '⚡' : plan == 'boost_monthly' ? '👑' : '🏆', style: const TextStyle(fontSize: 30)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+      subtitle: Text(desc),
+      trailing: active ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : pending ? Chip(label: Text(ps ? 'د تایید په تمه' : 'در انتظار تأیید')) : FilledButton(onPressed: () => _buyGlobal(plan, price, title), child: Text('$price ${tr(context,'afghani')}')),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final ps = Localizations.localeOf(context).languageCode == 'ps';
-    final globalActive = subscriptions.any((s) => ['boost_monthly','boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
-    final shortPackages = packages.where((x) => ['boost24','boost3','boost7'].contains(x['id'])).toList();
+    final globalActive = subscriptions.any((s) => ['boost_weekly','boost_monthly','boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+
     return Scaffold(
       appBar: AppBar(title: Text(ps ? '🚀 د بازارک Boost' : '🚀 Boost بازارک')),
       body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? OfflineErrorView(onRetry: _load, message: error) : ListView(
@@ -2195,27 +2244,25 @@ class _BoostScreenState extends State<BoostScreen> {
           ])),
           const SizedBox(height: 22),
           Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: د Boost د انتخاب پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي. مبلغ ولېږئ، د رسید شمېره ولیکئ، او د مدیریت تایید ته انتظار وباسئ.' : '💳 روش پرداخت: هنگام انتخاب Boost، شماره کارت/حساب بازارک نمایش داده می‌شود. مبلغ را انتقال دهید، شماره رسید را وارد کنید و منتظر تأیید مدیریت بمانید.')),
-          const SizedBox(height: 14),
-          Text(ps ? '⚡ لنډمهاله Boost' : '⚡ بوست کوتاه‌مدت', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 18),
+          Text(ps ? '⚡ د بازارک توربو پلانونه' : '⚡ پلان‌های توربو بازارک', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 5),
-          Text(ps ? 'یوازې د یوه ټاکلي اعلان لپاره؛ ارزانه او مناسب د چټک پلور لپاره.' : 'فقط برای یک آگهی؛ ارزان و مناسب برای فروش سریع.', style: const TextStyle(color: Colors.black54)),
+          Text(ps ? 'یو پلان واخلئ؛ ستاسو ټول فعال اعلانونه د تایید وروسته سمدستي توربو کېږي او د پلان تر ختمېدو پورې نښان لري.' : 'یک پلان بخرید؛ بعد از تأیید مدیریت، تمام آگهی‌های فعال شما توربو می‌شوند و تا پایان مدت نشان توربو را دارند.', style: const TextStyle(color: Colors.black54)),
           const SizedBox(height: 10),
-          if (shortPackages.isEmpty) Card(child: ListTile(leading: const Icon(Icons.info_outline), title: Text(ps ? 'لنډمهاله Boostونه موجود نه دي.' : 'بوست‌های کوتاه‌مدت موجود نیستند.')))
-          else ...shortPackages.map((pkg) {
-            final id = pkg['id'];
-            final title = ps ? (id == 'boost24' ? '⚡ توربو — ۲۴ ساعته' : id == 'boost3' ? '🔥 انفجاري — ۳ ورځې' : '💥 پیاوړی — ۷ ورځې') : (id == 'boost24' ? '⚡ توربو — ۲۴ ساعت' : id == 'boost3' ? '🔥 انفجاری — ۳ روز' : '💥 قدرتی — ۷ روز');
-            final desc = id == 'boost24' ? tr(context,'boost_24_desc') : id == 'boost3' ? tr(context,'boost_3_desc') : tr(context,'boost_7_desc');
-            return Card(margin: const EdgeInsets.only(bottom: 10), child: ListTile(leading: Text(id == 'boost24' ? '⚡' : id == 'boost3' ? '🔥' : '💥', style: const TextStyle(fontSize: 30)), title: Text(title), subtitle: Text(desc), trailing: FilledButton(onPressed: () => _buyOne(pkg), child: Text('${pkg['price_afn']} ${tr(context,'afghani')}'))));
-          }),
-          const SizedBox(height: 20),
-          Text(ps ? '👑 میاشتنی او کلنی Boost' : '👑 بوست ماهانه و سالانه', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 5),
-          Text(ps ? 'د پیسو په بدل کې ستاسو ټول فعال اعلانونه Boost کېږي.' : 'یک اشتراک بخرید تا تمام آگهی‌های فعال شما Boost شوند.', style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 10),
-          Card(child: ListTile(leading: const Text('👑', style: TextStyle(fontSize: 30)), title: Text(ps ? 'میاشتنی — ټول اعلانونه' : 'ماهانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_month_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_monthly', 300, ps ? '👑 میاشتنی Boost' : '👑 بوست ماهانه'), child: Text('۳۰۰ ${tr(context,'afghani')}')))),
-          Card(child: ListTile(leading: const Text('🏆', style: TextStyle(fontSize: 30)), title: Text(ps ? 'کلنی — ټول اعلانونه' : 'سالانه — همه آگهی‌ها'), subtitle: Text(tr(context,'boost_year_desc')), trailing: globalActive ? Chip(label: Text(ps ? 'فعال' : 'فعال')) : FilledButton(onPressed: () => _buyGlobal('boost_yearly', 2500, ps ? '🏆 کلنی Boost' : '🏆 بوست سالانه'), child: Text('۲۵۰۰ ${tr(context,'afghani')}')))),
+          if (globalActive)
+            Builder(builder: (context) {
+              final active = subscriptions.where((s) => ['boost_weekly','boost_monthly','boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true).toList()..sort((a,b) => DateTime.tryParse('${b['ends_at']}')!.compareTo(DateTime.tryParse('${a['ends_at']}')!));
+              final s = active.isEmpty ? null : active.first;
+              final start = s == null ? '' : _dateTimeForUser(s['starts_at']);
+              final end = s == null ? '' : _dateTimeForUser(s['ends_at']);
+              final planTitle = s == null ? '' : _boostPlanTitle(context, s['plan']?.toString() ?? '');
+              return Card(color: Theme.of(context).colorScheme.primaryContainer, child: ListTile(leading: const Text('⚡', style: TextStyle(fontSize: 28)), title: Text(planTitle.isEmpty ? (ps ? 'توربو فعال' : 'توربو فعال') : planTitle, style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text(start.isEmpty ? end : '$start\n$end'), trailing: Chip(label: Text(ps ? 'فعال' : 'فعال'))));
+            }),
+          _globalBoostPlanCard(context, ps, 'boost_weekly', ps ? '⚡ اوونیز — ټول اعلانونه' : '⚡ هفتگی — همه آگهی‌ها', tr(context,'boost_week_desc'), 150),
+          _globalBoostPlanCard(context, ps, 'boost_monthly', ps ? '👑 میاشتنی — ټول اعلانونه' : '👑 ماهانه — همه آگهی‌ها', tr(context,'boost_month_desc'), 500),
+          _globalBoostPlanCard(context, ps, 'boost_yearly', ps ? '🏆 کلنی — ټول اعلانونه' : '🏆 سالانه — همه آگهی‌ها', tr(context,'boost_year_desc'), 4500),
           const SizedBox(height: 8),
-          Text(ps ? '💡 لنډمهاله Boost یوازې پر ټاکلي اعلان لګېږي. میاشتنی او کلنی پلان ستاسو پر ټولو فعالو اعلانونو اغېز کوي.' : '💡 بوست کوتاه‌مدت فقط روی همان آگهی اعمال می‌شود؛ اشتراک ماهانه و سالانه روی تمام آگهی‌های فعال شما اثر می‌گذارد.', style: const TextStyle(color: Colors.black54)),
+          Text(ps ? '💡 هر درې پلانونه د تایید وروسته ستاسو پر ټولو فعالو اعلانونو اغېز کوي. د تایید وخت د توربو د پیل وخت دی؛ له ختمېدو وروسته په اوتومات ډول غیر فعال کېږي.' : '💡 هر سه پلان بعد از تأیید روی تمام آگهی‌های فعال شما اثر می‌گذارد. زمان تأیید مدیریت همان زمان شروع توربو است؛ پس از پایان، توربو خودکار غیرفعال می‌شود.', style: const TextStyle(color: Colors.black54)),
         ],
       ),
     );
