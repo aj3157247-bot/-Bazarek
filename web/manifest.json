@@ -1,0 +1,39 @@
+{
+  "name": "بازارک | Bazarek",
+  "short_name": "بازارک",
+  "id": "bazarek-pwa-v3",
+  "start_url": "./?pwa=3",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0B72E7",
+  "description": "بازارک؛ خرید و فروش آسان در افغانستان",
+  "orientation": "any",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icons/bazarek-pwa-192.png?v=3",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/bazarek-pwa-512.png?v=3",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/bazarek-pwa-maskable-192.png?v=3",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/bazarek-pwa-maskable-512.png?v=3",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
