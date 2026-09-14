@@ -632,18 +632,10 @@ class ApiService {
 
   static Future<Map<String, dynamic>> register(String name, String email, String password) async {
     try {
-      final contact = email.trim();
-      final isEmail = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(contact);
-      final body = <String, dynamic>{
-        'email': isEmail ? contact.toLowerCase() : contact,
-        'password': password,
-        'full_name': name.trim(),
-      };
-      if (!isEmail) body['phone'] = contact;
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/auth/register'),
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: jsonEncode(body),
+        body: jsonEncode({'email': email.trim().toLowerCase(), 'password': password, 'full_name': name.trim()}),
       ).timeout(const Duration(seconds: 30));
       final data = jsonDecode(res.body);
       if (res.statusCode == 200 || res.statusCode == 201) return data;
@@ -1464,8 +1456,7 @@ if (item['turbo_active'] == true)
         ),
       ),
     ),
-  ),
-          ]))),
+  ]))),
           const SizedBox(width: 13),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [Expanded(child: LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, height: 1.25))), const SizedBox(width: 4), _SaveButton(item: item)]),
@@ -1492,7 +1483,7 @@ if (item['turbo_active'] == true)
   }
 }
 
-class _SaveButton extends StatefulWidget {
+ss _SaveButton extends StatefulWidget {
   final dynamic item;
   const _SaveButton({required this.item});
   @override State<_SaveButton> createState() => _SaveButtonState();
@@ -2691,7 +2682,7 @@ class _AuthScreenState extends State<AuthScreen> {
       await AuthService.saveUser(
         response['token'],
         user['name'] ?? name,
-        user['email'] ?? user['user_metadata']?['phone'] ?? contact,
+        user['user_metadata']?['phone'] ?? user['email'] ?? contact,
         refreshTokenVal: response['refresh_token'],
       );
       if (mounted) {
@@ -2749,7 +2740,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ],
                 TextFormField(
                   controller: contactController,
-                  keyboardType: TextInputType.phone,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: tr(context, 'phone_or_email'),
                     prefixIcon: const Icon(Icons.phone_android),
