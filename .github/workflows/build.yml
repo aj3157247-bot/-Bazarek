@@ -25,17 +25,19 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
 
-      # The repository does not commit generated Android platform files.
-      # Generate them BEFORE pub get so plugin registration is clean.
       - name: Generate Flutter platform files
         run: flutter create . --platforms=android,web
 
+      # flutter create regenerates web/index.html and the web manifest.
+      # Restore the Bazarek PWA files committed in this repository.
       - name: Restore Bazarek Web/PWA branding
         run: |
+          git checkout -- web/index.html web/manifest.json web/icons/
           test -f web/index.html
           test -f web/manifest.json
           test -f web/icons/bazarek-pwa-192.png
           test -f web/icons/bazarek-pwa-512.png
+          grep -F '<base href="$FLUTTER_BASE_HREF">' web/index.html
 
       - name: Configure Android WebView shell
         run: |
@@ -50,10 +52,10 @@ jobs:
               'android.permission.ACCESS_COARSE_LOCATION',
           ]
           for permission in permissions:
-              line = f'    <uses-permission android:name=\"{permission}\"/>\n'
+              line = f'    <uses-permission android:name="{permission}"/>\n'
               if permission not in text:
                   text = text.replace('<application', line + '    <application', 1)
-          text = text.replace('android:label=\"${applicationName}\"', 'android:label=\"بازارک\"')
+          text = text.replace('android:label="${applicationName}"', 'android:label="بازارک"')
           p.write_text(text, encoding='utf-8')
           PY
 
