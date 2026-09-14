@@ -1456,7 +1456,8 @@ if (item['turbo_active'] == true)
         ),
       ),
     ),
-  ]))),
+  ),
+          ])),
           const SizedBox(width: 13),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [Expanded(child: LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, height: 1.25))), const SizedBox(width: 4), _SaveButton(item: item)]),
@@ -2682,7 +2683,7 @@ class _AuthScreenState extends State<AuthScreen> {
       await AuthService.saveUser(
         response['token'],
         user['name'] ?? name,
-        user['user_metadata']?['phone'] ?? user['email'] ?? contact,
+        user['email'] ?? user['user_metadata']?['phone'] ?? contact,
         refreshTokenVal: response['refresh_token'],
       );
       if (mounted) {
