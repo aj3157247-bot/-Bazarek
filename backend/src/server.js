@@ -519,14 +519,14 @@ app.get('/api/listings', async (req, res) => {
     const vendorIds = [...new Set((data || []).map(x => x.vendor_id).filter(Boolean))];
     const [{ data: profiles }, { data: globalSubs }] = await Promise.all([
       vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : Promise.resolve({ data: [] }),
-      vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,ends_at,status').in('user_id', vendorIds).in('status', ['active']) : Promise.resolve({ data: [] }),
+      vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['boost_weekly','boost_monthly','boost_yearly']) : Promise.resolve({ data: [] }),
     ]);
     const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
     const globalLevel = {};
     for (const sub of (globalSubs || [])) {
       const end = new Date(sub.ends_at || 0).getTime();
       if (end <= now) continue;
-      const level = sub.plan === 'boost_yearly' ? 5 : sub.plan === 'boost_monthly' ? 4 : 0;
+      const level = sub.plan === 'boost_yearly' ? 5 : sub.plan === 'boost_monthly' ? 4 : sub.plan === 'boost_weekly' ? 3 : 0;
       if (level > (globalLevel[sub.user_id] || 0)) globalLevel[sub.user_id] = level;
     }
     const rows = (data || []).map(x => {
@@ -535,12 +535,13 @@ app.get('/api/listings', async (req, res) => {
       const ownBoost = x.boost_level && (!x.boost_until || new Date(x.boost_until).getTime() > now) ? Number(x.boost_level) : 0;
       const level = Math.max(ownBoost, globalLevel[x.vendor_id] || 0);
       const boostUntil = level === globalLevel[x.vendor_id] ? (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0]?.ends_at || x.boost_until : x.boost_until;
-      return { ...x, is_featured: featured, is_pinned: pinned, effective_boost_level: level, boost_until: boostUntil };
+      const turboSub = (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0];
+      return { ...x, is_featured: featured, is_pinned: pinned, effective_boost_level: level, boost_until: boostUntil, turbo_active: Boolean(turboSub), turbo_plan: turboSub?.plan || null, turbo_starts_at: turboSub?.starts_at || null, turbo_until: turboSub?.ends_at || null };
     }).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || Number(b.is_featured) - Number(a.is_featured) || Number(b.effective_boost_level || 0) - Number(a.effective_boost_level || 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     res.json(rows.map(x => {
       const level = Number(x.effective_boost_level || 0);
       const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
-      return { ...x, boost_label: labels[level] || '', seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
+      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
@@ -675,8 +676,9 @@ app.get('/api/subscriptions', requireUser, async (req,res)=>{try{const db=getSup
 app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
   const plans={
     basic:{price:150,days:30},pro:{price:250,days:30},business:{price:450,days:30},
-    boost_monthly:{price:300,days:30,boost_level:4},
-    boost_yearly:{price:2500,days:365,boost_level:5}
+    boost_weekly:{price:150,days:7,boost_level:3},
+    boost_monthly:{price:500,days:30,boost_level:4},
+    boost_yearly:{price:4500,days:365,boost_level:5}
   };
   const plan=String(req.body?.plan||'');
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
@@ -686,9 +688,9 @@ app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const {data:existing}=await db.from('seller_subscriptions').select('id').eq('user_id',req.user.id).eq('plan',plan).eq('status','pending').limit(1);
   if(existing?.length)return res.status(409).json({error:'یک درخواست پرداخت برای این پلن در انتظار تأیید است.'});
-  const now=new Date();
-  const end=new Date(now.getTime()+p.days*86400000);
-  const {data,error}=await db.from('seller_subscriptions').insert([{user_id:req.user.id,plan,price_afn:p.price,starts_at:now.toISOString(),ends_at:end.toISOString(),status:'pending',payment_method:'manual',payment_reference:reference.slice(0,200)}]).select().single();
+  // A pending request has no active time yet. The clock starts only when
+  // management approves the payment in the admin panel.
+  const {data,error}=await db.from('seller_subscriptions').insert([{user_id:req.user.id,plan,price_afn:p.price,starts_at:null,ends_at:null,status:'pending',payment_method:'manual',payment_reference:reference.slice(0,200)}]).select().single();
   if(error)throw error;
   res.status(201).json(data);
 }catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست اشتراک.'});}});
@@ -700,7 +702,7 @@ app.patch('/api/admin/subscriptions/:id', requireAdmin, async (req,res)=>{try{
   const {data:sub,error:se}=await db.from('seller_subscriptions').select('*').eq('id',req.params.id).maybeSingle();
   if(se)throw se;if(!sub)return res.status(404).json({error:'اشتراک پیدا نشد.'});
   const patch={status};
-  if(status==='active'){const days=sub.plan==='boost_yearly'?365:30;const start=new Date();const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
+  if(status==='active'){const days=sub.plan==='boost_yearly'?365:sub.plan==='boost_monthly'?30:sub.plan==='boost_weekly'?7:30;const start=new Date();const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
   const {data,error}=await db.from('seller_subscriptions').update(patch).eq('id',req.params.id).select().single();
   if(error)throw error;
   if(status==='active')await db.from('profiles').update({plan:['pro','business'].includes(sub.plan) ? sub.plan : 'free'}).eq('id',sub.user_id);
@@ -748,18 +750,19 @@ app.get('/api/products', requireUser, async (req, res) => {
     const { data, error } = await db.from('products').select('*').eq('vendor_id', req.user.id).order('created_at', { ascending: false });
     if (error) throw error;
     const now = Date.now();
-    const { data: subs } = await db.from('seller_subscriptions').select('plan,status,ends_at').eq('user_id', req.user.id).eq('status','active');
+    const { data: subs } = await db.from('seller_subscriptions').select('plan,status,starts_at,ends_at').eq('user_id', req.user.id).eq('status','active').in('plan', ['boost_weekly','boost_monthly','boost_yearly']);
     const globalLevel = (subs || []).reduce((max, sub) => {
       const end = new Date(sub.ends_at || 0).getTime();
       if (end <= now) return max;
-      const level = sub.plan === 'boost_yearly' ? 5 : sub.plan === 'boost_monthly' ? 4 : 0;
+      const level = sub.plan === 'boost_yearly' ? 5 : sub.plan === 'boost_monthly' ? 4 : sub.plan === 'boost_weekly' ? 3 : 0;
       return Math.max(max, level);
     }, 0);
     const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
     res.json((data || []).map(x => {
       const own = x.boost_level && (!x.boost_until || new Date(x.boost_until).getTime() > now) ? Number(x.boost_level) : 0;
       const level = Math.max(own, globalLevel);
-      return { ...x, effective_boost_level: level, boost_label: labels[level] || '', global_boost: globalLevel > 0 };
+      const turboSub = (subs || []).filter(s => s.status === 'active' && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0];
+      return { ...x, effective_boost_level: level, boost_label: turboSub ? '⚡ توربو' : (labels[level] || ''), global_boost: globalLevel > 0, turbo_active: Boolean(turboSub), turbo_plan: turboSub?.plan || null, turbo_starts_at: turboSub?.starts_at || null, turbo_until: turboSub?.ends_at || null };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت محصولات.' }); }
 });
