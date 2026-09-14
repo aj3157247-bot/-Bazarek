@@ -30,6 +30,13 @@ jobs:
       - name: Generate Flutter platform files
         run: flutter create . --platforms=android,web
 
+      - name: Restore Bazarek Web/PWA branding
+        run: |
+          test -f web/index.html
+          test -f web/manifest.json
+          test -f web/icons/bazarek-pwa-192.png
+          test -f web/icons/bazarek-pwa-512.png
+
       - name: Configure Android WebView shell
         run: |
           python3 - <<'PY'
