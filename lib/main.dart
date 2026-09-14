@@ -1024,85 +1024,52 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
-
-    final destinations = [
-      NavigationDestination(
-        icon: const Icon(Icons.home_outlined),
-        selectedIcon: const Icon(Icons.home),
-        label: tr(context, 'home'),
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.favorite_border_rounded),
-        selectedIcon: const Icon(Icons.favorite_rounded),
-        label: tr(context, 'saved'),
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.add_circle_outline),
-        selectedIcon: const Icon(Icons.add_circle),
-        label: tr(context, 'add'),
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.chat_bubble_outline_rounded),
-        selectedIcon: const Icon(Icons.chat_bubble_rounded),
-        label: tr(context, 'chat'),
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.person_outline),
-        selectedIcon: const Icon(Icons.person),
-        label: tr(context, 'profile'),
-      ),
-    ];
-
-    Future<void> selectPage(int idx) async {
-      if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
-        await requireAccount(context);
-        return;
-      }
-      if (mounted) setState(() => _currentIndex = idx);
-    }
-
-    final content = ValueListenableBuilder<int>(
-      valueListenable: AuthService.authVersion,
-      builder: (_, __, ___) => IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-    );
-
-    if (isDesktop) {
-      return Scaffold(
-        body: Row(
-          children: [
-            Expanded(child: content),
-            NavigationRail(
-              selectedIndex: _currentIndex,
-              onDestinationSelected: selectPage,
-              labelType: NavigationRailLabelType.all,
-              groupAlignment: 0,
-              leading: Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 18),
-                child: Image.asset('assets/icon/bazarek_icon.png', width: 48, height: 48),
-              ),
-              destinations: destinations
-                  .map((d) => NavigationRailDestination(
-                        icon: d.icon,
-                        selectedIcon: d.selectedIcon,
-                        label: Text(d.label),
-                      ))
-                  .toList(),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Scaffold(
-      body: content,
+      body: ValueListenableBuilder<int>(
+        valueListenable: AuthService.authVersion,
+        builder: (_, __, ___) => IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: selectPage,
-        destinations: destinations,
+        onDestinationSelected: (idx) async {
+          if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
+            await requireAccount(context);
+            return;
+          }
+          setState(() {
+            _currentIndex = idx;
+          });
+        },
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(Icons.home),
+            label: tr(context, 'home'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.favorite_border_rounded),
+            selectedIcon: const Icon(Icons.favorite_rounded),
+            label: tr(context, 'saved'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.add_circle_outline),
+            selectedIcon: const Icon(Icons.add_circle),
+            label: tr(context, 'add'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            selectedIcon: const Icon(Icons.chat_bubble_rounded),
+            label: tr(context, 'chat'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.person_outline),
+            selectedIcon: const Icon(Icons.person),
+            label: tr(context, 'profile'),
+          ),
+        ],
       ),
     );
   }
@@ -1191,7 +1158,7 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1440),
+                  constraints: const BoxConstraints(maxWidth: 980),
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(isWide ? 22 : 12, 10, isWide ? 22 : 12, 0),
                     child: Column(
@@ -1262,7 +1229,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1440),
+                    constraints: const BoxConstraints(maxWidth: 980),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(isWide ? 22 : 12, 0, isWide ? 22 : 12, 30),
                       child: Column(
@@ -1489,7 +1456,7 @@ if (item['turbo_active'] == true)
         ),
       ),
     ),
-  ),
+  ])),
           const SizedBox(width: 13),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [Expanded(child: LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, height: 1.25))), const SizedBox(width: 4), _SaveButton(item: item)]),
@@ -2572,12 +2539,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
               accountEmail: Text(AuthService.userContact ?? ''),
-            ),
-            ListTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: Text(psText(context, 'آگهی‌های من', 'زما اعلانونه')),
-              subtitle: Text(psText(context, 'مشاهده و مدیریت آگهی‌های ثبت‌شده شما', 'خپل ثبت شوي اعلانونه وګورئ او اداره یې کړئ')),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())),
             ),
             ListTile(
               leading: const Icon(Icons.add_a_photo_outlined),
