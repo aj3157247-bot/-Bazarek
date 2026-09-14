@@ -39,6 +39,54 @@ jobs:
           test -f web/icons/bazarek-pwa-512.png
           grep -F '<base href="$FLUTTER_BASE_HREF">' web/index.html
 
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Missing Android signing secrets."
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/bazarek-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=bazarek-release.jks
+          EOF
+          python3 - <<'PY2'
+          from pathlib import Path
+          p = Path('android/app/build.gradle')
+          text = p.read_text(encoding='utf-8')
+          if 'keystorePropertiesFile' not in text:
+              prefix = """def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+"""
+              signing = """    signingConfigs {
+        release {
+            keyAlias = keystoreProperties['keyAlias']
+            keyPassword = keystoreProperties['keyPassword']
+            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword = keystoreProperties['storePassword']
+        }
+    }
+
+"""
+              text = prefix + text.replace('android {
+', 'android {
+' + signing, 1)
+          text = text.replace('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.release')
+          text = text.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+          p.write_text(text, encoding='utf-8')
+          PY2
+
       - name: Configure Android WebView shell
         run: |
           python3 - <<'PY'
