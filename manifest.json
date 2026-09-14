@@ -1,34 +1,36 @@
 {
-"name": "بازارک",
+  "name": "بازارک | Bazarek",
   "short_name": "بازارک",
-  "start_url": ".",
-  "id": "/",
-  "scope": "/",
+  "id": "bazarek-pwa-v2",
+  "start_url": "./?pwa=2",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#FFFFFF",
-  "theme_color": "#173C91",
-  "description": "بازارک - خرید و فروش در سراسر افغانستان",
-  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0B72E7",
+  "description": "بازارک؛ خرید و فروش آسان در افغانستان",
+  "orientation": "any",
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icons/Icon-192.png",
+      "src": "icons/bazarek-pwa-192.png?v=2",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "icons/Icon-512.png",
+      "src": "icons/bazarek-pwa-512.png?v=2",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "icons/Icon-maskable-192.png",
+      "src": "icons/bazarek-pwa-maskable-192.png?v=2",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "icons/Icon-maskable-512.png",
+      "src": "icons/bazarek-pwa-maskable-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
