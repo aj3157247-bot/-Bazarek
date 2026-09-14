@@ -110,11 +110,16 @@ app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', versi
 app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
 app.get('/api/version', (_, res) => res.json({ version: '2.5.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone'] }));
 
+// Phone numbers are stored as a private, deterministic Supabase email alias so
+// phone registration/login works without enabling Supabase SMS/OTP. Gmail/email
+// accounts continue to use their real email address.
 function normalizePhone(value) {
   let v = String(value || '').trim().replace(/[\s\-()]/g, '');
   const fa = '۰۱۲۳۴۵۶۷۸۹';
   const ar = '٠١٢٣٤٥٦٧٨٩';
-  for (let i = 0; i < 10; i++) v = v.replaceAll(fa[i], String(i)).replaceAll(ar[i], String(i));
+  for (let i = 0; i < 10; i++) {
+    v = v.replaceAll(fa[i], String(i)).replaceAll(ar[i], String(i));
+  }
   if (v.startsWith('00')) v = '+' + v.slice(2);
   if (v.startsWith('0')) v = '+93' + v.slice(1);
   if (/^93\d{9}$/.test(v)) v = '+' + v;
@@ -122,12 +127,15 @@ function normalizePhone(value) {
 }
 
 function isPhone(value) {
-  const v = normalizePhone(value);
-  return /^\+93\d{9}$/.test(v);
+  return /^\+93\d{9}$/.test(normalizePhone(value));
 }
 
 function phoneAuthEmail(phone) {
-  return `phone_${phone.replace('+', '')}@phone.bazarek.local`;
+  return `phone_${normalizePhone(phone).slice(1)}@phone.bazarek.app`;
+}
+
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
 app.post('/api/auth/register', async (req, res) => {
@@ -135,27 +143,50 @@ app.post('/api/auth/register', async (req, res) => {
     if (!requireConfig(res)) return;
     const { email = '', password, full_name = '', shop_name = '', phone = '' } = req.body || {};
     const contact = String(email || phone || '').trim();
-    if (!contact || !password) return res.status(400).json({ error: 'ایمیل یا شماره تلفن و رمز عبور الزامی است.' });
+    if (!contact || !password) return res.status(400).json({ error: 'شماره تلفن یا ایمیل و رمز عبور الزامی است.' });
     if (password.length < 8) return res.status(400).json({ error: 'رمز عبور باید حداقل ۸ کاراکتر باشد.' });
 
-    const phoneMode = isPhone(contact);
-    const normalizedPhone = phoneMode ? normalizePhone(contact) : String(phone || '').trim();
-    const normalizedEmail = phoneMode ? phoneAuthEmail(normalizedPhone) : contact.toLowerCase();
+    const phoneAccount = isPhone(contact);
+    const normalizedPhone = phoneAccount ? normalizePhone(contact) : (String(phone || '').trim() || '');
+    const normalizedEmail = phoneAccount ? phoneAuthEmail(normalizedPhone) : contact.toLowerCase();
+    if (!phoneAccount && !isEmail(normalizedEmail)) {
+      return res.status(400).json({ error: 'ایمیل یا شماره تلفن معتبر وارد کنید.' });
+    }
+
     const db = getSupabaseAdmin();
     const { data: created, error } = await db.auth.admin.createUser({
       email: normalizedEmail,
       password,
       email_confirm: true,
-      user_metadata: { full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone }
+      user_metadata: {
+        full_name: String(full_name).trim(),
+        shop_name: String(shop_name).trim(),
+        phone: normalizedPhone
+      }
     });
     if (error) return res.status(400).json({ error: error.message });
+
     const user = created.user;
-    const { error: profileError } = await db.from('profiles').upsert({ id: user.id, full_name: full_name.trim(), shop_name: shop_name.trim(), phone: normalizedPhone }, { onConflict: 'id' });
-    if (profileError) console.warn('Could not save profile:', profileError.message);
-    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({ email: normalizedEmail, password });
-    if (loginError || !signedIn.session) return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
+    const { error: profileError } = await db.from('profiles').upsert({
+      id: user.id,
+      full_name: String(full_name).trim(),
+      shop_name: String(shop_name).trim(),
+      phone: normalizedPhone
+    }, { onConflict: 'id' });
+    if (profileError) console.warn('Profile creation warning:', profileError.message);
+
+    const { data: signedIn, error: loginError } = await supabaseAuth.auth.signInWithPassword({
+      email: normalizedEmail,
+      password
+    });
+    if (loginError || !signedIn.session) {
+      return res.status(500).json({ error: 'حساب ساخته شد اما ورود خودکار انجام نشد. دوباره وارد شوید.' });
+    }
     res.status(201).json({ token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token, user });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ساخت حساب.' }); }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در ساخت حساب.' });
+  }
 });
 
 app.post('/api/upload-images', requireUser, upload.array('images', 10), async (req, res) => {
@@ -206,8 +237,14 @@ app.post('/api/auth/login', async (req, res) => {
     const { email = '', password } = req.body || {};
     const contact = String(email || '').trim();
     if (!contact || !password) return res.status(400).json({ error: 'ایمیل یا شماره تلفن و رمز عبور الزامی است.' });
-    const loginEmail = isPhone(contact) ? phoneAuthEmail(normalizePhone(contact)) : contact.toLowerCase();
-    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: loginEmail, password });
+
+    const phoneAccount = isPhone(contact);
+    const normalizedEmail = phoneAccount ? phoneAuthEmail(contact) : contact.toLowerCase();
+    if (!phoneAccount && !isEmail(normalizedEmail)) {
+      return res.status(400).json({ error: 'ایمیل یا شماره تلفن معتبر وارد کنید.' });
+    }
+
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: normalizedEmail, password });
     if (error || !data.session) return res.status(401).json({ error: 'ایمیل/شماره تلفن یا رمز عبور اشتباه است.' });
     res.json({ token: data.session.access_token, refresh_token: data.session.refresh_token, user: data.user });
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ورود.' }); }
