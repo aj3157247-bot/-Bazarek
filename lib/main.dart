@@ -2552,15 +2552,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: Text(tr(context, 'my_ads')),
-              subtitle: Text(psText(context, 'تمام آگهی‌هایی که ثبت کرده‌اید', 'ستاسو ټول ثبت شوي اعلانونه')),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyProductsScreen()),
-              ),
-            ),
-            ListTile(
               leading: const Icon(Icons.notifications_outlined),
               title: Text(psText(context, 'اعلان‌ها', 'خبرتیاوې')),
               subtitle: Text(psText(context, 'پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها', 'د سیسټم او راپورونو خبرتیاوې')),
@@ -2607,8 +2598,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             leading: const Icon(Icons.download_for_offline_outlined),
             title: Text(tr(context, 'download_app')),
             subtitle: Text(tr(context, 'download_app_desc')),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'لینک دانلود اپلیکیشن به‌زودی فعال می‌شود.', 'د اپلېکېشن د ډاونلوډ لینک به ژر فعال شي.'))));
+            onTap: () async {
+              const apkUrl = 'https://github.com/aj3157247-bot/Bazarek/releases/latest/download/bazarek.apk';
+              final uri = Uri.parse(apkUrl);
+              try {
+                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (!opened && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+                  );
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+                  );
+                }
+              }
             },
           ),
           const Divider(),
