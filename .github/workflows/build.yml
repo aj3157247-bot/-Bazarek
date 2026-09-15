@@ -31,15 +31,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find android_shell/app/src/main/res -type f \( \
-            -name '1' -o -name '2' -o -name '3' -o -name '4' -o \
-            -name '5' -o -name '6' -o -name '7' -o -name '8' -o -name '9' -o \
-            -name '*.xm' -o \
-            -name 'Icon-192.png' -o \
-            -name 'Icon-maskable-192.png' -o \
-            -name 'Icon-maskable-512.png' -o \
-            -name 'Icon-maskable-512 (1).png' \
-          \) -delete || true
+          # The WebView shell uses bazarek_icon.png as its actual launcher icon.
+          # Remove old copied PWA/icon assets whose names are illegal Android resources
+          # (uppercase letters, spaces, or other invalid resource-name characters).
+          find android_shell/app/src/main/res -type f \
+            \( -name 'Icon-*.png' -o -name 'Icon-*' -o -name '* *' -o -name '*.xm' \
+               -o -name '1' -o -name '2' -o -name '3' -o -name '4' -o -name '5' \
+               -o -name '6' -o -name '7' -o -name '8' -o -name '9' \
+            \) -delete || true
 
       - name: Build Android WebView shell
         working-directory: android_shell
