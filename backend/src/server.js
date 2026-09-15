@@ -269,15 +269,17 @@ app.get('/api/me', requireUser, async (req, res) => {
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('profiles').select('*').eq('id', req.user.id).single();
     if (error) throw error;
+    const { data: ads } = await db.from('products').select('is_active,views_count').eq('vendor_id', req.user.id);
+    const list=ads||[]; data.active_ads=list.filter(a=>a.is_active===true).length; data.total_ads=list.length; data.total_views=list.reduce((n,a)=>n+Number(a.views_count||0),0);
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در دریافت پروفایل.' }); }
 });
 
 app.patch('/api/me', requireUser, async (req, res) => {
   try {
-    const { full_name, shop_name, phone, city } = req.body || {};
+    const { full_name, shop_name, phone, city, bio } = req.body || {};
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('profiles').update({ full_name, shop_name, phone, city, updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
+    const { data, error } = await db.from('profiles').update({ full_name: String(full_name||'').trim().slice(0,120), shop_name: String(shop_name||'').trim().slice(0,120), phone: String(phone||'').trim().slice(0,30), city: String(city||'').trim().slice(0,120), bio: String(bio||'').trim().slice(0,500), updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
@@ -687,6 +689,12 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
 });
 
 app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('admin_login_events').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت رویدادهای امنیتی.'});}});
+
+
+app.get('/api/support/requests', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت درخواست‌های پشتیبانی.'});}});
+app.post('/api/support/requests', requireUser, async (req,res)=>{try{const type=String(req.body?.type||'support');const allowed=['bug','suggestion','support','report'];if(!allowed.includes(type))return res.status(400).json({error:'نوع درخواست نامعتبر است.'});const title=String(req.body?.title||'').trim().slice(0,160);const message=String(req.body?.message||'').trim().slice(0,4000);if(!title||!message)return res.status(400).json({error:'موضوع و توضیح الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').insert([{user_id:req.user.id,type,title,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست پشتیبانی.'});}});
+app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*,profiles(full_name,phone,city,shop_name)').order('created_at',{ascending:false}).limit(500);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پشتیبانی.'});}});
+app.patch('/api/admin/support/requests/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'in_progress');if(!['open','in_progress','answered','resolved','closed'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const reply=String(req.body?.admin_reply||'').trim().slice(0,4000);const db=getSupabaseAdmin();const {data:old}=await db.from('support_requests').select('user_id,title').eq('id',req.params.id).maybeSingle();const {data,error}=await db.from('support_requests').update({status,admin_reply:reply,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(old?.user_id&&reply){await db.from('user_notifications').insert([{user_id:old.user_id,type:'support',title:'پاسخ پشتیبانی بازارک',message:`پاسخ درخواست «${old.title||'پشتیبانی'}» آماده شد.`}]);}res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در پاسخ به درخواست.'});}});
 
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   try {
