@@ -24,9 +24,29 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      # Build the lightweight native Android WebView shell already included
-      # in this repository. It avoids the Flutter InAppWebView blank-screen
-      # issue on some Android devices and opens the live Bazarek website.
+      # The repository contains a few accidentally uploaded resource files
+      # with invalid Android resource names. Keep the real app resources only.
+      - name: Clean invalid Android resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          RES="android_shell/app/src/main/res"
+          rm -f "$RES/drawable/1"
+          rm -f "$RES/mipmap-hdpi/1"
+          rm -f "$RES/mipmap-mdpi/1"
+          rm -f "$RES/mipmap-xhdpi/1"
+          rm -f "$RES/mipmap-xxhdpi/1"
+          rm -f "$RES/mipmap-xxxhdpi/1"
+          rm -f "$RES/xml/file_paths.xm"
+          rm -f "$RES/drawable-nodpi/Icon-192.png"
+          rm -f "$RES/drawable-nodpi/Icon-192 (1).png"
+          rm -f "$RES/drawable-nodpi/Icon-maskable-192.png"
+          rm -f "$RES/drawable-nodpi/Icon-maskable-512.png"
+          rm -f "$RES/drawable-nodpi/Icon-maskable-512 (1).png"
+          test -f "$RES/drawable-nodpi/bazarek_icon.png"
+          test -f "$RES/xml/file_paths.xml"
+          test -f "$RES/xml/network_security_config.xml"
+
       - name: Build Android WebView shell
         working-directory: android_shell
         run: gradle :app:assembleRelease --no-daemon
