@@ -2731,7 +2731,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: Text(tr(context, 'download_app')),
             subtitle: Text(tr(context, 'download_app_desc')),
             onTap: () async {
-              const apkUrl = 'https://github.com/aj3157247-bot/Bazarek/releases/latest/download/bazarek.apk';
+              const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
               final uri = Uri.parse(apkUrl);
               try {
                 final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
