@@ -62,16 +62,32 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     final prefs = await SharedPreferences.getInstance();
     final lang = prefs.getString('language') ?? 'fa';
     final isDark = prefs.getBool('isDark') ?? false;
+
+    // Restore the saved session before the first authenticated screens are
+    // rendered. The access token can expire while the app is closed, so use
+    // the saved Supabase refresh token to obtain a fresh session.
     AuthService.token = prefs.getString('auth_token');
     AuthService.userName = prefs.getString('user_name');
     AuthService.userContact = prefs.getString('user_contact');
     AuthService.avatarUrl = prefs.getString('avatar_url');
     AuthService.refreshToken = prefs.getString('refresh_token');
+
     // توکن‌های ساختگی نسخه‌های قدیمی معتبر نیستند؛ آنها را پاک می‌کنیم.
     if (AuthService.token != null && AuthService.token!.startsWith('local_')) {
       await AuthService.logout();
+    } else if (AuthService.token != null && AuthService.token!.isNotEmpty) {
+      // If a refresh token exists, refresh the session on every app start.
+      // This keeps the user signed in even after the access token expires.
+      if (AuthService.refreshToken != null && AuthService.refreshToken!.isNotEmpty) {
+        final refreshed = await ApiService.refreshSession();
+        if (!refreshed) {
+          // Keep the cached login if the network is temporarily unavailable.
+          // A later authenticated API request can refresh it again.
+        }
+      }
     }
 
+    if (!mounted) return;
     setState(() {
       _locale = Locale(lang);
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
@@ -550,6 +566,8 @@ class AuthService {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) await prefs.setString('avatar_url', avatarUrl!);
     if (refreshTokenVal != null && refreshTokenVal.isNotEmpty) {
       await prefs.setString('refresh_token', refreshTokenVal);
+    } else {
+      await prefs.remove('refresh_token');
     }
     authVersion.value++;
   }
