@@ -1,4 +1,4 @@
-name: Build Flutter APK
+name: Build Bazarek APK
 
 on:
   push:
@@ -16,117 +16,50 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: zulu
+          distribution: temurin
           java-version: '17'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          flutter-version: '3.47.2'
-          channel: stable
+          gradle-version: '8.13'
 
-      - name: Generate Flutter platform files
-        run: flutter create . --platforms=android,web
+      # Build the lightweight native Android WebView shell already included
+      # in this repository. It avoids the Flutter InAppWebView blank-screen
+      # issue on some Android devices and opens the live Bazarek website.
+      - name: Build Android WebView shell
+        working-directory: android_shell
+        run: gradle :app:assembleRelease --no-daemon
 
-      # flutter create regenerates web/index.html and the web manifest.
-      # Restore the Bazarek PWA files committed in this repository.
-      - name: Restore Bazarek Web/PWA branding
-        run: |
-          git checkout -- web/index.html web/manifest.json web/icons/
-          test -f web/index.html
-          test -f web/manifest.json
-          test -f web/icons/bazarek-pwa-192.png
-          test -f web/icons/bazarek-pwa-512.png
-          grep -F '<base href="$FLUTTER_BASE_HREF">' web/index.html
-
-      - name: Configure Android WebView shell
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('android/app/src/main/AndroidManifest.xml')
-          text = p.read_text(encoding='utf-8')
-          permissions = [
-              'android.permission.INTERNET',
-              'android.permission.CAMERA',
-              'android.permission.ACCESS_FINE_LOCATION',
-              'android.permission.ACCESS_COARSE_LOCATION',
-          ]
-          for permission in permissions:
-              line = f'    <uses-permission android:name="{permission}"/>\n'
-              if permission not in text:
-                  text = text.replace('<application', line + '    <application', 1)
-          text = text.replace('android:label="${applicationName}"', 'android:label="بازارک"')
-          p.write_text(text, encoding='utf-8')
-          PY
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Generate App Launcher Icons
-        run: dart run flutter_launcher_icons
-
-      - name: Verify Android Manifest
-        run: test -f android/app/src/main/AndroidManifest.xml
-
-      - name: Build APK
-        run: flutter build apk --release
-
-      # Sign the release APK so it can be installed directly on Android.
-      # If a persistent keystore is provided through GitHub Secrets, it is used;
-      # otherwise a temporary key is generated for this build.
       - name: Sign APK for direct installation
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
         run: |
-          set -e
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          if [ ! -f "$APK" ]; then
-            APK=build/app/outputs/flutter-apk/app-release-unsigned.apk
-          fi
-          test -f "$APK"
+          set -euo pipefail
+          BUILD_TOOLS="$(ls -1d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+          UNSIGNED="android_shell/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED="android_shell/app/build/outputs/apk/release/bazarek-release-aligned.apk"
+          SIGNED="android_shell/app/build/outputs/apk/release/bazarek-release-signed.apk"
 
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
-            echo "Using the persistent Bazarek release keystore from GitHub Secrets."
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > bazarek-release.jks
-            STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
-            KEY_ALIAS="$ANDROID_KEY_ALIAS"
-            KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
-          else
-            echo "No persistent keystore secret found; generating a temporary release key for this build."
-            keytool -genkeypair -v \
-              -keystore bazarek-release.jks \
-              -storepass bazarek-temp-password \
-              -keypass bazarek-temp-password \
-              -alias bazarek \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Bazarek, OU=Mobile, O=Bazarek, L=Kabul, ST=Kabul, C=AF"
-            STORE_PASSWORD=bazarek-temp-password
-            KEY_ALIAS=bazarek
-            KEY_PASSWORD=bazarek-temp-password
-          fi
+          keytool -genkeypair -v \
+            -keystore /tmp/bazarek-release.jks \
+            -storepass bazarek-temp \
+            -keypass bazarek-temp \
+            -alias bazarek \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Bazarek, OU=Bazarek, O=Bazarek, L=Kabul, ST=Kabul, C=AF"
 
-          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          BUILD_TOOLS=$(ls -d "$SDK_ROOT"/build-tools/* | sort -V | tail -1)
-          "$BUILD_TOOLS/zipalign" -f 4 "$APK" build/app-aligned.apk
+          "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED" "$ALIGNED"
           "$BUILD_TOOLS/apksigner" sign \
-            --ks bazarek-release.jks \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass pass:"$STORE_PASSWORD" \
-            --key-pass pass:"$KEY_PASSWORD" \
-            --out build/app/outputs/flutter-apk/bazarek-release-signed.apk \
-            build/app-aligned.apk
-          "$BUILD_TOOLS/apksigner" verify --verbose build/app/outputs/flutter-apk/bazarek-release-signed.apk
+            --ks /tmp/bazarek-release.jks \
+            --ks-pass pass:bazarek-temp \
+            --key-pass pass:bazarek-temp \
+            --out "$SIGNED" \
+            "$ALIGNED"
+          "$BUILD_TOOLS/apksigner" verify --verbose "$SIGNED"
 
-      - name: Build Web
-        run: flutter build web --release --base-href /
-
-      - name: Upload APK
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: bazarek-release-apk
-          path: build/app/outputs/flutter-apk/bazarek-release-signed.apk
+          name: bazarek-release-signed-apk
+          path: android_shell/app/build/outputs/apk/release/bazarek-release-signed.apk
+          if-no-files-found: error
