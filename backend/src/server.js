@@ -437,7 +437,22 @@ app.patch('/api/me/notifications/:id/read', requireUser, async (req,res)=>{try{c
 app.delete('/api/me/notifications/:id', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('user_notifications').delete().eq('id',req.params.id).eq('user_id',req.user.id);if(error)throw error;res.json({ok:true});}catch(e){res.status(500).json({error:'خطا در حذف اعلان.'});}});
 
 app.post('/api/reports', requireUser, async (req,res)=>{
-  try{const listingId=String(req.body?.listing_id||'').trim();const reason=String(req.body?.reason||'').trim().slice(0,500);if(!listingId||!reason)return res.status(400).json({error:'آگهی و دلیل گزارش الزامی است.'});const db=getSupabaseAdmin();const {data:listing}=await db.from('products').select('id').eq('id',listingId).maybeSingle();if(!listing)return res.status(404).json({error:'آگهی پیدا نشد.'});const {data,error}=await db.from('reports').insert([{listing_id:listingId,reporter_id:req.user.id,reason}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت گزارش.'});}
+  try{
+    const listingId=String(req.body?.listing_id||'').trim();
+    const reason=String(req.body?.reason||'').trim().slice(0,500);
+    if(!listingId||!reason)return res.status(400).json({error:'آگهی و دلیل گزارش الزامی است.'});
+    const db=getSupabaseAdmin();
+    const {data:listing,error:listingError}=await db.from('products').select('id,vendor_id').eq('id',listingId).maybeSingle();
+    if(listingError)throw listingError;
+    if(!listing)return res.status(404).json({error:'آگهی پیدا نشد.'});
+    if(listing.vendor_id===req.user.id)return res.status(400).json({error:'نمی‌توانید آگهی خودتان را گزارش کنید.'});
+    const {data:existing,error:existingError}=await db.from('reports').select('id').eq('listing_id',listingId).eq('reporter_id',req.user.id).eq('status','open').maybeSingle();
+    if(existingError)throw existingError;
+    if(existing)return res.status(409).json({error:'این آگهی را قبلاً گزارش کرده‌اید؛ گزارش شما در انتظار بررسی است.'});
+    const {data,error}=await db.from('reports').insert([{listing_id:listingId,reporter_id:req.user.id,reason}]).select().single();
+    if(error)throw error;
+    res.status(201).json(data);
+  }catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت گزارش.'});}
 });
 
 app.post('/api/admin/login', async (req, res) => {
@@ -655,7 +670,12 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
     const resolutionNote=String(req.body?.resolution_note||'').trim().slice(0,1000);
     const {data:listing}=await db.from('products').select('id,title,vendor_id').eq('id',report.listing_id).maybeSingle();
     if(disableListing && listing) await db.from('products').update({is_active:false,updated_at:new Date().toISOString()}).eq('id',listing.id);
-    if(warningMessage && listing?.vendor_id) await db.from('user_warnings').insert([{user_id:listing.vendor_id,message:warningMessage}]);
+    if(warningMessage && listing?.vendor_id) {
+      await db.from('user_warnings').insert([{user_id:listing.vendor_id,message:warningMessage}]);
+      await db.from('user_notifications').insert([{
+        user_id:listing.vendor_id,type:'warning',title:'هشدار مدیریت بازارک',message:warningMessage
+      }]);
+    }
     if(thankReporter && report.reporter_id) await db.from('user_notifications').insert([{
       user_id:report.reporter_id,type:'report',title:'تشکر بابت گزارش درست',
       message:'از شما بابت اطلاع‌رسانی مسئولانه تشکر می‌کنیم. گزارش شما بررسی شد و اقدام لازم انجام گرفت.'
