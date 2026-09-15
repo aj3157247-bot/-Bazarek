@@ -155,7 +155,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   bool loading = true;
   String? loadError;
   Map<String, dynamic> stats = {}, money = {};
-  List<Map<String, dynamic>> users = [], products = [], reports = [], warnings = [], supportRequests = [], securityEvents = [];
+  List<Map<String, dynamic>> users = [], products = [], reports = [], warnings = [], support = [], securityEvents = [];
   Timer? _clockTimer;
 
   @override void initState() {
@@ -177,8 +177,8 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
         _AdminApi.list('/admin/products', widget.token),
         _AdminApi.list('/admin/reports', widget.token),
         _AdminApi.list('/admin/warnings', widget.token),
+        _AdminApi.list('/admin/support', widget.token),
         _AdminApi.map('/admin/monetization', widget.token),
-        _AdminApi.list('/admin/support/requests', widget.token),
         _AdminApi.list('/admin/security/events', widget.token),
       ]);
       if (!mounted) return;
@@ -188,8 +188,8 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
         products = List<Map<String, dynamic>>.from(results[2] as List);
         reports = List<Map<String, dynamic>>.from(results[3] as List);
         warnings = List<Map<String, dynamic>>.from(results[4] as List);
-        money = Map<String, dynamic>.from(results[5] as Map);
-        supportRequests = List<Map<String, dynamic>>.from(results[6] as List);
+        support = List<Map<String, dynamic>>.from(results[5] as List);
+        money = Map<String, dynamic>.from(results[6] as Map);
         securityEvents = List<Map<String, dynamic>>.from(results[7] as List);
         loading = false;
       });
@@ -375,7 +375,6 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
 
   Widget _overview() {
     final openReports = reports.where((x) => x['status'] == 'open').length;
-    final openSupport = supportRequests.where((x) => x['status'] == 'open' || x['status'] == 'in_progress').length;
     final blocked = users.where((x) => x['is_blocked'] == true).length;
     final pendingOrders = (money['orders'] as List? ?? []).where((x) => x is Map && x['status'] == 'pending').length;
     final pendingSubs = (money['subscriptions'] as List? ?? []).where((x) => x is Map && x['status'] == 'pending').length;
@@ -383,14 +382,14 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
     return RefreshIndicator(onRefresh: _loadAll, child: ListView(padding: const EdgeInsets.all(16), children: [
       const Text('خلاصه وضعیت', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 14),
       GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 4 : 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.45, children: [
-        _clickStat('کاربران', stats['users'] ?? users.length, Icons.people, 2), _clickStat('آگهی‌ها', stats['products'] ?? products.length, Icons.campaign, 1), _clickStat('شکایات باز', openReports, Icons.report_problem, 3), _clickStat('پشتیبانی باز', openSupport, Icons.support_agent, 4), _clickStat('مسدودها', blocked, Icons.block, 2),
+        _clickStat('کاربران', stats['users'] ?? users.length, Icons.people, 2), _clickStat('آگهی‌ها', stats['products'] ?? products.length, Icons.campaign, 1), _clickStat('شکایات باز', openReports, Icons.report_problem, 3), _clickStat('مسدودها', blocked, Icons.block, 2),
       ]),
       const SizedBox(height: 18),
       _dashboardCard(Icons.payments_outlined, 'درآمد ثبت‌شده', '$revenue افغانی', 5),
       _dashboardCard(Icons.pending_actions, 'سفارش‌های ارتقای آگهی', '$pendingOrders مورد در انتظار بررسی', 5),
       _dashboardCard(Icons.subscriptions_outlined, 'اشتراک‌ها', '$pendingSubs درخواست در انتظار بررسی', 5),
-      _dashboardCard(Icons.report_gmailerrorred_outlined, 'شکایات', '$openReports گزارش باز', 3), _dashboardCard(Icons.support_agent_outlined, 'پشتیبانی', '$openSupport درخواست باز', 4),
-      _dashboardCard(Icons.security_outlined, 'امنیت مدیریت', '${securityEvents.length} ورود اخیر ثبت شده', 7),
+      _dashboardCard(Icons.report_gmailerrorred_outlined, 'شکایات', '$openReports گزارش باز', 3),
+      _dashboardCard(Icons.security_outlined, 'امنیت مدیریت', '${securityEvents.length} ورود اخیر ثبت شده', 6),
       Card(child: ListTile(leading: const Icon(Icons.info_outline), title: const Text('منطق درآمد'), subtitle: Text('فقط پرداخت‌های تأییدشده در درآمد حساب می‌شوند. پرداخت‌های در انتظار بررسی: ${NumberFormatLike.afn(money['pending_afn'])} افغانی.'))),
     ]));
   }
@@ -414,12 +413,84 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
     ])));
   });
 
-  Future<void> _supportAction(Map<String,dynamic> r) async {
-    final reply=TextEditingController(text:r['admin_reply']?.toString()??'');
-    String status=r['status']?.toString()??'open';
-    await showDialog(context:context,builder:(_)=>StatefulBuilder(builder:(c,setLocal)=>AlertDialog(title:Text(r['title']?.toString()??'درخواست پشتیبانی'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('کاربر: ${r['profiles']?['full_name']??'-'} • ${r['profiles']?['phone']??'-'}'),const SizedBox(height:12),Text(r['message']?.toString()??'-'),const SizedBox(height:16),DropdownButtonFormField<String>(value:status,items:const[DropdownMenuItem(value:'open',child:Text('جدید')),DropdownMenuItem(value:'in_progress',child:Text('در حال بررسی')),DropdownMenuItem(value:'answered',child:Text('پاسخ داده شد')),DropdownMenuItem(value:'resolved',child:Text('حل شد')),DropdownMenuItem(value:'closed',child:Text('بسته'))],onChanged:(v)=>setLocal(()=>status=v??status)),TextField(controller:reply,maxLines:5,decoration:const InputDecoration(labelText:'پاسخ به کاربر',border:OutlineInputBorder()))]))),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('انصراف')),FilledButton(onPressed:()async{Navigator.pop(c);await _run(()=>_AdminApi.patch('/admin/support/requests/${r['id']}',widget.token,{'status':status,'admin_reply':reply.text.trim()}),success:'پاسخ پشتیبانی ثبت شد.');},child:const Text('ذخیره و ارسال'))]));
+  String _supportType(String type) {
+    switch (type) {
+      case 'bug': return '🐞 گزارش اشکال';
+      case 'suggestion': return '💡 پیشنهاد';
+      case 'listing_report': return '📢 گزارش آگهی یا کاربر';
+      default: return '💬 پشتیبانی';
+    }
   }
-  Widget _support()=>_searchableList(supportRequests,'درخواست پشتیبانی وجود ندارد',(r)=>Card(child:ListTile(leading:const Icon(Icons.support_agent_outlined,size:34),title:Text(r['title']?.toString()??'-'),subtitle:Text('${r['type']??'support'} • ${r['status']??'open'}\nکاربر: ${r['profiles']?['full_name']??'-'} • ${r['profiles']?['phone']??'-'}\n${r['message']??''}',maxLines:4,overflow:TextOverflow.ellipsis),isThreeLine:true,trailing:FilledButton(onPressed:()=>_supportAction(r),child:const Text('رسیدگی')))));
+
+  String _supportStatus(String status) {
+    switch (status) {
+      case 'in_progress': return 'در حال بررسی';
+      case 'answered': return 'پاسخ داده شد';
+      case 'resolved': return 'حل شد';
+      default: return 'جدید';
+    }
+  }
+
+  Future<void> _replySupport(Map<String, dynamic> item) async {
+    final reply = TextEditingController(text: item['admin_reply']?.toString() ?? '');
+    String status = item['status']?.toString() ?? 'new';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(item['subject']?.toString() ?? 'درخواست پشتیبانی'),
+          content: SizedBox(width: 560, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('نوع: ${_supportType(item['type']?.toString() ?? 'support')}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('کاربر: ${_person(item['user'] is Map ? Map<String, dynamic>.from(item['user']) : null)}'),
+            Text('شماره: ${item['user'] is Map ? (item['user']['phone'] ?? '-') : '-'}'),
+            const Divider(height: 24),
+            const Text('متن کاربر:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(item['message']?.toString() ?? '-'),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: status,
+              decoration: const InputDecoration(labelText: 'وضعیت', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'new', child: Text('جدید')),
+                DropdownMenuItem(value: 'in_progress', child: Text('در حال بررسی')),
+                DropdownMenuItem(value: 'answered', child: Text('پاسخ داده شد')),
+                DropdownMenuItem(value: 'resolved', child: Text('حل شد')),
+              ],
+              onChanged: (v) => setDialogState(() => status = v ?? 'new'),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: reply, minLines: 4, maxLines: 8, maxLength: 5000, decoration: const InputDecoration(labelText: 'پاسخ مدیر', hintText: 'پاسخ خود را برای کاربر بنویسید...', border: OutlineInputBorder())),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('ذخیره و ارسال پاسخ')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true) {
+      await _run(
+        () => _AdminApi.patch('/admin/support/${item['id']}', widget.token, {'status': status, 'admin_reply': reply.text.trim()}),
+        success: 'پاسخ پشتیبانی ثبت شد.',
+      );
+    }
+    reply.dispose();
+  }
+
+  Widget _support() => _searchableList(support, 'درخواست پشتیبانی وجود ندارد', (s) {
+    final user = s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null;
+    final status = s['status']?.toString() ?? 'new';
+    return Card(child: ListTile(
+      leading: Icon(status == 'new' ? Icons.mark_email_unread_outlined : Icons.support_agent_outlined),
+      title: Text(s['subject']?.toString() ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text('${_supportType(s['type']?.toString() ?? 'support')} • ${_supportStatus(status)}\nکاربر: ${_person(user)} • ${user?['phone'] ?? '-'}\n${s['message']?.toString() ?? '-'}', maxLines: 4, overflow: TextOverflow.ellipsis),
+      isThreeLine: true,
+      trailing: const Icon(Icons.reply_outlined),
+      onTap: () => _replySupport(s),
+    ));
+  });
 
   Widget _warnings() => _searchableList(warnings, 'هشداری ثبت نشده است', (w) => Card(child: ListTile(leading: const Icon(Icons.warning_amber_outlined), title: Text(w['message']?.toString() ?? '-'), subtitle: Text('کاربر: ${w['user_id'] ?? '-'}\n${w['created_at'] ?? '-'}'), isThreeLine: true)));
 

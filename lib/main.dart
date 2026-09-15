@@ -837,6 +837,39 @@ class ApiService {
     return Map<String,dynamic>.from(data);
   }
 
+
+  static Future<List<dynamic>> getSupportRequests() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support'), headers: headers).timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support'), headers: headers).timeout(const Duration(seconds: 15));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت درخواست‌های پشتیبانی.') : 'خطا در دریافت درخواست‌های پشتیبانی.');
+    return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
+  }
+
+  static Future<Map<String, dynamic>> createSupportRequest({
+    required String type,
+    required String subject,
+    required String message,
+  }) async {
+    var res = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/support'),
+      headers: headers,
+      body: jsonEncode({'type': type, 'subject': subject, 'message': message}),
+    ).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/support'),
+        headers: headers,
+        body: jsonEncode({'type': type, 'subject': subject, 'message': message}),
+      ).timeout(const Duration(seconds: 20));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ارسال درخواست ناموفق بود.') : 'ارسال درخواست ناموفق بود.');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   static Future<List<dynamic>> getNotifications() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/notifications'), headers: headers).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401 && await refreshSession()) {
@@ -2608,8 +2641,8 @@ Future<PickedProfileImage?> pickProfileImage() async {
       allowMultiple: false,
       withData: true,
     );
-    if (result == null || result.files.isEmpty) return null;
-    final file = result.files.first;
+    if (result == null || result.isEmpty) return null;
+    final file = result.first;
     final bytes = file.bytes;
     if (bytes == null || bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
@@ -2694,6 +2727,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
             ),
             ListTile(
+              leading: const Icon(Icons.support_agent_outlined),
+              title: Text(psText(context, 'پشتیبانی و ارتباط با ما', 'ملاتړ او له موږ سره اړیکه')),
+              subtitle: Text(psText(context, 'گزارش اشکال، پیشنهاد و پیام به تیم بازارک', 'د ستونزې راپور، وړاندیز او د بازارک ټیم ته پیغام')),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())),
+            ),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: Text(tr(context, 'logout'), style: const TextStyle(color: Colors.red)),
               onTap: () async {
@@ -2764,6 +2803,178 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+
+class SupportScreen extends StatefulWidget {
+  const SupportScreen({super.key});
+  @override State<SupportScreen> createState() => _SupportScreenState();
+}
+
+class _SupportScreenState extends State<SupportScreen> {
+  bool loading = true;
+  bool sending = false;
+  String? error;
+  List<Map<String, dynamic>> items = [];
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    try {
+      final data = await ApiService.getSupportRequests();
+      if (!mounted) return;
+      setState(() {
+        items = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        loading = false;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  String _typeLabel(String type) {
+    switch (type) {
+      case 'bug': return psText(context, '🐞 گزارش اشکال', '🐞 د ستونزې راپور');
+      case 'suggestion': return psText(context, '💡 پیشنهاد', '💡 وړاندیز');
+      case 'listing_report': return psText(context, '📢 گزارش آگهی یا کاربر', '📢 د اعلان یا کارونکي راپور');
+      default: return psText(context, '💬 پیام به پشتیبانی', '💬 ملاتړ ته پیغام');
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'in_progress': return psText(context, 'در حال بررسی', 'د کتنې په حال کې');
+      case 'answered': return psText(context, 'پاسخ داده شد', 'ځواب ورکړل شو');
+      case 'resolved': return psText(context, 'حل شد', 'حل شو');
+      default: return psText(context, 'جدید', 'نوی');
+    }
+  }
+
+  Future<void> _newRequest() async {
+    final subject = TextEditingController();
+    final message = TextEditingController();
+    String type = 'support';
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(psText(context, 'ارتباط با تیم بازارک', 'له د بازارک ټیم سره اړیکه')),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<String>(
+              value: type,
+              decoration: InputDecoration(
+                labelText: psText(context, 'موضوع', 'موضوع'),
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(value: 'support', child: Text(psText(context, '💬 پیام به پشتیبانی', '💬 ملاتړ ته پیغام'))),
+                DropdownMenuItem(value: 'bug', child: Text(psText(context, '🐞 گزارش اشکال', '🐞 د ستونزې راپور'))),
+                DropdownMenuItem(value: 'suggestion', child: Text(psText(context, '💡 پیشنهاد برای بهتر شدن بازارک', '💡 د بازارک د ښه کېدو وړاندیز'))),
+                DropdownMenuItem(value: 'listing_report', child: Text(psText(context, '📢 گزارش آگهی یا کاربر', '📢 د اعلان یا کارونکي راپور'))),
+              ],
+              onChanged: (v) => setDialogState(() => type = v ?? 'support'),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: subject, maxLength: 120, decoration: InputDecoration(labelText: psText(context, 'عنوان', 'سرلیک'), border: const OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: message, minLines: 4, maxLines: 8, maxLength: 3000, decoration: InputDecoration(labelText: psText(context, 'توضیح', 'تشریح'), hintText: psText(context, 'مشکل یا پیشنهاد خود را بنویسید...', 'خپله ستونزه یا وړاندیز ولیکئ...'), border: const OutlineInputBorder())),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(psText(context, 'انصراف', 'لغوه'))),
+            FilledButton(
+              onPressed: sending ? null : () async {
+                if (subject.text.trim().isEmpty || message.text.trim().isEmpty) return;
+                setDialogState(() {});
+                setState(() => sending = true);
+                try {
+                  await ApiService.createSupportRequest(type: type, subject: subject.text.trim(), message: message.text.trim());
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+                } catch (e) {
+                  if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(friendlyNetworkError(dialogContext, e))));
+                } finally {
+                  if (mounted) setState(() => sending = false);
+                }
+              },
+              child: Text(sending ? psText(context, 'در حال ارسال...', 'د لېږلو په حال کې...') : psText(context, 'ارسال', 'لېږل')),
+            ),
+          ],
+        ),
+      ),
+    );
+    subject.dispose();
+    message.dispose();
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'درخواست شما ثبت شد.', 'ستاسو غوښتنه ثبت شوه.'))));
+      _load();
+    }
+  }
+
+  void _showRequest(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(item['subject']?.toString() ?? '-'),
+        content: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_typeLabel(item['type']?.toString() ?? 'support'), style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('${psText(context, 'وضعیت', 'حالت')}: ${_statusLabel(item['status']?.toString() ?? 'new')}'),
+          const Divider(height: 24),
+          Text(item['message']?.toString() ?? '-'),
+          if ((item['admin_reply']?.toString() ?? '').trim().isNotEmpty) ...[
+            const Divider(height: 24),
+            Text(psText(context, 'پاسخ پشتیبانی', 'د ملاتړ ځواب'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(item['admin_reply'].toString()),
+          ],
+        ])),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(psText(context, 'بستن', 'تړل')))],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(psText(context, 'پشتیبانی و ارتباط با ما', 'ملاتړ او له موږ سره اړیکه')),
+      actions: [IconButton(onPressed: loading ? null : _load, icon: const Icon(Icons.refresh))],
+    ),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _newRequest,
+      icon: const Icon(Icons.add_comment_outlined),
+      label: Text(psText(context, 'درخواست جدید', 'نوې غوښتنه')),
+    ),
+    body: loading
+      ? const Center(child: CircularProgressIndicator())
+      : error != null
+        ? OfflineErrorView(onRetry: _load, message: error)
+        : RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+              children: [
+                Card(child: ListTile(
+                  leading: const Icon(Icons.support_agent, size: 38),
+                  title: Text(psText(context, 'پشتیبانی بازارک', 'د بازارک ملاتړ'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(psText(context, 'اگر مشکل یا پیشنهادی دارید، از همین‌جا برای تیم بازارک بفرستید.', 'که ستونزه یا وړاندیز لرئ، له همدې ځایه یې د بازارک ټیم ته ولېږئ.')),
+                )),
+                if (items.isEmpty)
+                  Card(child: ListTile(leading: const Icon(Icons.inbox_outlined), title: Text(psText(context, 'هنوز درخواستی ندارید.', 'تر اوسه کومه غوښتنه نه لرئ.'))))
+                else
+                  ...items.map((item) => Card(child: ListTile(
+                    onTap: () => _showRequest(item),
+                    leading: const Icon(Icons.forum_outlined),
+                    title: Text(item['subject']?.toString() ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis),
+                    subtitle: Text('${_typeLabel(item['type']?.toString() ?? 'support')}\n${_statusLabel(item['status']?.toString() ?? 'new')}${(item['admin_reply']?.toString() ?? '').trim().isNotEmpty ? ' • ${psText(context, 'پاسخ دارد', 'ځواب لري')}' : ''}'),
+                    isThreeLine: true,
+                    trailing: const Icon(Icons.chevron_left),
+                  ))),
+              ],
+            ),
+          ),
+  );
 }
 
 class NotificationsScreen extends StatefulWidget {
@@ -3007,9 +3218,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
         allowMultiple: true,
         withData: true,
       );
-      if (result == null || result.files.isEmpty) return;
+      if (result == null || result.isEmpty) return;
       final remaining = 10 - imageBytes.length;
-      for (final file in result.files.take(remaining)) {
+      for (final file in result.take(remaining)) {
         final bytes = file.bytes;
         if (bytes == null || bytes.isEmpty) continue;
         imageBytes.add(bytes);
