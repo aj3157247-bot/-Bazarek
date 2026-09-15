@@ -2643,8 +2643,8 @@ Future<PickedProfileImage?> pickProfileImage() async {
     );
     if (result == null || result.isEmpty) return null;
     final file = result.first;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
     return PickedProfileImage(bytes: bytes, name: file.name);
@@ -3221,8 +3221,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (result == null || result.isEmpty) return;
       final remaining = 10 - imageBytes.length;
       for (final file in result.take(remaining)) {
-        final bytes = file.bytes;
-        if (bytes == null || bytes.isEmpty) continue;
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) continue;
         imageBytes.add(bytes);
         imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
       }
