@@ -465,7 +465,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
             ),
             const SizedBox(height: 12),
             TextField(controller: reply, minLines: 4, maxLines: 8, maxLength: 5000, decoration: const InputDecoration(labelText: 'پاسخ مدیر', hintText: 'پاسخ خود را برای کاربر بنویسید...', border: OutlineInputBorder())),
-          ])),
+          ]))),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
             FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('ذخیره و ارسال پاسخ')),
