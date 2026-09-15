@@ -723,6 +723,26 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> submitReport({required String listingId, required String reason}) async {
+    var res = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/reports'),
+      headers: headers,
+      body: jsonEncode({'listing_id': listingId, 'reason': reason}),
+    ).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/reports'),
+        headers: headers,
+        body: jsonEncode({'listing_id': listingId, 'reason': reason}),
+      ).timeout(const Duration(seconds: 20));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 201) {
+      throw Exception(data is Map ? (data['error'] ?? 'خطا در ثبت گزارش آگهی.') : 'خطا در ثبت گزارش آگهی.');
+    }
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   static Future<List<dynamic>> getMyProducts() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/products'), headers: headers).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401 && await refreshSession()) {
@@ -1746,6 +1766,93 @@ class ProductDetailScreen extends StatelessWidget {
   final dynamic product;
   const ProductDetailScreen({super.key, required this.product});
 
+  Future<void> _reportListing(BuildContext context) async {
+    if (!await requireAccount(context)) return;
+    if (!context.mounted) return;
+
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    final reasons = ps
+        ? <String>['درغلي اعلان', 'جعلي/ناسم اعلان', 'نامناسب يا سپکاوی کوونکی محتوا', 'منع شوی توکی یا خدمت', 'سپیم یا تکراري اعلان', 'نور']
+        : <String>['کلاهبرداری یا فریب', 'آگهی جعلی یا اطلاعات نادرست', 'محتوای نامناسب یا توهین‌آمیز', 'کالای یا خدمات ممنوع', 'اسپم یا آگهی تکراری', 'سایر'];
+    String selected = reasons.first;
+    final other = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(ps ? 'د اعلان راپور' : 'گزارش آگهی'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(ps ? 'د دې اعلان د ستونزې دلیل وټاکئ:' : 'دلیل گزارش را انتخاب کنید:'),
+                  const SizedBox(height: 8),
+                  ...reasons.map((reason) => RadioListTile<String>(
+                        value: reason,
+                        groupValue: selected,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(reason),
+                        onChanged: (value) {
+                          if (value != null) setLocal(() => selected = value);
+                        },
+                      )),
+                  if (selected == reasons.last) ...[
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: other,
+                      maxLines: 3,
+                      maxLength: 500,
+                      decoration: InputDecoration(
+                        labelText: ps ? 'تفصیل' : 'توضیحات',
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(ps ? 'لغوه' : 'انصراف')),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.send_outlined),
+              label: Text(ps ? 'راپور لېږل' : 'ارسال گزارش'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (submitted != true) {
+      other.dispose();
+      return;
+    }
+
+    final reason = selected == reasons.last && other.text.trim().isNotEmpty
+        ? '${selected}: ${other.text.trim()}'
+        : selected;
+    try {
+      await ApiService.submitReport(listingId: product['id']?.toString() ?? '', reason: reason);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ps ? 'ستاسو راپور ثبت شو او مدیریت به یې وڅېړي.' : 'گزارش شما ثبت شد و توسط مدیریت بررسی می‌شود.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      other.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     List<dynamic> images = [];
@@ -1758,6 +1865,13 @@ class ProductDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(tr(context, 'details')),
+        actions: [
+          IconButton(
+            tooltip: Localizations.localeOf(context).languageCode == 'ps' ? 'د اعلان راپور' : 'گزارش آگهی',
+            onPressed: () => _reportListing(context),
+            icon: const Icon(Icons.flag_outlined),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -1807,6 +1921,15 @@ class ProductDetailScreen extends StatelessWidget {
                     leading: const Icon(Icons.location_on),
                     title: Text(localizedProvince(context, product['province']?.toString() ?? '')),
                     subtitle: LocalizedText(product['location_text']?.toString() ?? ''),
+                  ),
+                  const Divider(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _reportListing(context),
+                      icon: const Icon(Icons.flag_outlined),
+                      label: Text(psText(context, 'گزارش آگهی', 'د اعلان راپور')),
+                    ),
                   ),
                   if ((product['external_link'] ?? '').toString().trim().isNotEmpty) ...[
                     const Divider(height: 24),
@@ -2598,23 +2721,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             leading: const Icon(Icons.download_for_offline_outlined),
             title: Text(tr(context, 'download_app')),
             subtitle: Text(tr(context, 'download_app_desc')),
-            onTap: () async {
-              const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
-              final uri = Uri.parse(apkUrl);
-              try {
-                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!opened && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
-                  );
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
-                  );
-                }
-              }
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'لینک دانلود اپلیکیشن به‌زودی فعال می‌شود.', 'د اپلېکېشن د ډاونلوډ لینک به ژر فعال شي.'))));
             },
           ),
           const Divider(),
