@@ -34,7 +34,11 @@ jobs:
           find android_shell/app/src/main/res -type f \( \
             -name '1' -o -name '2' -o -name '3' -o -name '4' -o \
             -name '5' -o -name '6' -o -name '7' -o -name '8' -o -name '9' -o \
-            -name '*.xm' \
+            -name '*.xm' -o \
+            -name 'Icon-192.png' -o \
+            -name 'Icon-maskable-192.png' -o \
+            -name 'Icon-maskable-512.png' -o \
+            -name 'Icon-maskable-512 (1).png' \
           \) -delete || true
 
       - name: Build Android WebView shell
