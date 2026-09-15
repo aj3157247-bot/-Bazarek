@@ -2675,6 +2675,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: Text(tr(context, 'my_ads')),
+              subtitle: Text(psText(context, 'تمام آگهی‌هایی که ثبت کرده‌اید', 'ستاسو ټول ثبت شوي اعلانونه')),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+              ),
+            ),
+            ListTile(
               leading: const Icon(Icons.notifications_outlined),
               title: Text(psText(context, 'اعلان‌ها', 'خبرتیاوې')),
               subtitle: Text(psText(context, 'پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها', 'د سیسټم او راپورونو خبرتیاوې')),
