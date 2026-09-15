@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -55,6 +56,58 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
   void initState() {
     super.initState();
     _loadSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showAppDownloadPrompt();
+    });
+  }
+
+  void _showAppDownloadPrompt() {
+    if (!mounted) return;
+    const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
+    Timer? closeTimer;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        closeTimer ??= Timer(const Duration(seconds: 10), () {
+          if (Navigator.of(dialogContext).canPop()) {
+            Navigator.of(dialogContext).pop();
+          }
+        });
+
+        return AlertDialog(
+          title: const Text('📱 اپلیکیشن بازارک را دریافت کنید'),
+          content: const Text(
+            'برای استفاده سریع‌تر و راحت‌تر از بازارک، اپلیکیشن بازارک را دانلود کنید.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                closeTimer?.cancel();
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('بعداً'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.download),
+              label: const Text('دانلود اپلیکیشن'),
+              onPressed: () async {
+                closeTimer?.cancel();
+                final uri = Uri.parse(apkUrl);
+                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                if (!opened && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    ).whenComplete(() => closeTimer?.cancel());
   }
 
   Future<void> _loadSettings() async {
