@@ -27,6 +27,16 @@ jobs:
         with:
           gradle-version: '8.13'
 
+      - name: Clean invalid Android resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          find android_shell/app/src/main/res -type f \( \
+            -name '1' -o -name '2' -o -name '3' -o -name '4' -o \
+            -name '5' -o -name '6' -o -name '7' -o -name '8' -o -name '9' -o \
+            -name '*.xm' \
+          \) -delete || true
+
       - name: Build Android WebView shell
         working-directory: android_shell
         run: gradle :app:assembleRelease --no-daemon
@@ -57,11 +67,14 @@ jobs:
             "$ALIGNED"
           "$BUILD_TOOLS/apksigner" verify --verbose "$SIGNED"
 
+          # This exact filename is used by the website's download button.
+          cp "$SIGNED" bazarek.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: bazarek-release-signed-apk
-          path: android_shell/app/build/outputs/apk/release/bazarek-release-signed.apk
+          path: bazarek.apk
           if-no-files-found: error
 
       - name: Publish APK to GitHub Release
@@ -70,5 +83,5 @@ jobs:
           tag_name: v1.4.${{ github.run_number }}
           name: بازارک v1.4.${{ github.run_number }}
           body: نسخه قابل نصب مستقیم بازارک
-          files: android_shell/app/build/outputs/apk/release/bazarek-release-signed.apk
+          files: bazarek.apk
           fail_on_unmatched_files: true
