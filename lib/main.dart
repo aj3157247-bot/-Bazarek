@@ -56,58 +56,6 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
   void initState() {
     super.initState();
     _loadSettings();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showAppDownloadPrompt();
-    });
-  }
-
-  void _showAppDownloadPrompt() {
-    if (!mounted) return;
-    const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
-    Timer? closeTimer;
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        closeTimer ??= Timer(const Duration(seconds: 10), () {
-          if (Navigator.of(dialogContext).canPop()) {
-            Navigator.of(dialogContext).pop();
-          }
-        });
-
-        return AlertDialog(
-          title: const Text('📱 اپلیکیشن بازارک را دریافت کنید'),
-          content: const Text(
-            'برای استفاده سریع‌تر و راحت‌تر از بازارک، اپلیکیشن بازارک را دانلود کنید.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                closeTimer?.cancel();
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('بعداً'),
-            ),
-            FilledButton.icon(
-              icon: const Icon(Icons.download),
-              label: const Text('دانلود اپلیکیشن'),
-              onPressed: () async {
-                closeTimer?.cancel();
-                final uri = Uri.parse(apkUrl);
-                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                if (!opened && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
-                  );
-                }
-              },
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() => closeTimer?.cancel());
   }
 
   Future<void> _loadSettings() async {
@@ -697,12 +645,6 @@ class ApiService {
       return {'error': 'اتصال به سرور برقرار نشد. اینترنت و آدرس Backend را بررسی کنید.'};
     }
   }
-
-  static Future<Map<String,dynamic>> getProfile() async { final r=await http.get(Uri.parse('${ApiConfig.baseUrl}/me'),headers:headers).timeout(const Duration(seconds:15)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d is Map?(d['error']??'خطا در دریافت پروفایل.'):'خطا در دریافت پروفایل.'); return Map<String,dynamic>.from(d as Map); }
-  static Future<Map<String,dynamic>> updateProfile({String fullName='',String shopName='',String phone='',String city='',String bio=''}) async { final r=await http.patch(Uri.parse('${ApiConfig.baseUrl}/me'),headers:headers,body:jsonEncode({'full_name':fullName.trim(),'shop_name':shopName.trim(),'phone':phone.trim(),'city':city.trim(),'bio':bio.trim()})).timeout(const Duration(seconds:15)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d is Map?(d['error']??'خطا در ذخیره پروفایل.'):'خطا در ذخیره پروفایل.'); return Map<String,dynamic>.from(d as Map); }
-  static Future<List<Map<String,dynamic>>> getSupportRequests() async { final r=await http.get(Uri.parse('${ApiConfig.baseUrl}/support/requests'),headers:headers).timeout(const Duration(seconds:15)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d is Map?(d['error']??'خطا در دریافت پشتیبانی.'):'خطا در دریافت پشتیبانی.'); return List<Map<String,dynamic>>.from((d as List).map((e)=>Map<String,dynamic>.from(e))); }
-  static Future<Map<String,dynamic>> createSupportRequest(String type,String title,String message) async { final r=await http.post(Uri.parse('${ApiConfig.baseUrl}/support/requests'),headers:headers,body:jsonEncode({'type':type,'title':title.trim(),'message':message.trim()})).timeout(const Duration(seconds:15)); final d=jsonDecode(r.body); if(r.statusCode!=201)throw Exception(d is Map?(d['error']??'خطا در ثبت درخواست.'):'خطا در ثبت درخواست.'); return Map<String,dynamic>.from(d as Map); }
-  static Future<Map<String,dynamic>> getWallet() async { final r=await http.get(Uri.parse('${ApiConfig.baseUrl}/wallet'),headers:headers).timeout(const Duration(seconds:15)); final d=jsonDecode(r.body); if(r.statusCode!=200)throw Exception(d is Map?(d['error']??'خطا در دریافت کیف پول.'):'خطا در دریافت کیف پول.'); return Map<String,dynamic>.from(d as Map); }
 
   static Future<bool> refreshSession() async {
     final rt = AuthService.refreshToken;
@@ -2661,12 +2603,15 @@ Future<PickedProfileImage?> pickProfileImage() async {
   // image_picker's temporary browser Blob URL. This fixes the Web-only
   // "Could not load Blob from its URL" error.
   if (kIsWeb) {
-    final file = await FilePicker.pickFile(
+    final result = await FilePicker.pickFiles(
       type: FileType.image,
+      allowMultiple: false,
+      withData: true,
     );
-    if (file == null) return null;
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
+    if (result == null || result.files.isEmpty) return null;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
     return PickedProfileImage(bytes: bytes, name: file.name);
@@ -2689,77 +2634,137 @@ Future<PickedProfileImage?> pickProfileImage() async {
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
-  @override State<ProfileScreen> createState() => _ProfileScreenState();
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  Map<String,dynamic> profile = {};
-  bool loading = true;
-  @override void initState(){super.initState(); _load();}
-  Future<void> _load() async {
-    if (!AuthService.isLoggedIn) { if(mounted)setState(()=>loading=false); return; }
-    try { final d=await ApiService.getProfile(); if(mounted)setState(()=>profile=d); }
-    catch (_) {} finally { if(mounted)setState(()=>loading=false); }
-  }
-  Future<void> _editProfile() async {
-    final name=TextEditingController(text: profile['full_name']?.toString() ?? AuthService.userName ?? '');
-    final shop=TextEditingController(text: profile['shop_name']?.toString() ?? '');
-    final city=TextEditingController(text: profile['city']?.toString() ?? '');
-    final bio=TextEditingController(text: profile['bio']?.toString() ?? '');
-    final phone=TextEditingController(text: profile['phone']?.toString() ?? '');
-    final ok=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(
-      title:const Text('ویرایش پروفایل'),
-      content:SizedBox(width:480,child:SingleChildScrollView(child:Column(children:[
-        TextField(controller:name,decoration:const InputDecoration(labelText:'نام و نام خانوادگی',prefixIcon:Icon(Icons.person_outline))),
-        TextField(controller:shop,decoration:const InputDecoration(labelText:'نام فروشگاه')),
-        TextField(controller:city,decoration:const InputDecoration(labelText:'شهر / محل فعالیت')),
-        TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'شماره تلفن')),
-        TextField(controller:bio,maxLines:3,decoration:const InputDecoration(labelText:'معرفی کوتاه',hintText:'مثلاً فروشنده موبایل و لوازم جانبی')),
-      ]))),actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('انصراف')),FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text('ذخیره'))]));
-    if(ok!=true)return;
-    try { final d=await ApiService.updateProfile(fullName:name.text,shopName:shop.text,phone:phone.text,city:city.text,bio:bio.text); if(mounted)setState(()=>profile=d); await AuthService.saveUser(AuthService.token!,name.text.trim(),AuthService.userContact??phone.text.trim()); if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('پروفایل با موفقیت ذخیره شد.'))); }
-    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}
-  }
-  Widget _stat(String n,String label,IconData icon)=>Expanded(child:Column(children:[Icon(icon,size:24),const SizedBox(height:4),Text(n,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:12))]));
-  @override Widget build(BuildContext context){
-    final active=profile['active_ads']??0, total=profile['total_ads']??0, views=profile['total_views']??0;
-    return Scaffold(appBar:AppBar(title:Text(tr(context,'profile'))),body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.only(bottom:24),children:[
-      if(AuthService.isLoggedIn)...[
-        Container(padding:const EdgeInsets.fromLTRB(18,18,18,14),child:Column(children:[
-          Row(children:[GestureDetector(onTap:()async{final image=await pickProfileImage();if(image==null)return;try{await ApiService.uploadAvatar(image);if(mounted)setState((){});}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}},child:CircleAvatar(radius:38,backgroundImage:(AuthService.avatarUrl?.isNotEmpty??false)?NetworkImage(AuthService.avatarUrl!):null,child:(AuthService.avatarUrl?.isEmpty??true)?const Icon(Icons.person,size:38):null)),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(profile['full_name']?.toString().isNotEmpty==true?profile['full_name'].toString():'کاربر بازارک',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),if(profile['verified']==true)const Text('✓ تأییدشده',style:TextStyle(fontWeight:FontWeight.w600)),Text(profile['shop_name']?.toString()??''),Text(profile['city']?.toString()??'افغانستان',style:const TextStyle(color:Colors.grey))])),IconButton(onPressed:_editProfile,icon:const Icon(Icons.edit_outlined),tooltip:'ویرایش پروفایل')]),
-          if((profile['bio']?.toString()??'').isNotEmpty)Padding(padding:const EdgeInsets.only(top:10),child:Align(alignment:Alignment.centerRight,child:Text(profile['bio'].toString()))),
-          const SizedBox(height:14),Row(children:[_stat('$active','آگهی فعال',Icons.campaign_outlined),_stat('$total','کل آگهی‌ها',Icons.inventory_2_outlined),_stat('$views','بازدید آگهی‌ها',Icons.visibility_outlined)])
-        ])),
-        const Divider(),
-        ListTile(leading:const Icon(Icons.edit_outlined),title:const Text('ویرایش پروفایل'),subtitle:const Text('نام، فروشگاه، شهر، شماره و معرفی کوتاه'),onTap:_editProfile),
-        ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(tr(context,'my_ads')),subtitle:const Text('مدیریت آگهی‌های شما'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const MyProductsScreen()))),
-        ListTile(leading:const Icon(Icons.chat_bubble_outline),title:const Text('پیام‌های من'),subtitle:const Text('گفتگو با خریداران و فروشندگان'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const ChatListScreen()))),
-        ListTile(leading:const Icon(Icons.account_balance_wallet_outlined),title:const Text('موجودی حساب'),subtitle:const Text('کیف پول و تراکنش‌ها'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const WalletScreen()))),
-        ListTile(leading:const Icon(Icons.rocket_launch_outlined),title:const Text('خدمات ویژه'),subtitle:const Text('بیشتر دیده شوید و فروشگاه حرفه‌ای بسازید'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const BoostScreen()))),
-        ListTile(leading:const Icon(Icons.storefront_outlined),title:const Text('صفحه فروشگاه'),subtitle:const Text('آگهی‌های شما در یک صفحه برای مشتریان'),onTap:_editProfile),
-        ListTile(leading:const Icon(Icons.support_agent_outlined),title:const Text('پشتیبانی و ارتباط با ما'),subtitle:const Text('گزارش اشکال، پیشنهاد و ارتباط با تیم بازارک'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const SupportScreen()))),
-        ListTile(leading:const Icon(Icons.notifications_outlined),title:const Text('اعلان‌ها'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const NotificationsScreen()))),
-        ListTile(leading:const Icon(Icons.download_for_offline_outlined),title:const Text('دریافت اپلیکیشن بازارک'),subtitle:const Text('دانلود APK فقط از این بخش'),onTap:()async{await launchUrl(Uri.parse('https://bazarek-web.onrender.com/download/bazarek.apk'),mode:LaunchMode.externalApplication);}),
-        const Divider(),ListTile(leading:const Icon(Icons.settings_outlined),title:const Text('تنظیمات حساب و حریم خصوصی'),subtitle:const Text('امنیت، اعلان‌ها و تنظیمات حساب'),onTap:()=>showDialog(context:context,builder:(_)=>const AlertDialog(title:Text('تنظیمات حساب'),content:Text('تنظیمات امنیت و حریم خصوصی بازارک به‌زودی تکمیل می‌شود.')))),
-        ListTile(leading:const Icon(Icons.logout,color:Colors.red),title:const Text('خروج از حساب',style:TextStyle(color:Colors.red)),onTap:()async{await AuthService.logout();if(mounted)setState((){});}),
-      ] else ListTile(leading:const Icon(Icons.login),title:Text(tr(context,'login')),onTap:()async{await Navigator.push(context,MaterialPageRoute(builder:(_)=>const AuthScreen()));if(mounted){_load();setState((){});}}),
-      const Divider(),ListTile(leading:const Icon(Icons.admin_panel_settings_outlined),title:const Text('ورود مدیریت'),subtitle:const Text('پنل مدیریت بازارک'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AdminPanelScreen()))),
-      SwitchListTile(value:Theme.of(context).brightness==Brightness.dark,onChanged:(_)=>BazarBuzurgApp.toggleTheme(context),title:Text(tr(context,'dark_mode')),secondary:const Icon(Icons.dark_mode)),
-    ]));
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(context, 'profile'))),
+      body: ListView(
+        children: [
+          if (AuthService.isLoggedIn) ...[
+            UserAccountsDrawerHeader(
+              currentAccountPicture: GestureDetector(
+                onTap: () async {
+                  final image = await pickProfileImage();
+                  if (image == null) return;
+                  try {
+                    await ApiService.uploadAvatar(image);
+                    if (mounted) setState(() {});
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'عکس پروفایل با موفقیت تغییر کرد.', 'ستاسو د پروفایل انځور بدل شو.'))));
+                  } catch (e) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+                  }
+                },
+                child: CircleAvatar(
+                  backgroundImage: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty) ? NetworkImage(AuthService.avatarUrl!) : null,
+                  child: (AuthService.avatarUrl == null || AuthService.avatarUrl!.isEmpty) ? const Icon(Icons.person, size: 40) : null,
+                ),
+              ),
+              accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
+              accountEmail: Text(AuthService.userContact ?? ''),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_a_photo_outlined),
+              title: Text(psText(context, 'تغییر عکس پروفایل', 'د پروفایل انځور بدلول')),
+              subtitle: Text(psText(context, 'یک عکس از گالری انتخاب کنید.', 'له ګالري څخه یو انځور وټاکئ.')),
+              onTap: () async {
+                final image = await pickProfileImage();
+                if (image == null) return;
+                try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: Text(tr(context, 'my_ads')),
+              subtitle: Text(psText(context, 'تمام آگهی‌هایی که ثبت کرده‌اید', 'ستاسو ټول ثبت شوي اعلانونه')),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: Text(psText(context, 'اعلان‌ها', 'خبرتیاوې')),
+              subtitle: Text(psText(context, 'پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها', 'د سیسټم او راپورونو خبرتیاوې')),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: Text(tr(context, 'logout'), style: const TextStyle(color: Colors.red)),
+              onTap: () async {
+                await AuthService.logout();
+                setState(() {});
+              },
+            ),
+          ] else ...[
+            ListTile(
+              leading: const Icon(Icons.login),
+              title: Text(tr(context, 'login')),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+                setState(() {});
+              },
+            ),
+          ],
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.admin_panel_settings_outlined),
+            title: const Text('ورود مدیریت'),
+            subtitle: const Text('پنل مدیریت، کاربران، آگهی‌ها و شکایات'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.rocket_launch),
+            title: Text('🚀 ${tr(context, 'boost')}'),
+            subtitle: Text(psText(context, 'افزایش نمایش آگهی و اشتراک ویژه', 'د اعلانونو لیدل ډېر کړئ او ځانګړی ګډون واخلئ.')),
+            onTap: () async {
+              if (!await requireAccount(context)) return;
+              if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_for_offline_outlined),
+            title: Text(tr(context, 'download_app')),
+            subtitle: Text(tr(context, 'download_app_desc')),
+            onTap: () async {
+              const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
+              final uri = Uri.parse(apkUrl);
+              try {
+                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (!opened && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+                  );
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+                  );
+                }
+              }
+            },
+          ),
+          const Divider(),
+          SwitchListTile(
+            value: Theme.of(context).brightness == Brightness.dark,
+            onChanged: (_) => BazarBuzurgApp.toggleTheme(context),
+            title: Text(tr(context, 'dark_mode')),
+            secondary: const Icon(Icons.dark_mode),
+          ),
+        ],
+      ),
+    );
   }
 }
-
-class SupportScreen extends StatefulWidget { const SupportScreen({super.key}); @override State<SupportScreen> createState()=>_SupportScreenState(); }
-class _SupportScreenState extends State<SupportScreen>{ List<Map<String,dynamic>> items=[]; bool loading=true;
- @override void initState(){super.initState();_load();}
- Future<void> _load()async{try{final x=await ApiService.getSupportRequests();if(mounted)setState(()=>items=x);}catch(_){ }finally{if(mounted)setState(()=>loading=false);}}
- Future<void> _newRequest()async{String type='bug';final title=TextEditingController();final message=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(_)=>StatefulBuilder(builder:(c,setLocal)=>AlertDialog(title:const Text('ارتباط با تیم بازارک'),content:SizedBox(width:480,child:Column(mainAxisSize:MainAxisSize.min,children:[DropdownButtonFormField<String>(value:type,items:const[DropdownMenuItem(value:'bug',child:Text('🐞 گزارش اشکال')),DropdownMenuItem(value:'suggestion',child:Text('💡 پیشنهاد')),DropdownMenuItem(value:'support',child:Text('💬 پشتیبانی')),DropdownMenuItem(value:'report',child:Text('📢 گزارش آگهی یا کاربر'))],onChanged:(v)=>setLocal(()=>type=v??'bug')),TextField(controller:title,decoration:const InputDecoration(labelText:'موضوع')),TextField(controller:message,maxLines:5,decoration:const InputDecoration(labelText:'توضیح مشکل / پیام'))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('انصراف')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('ارسال'))])));if(ok!=true||title.text.trim().isEmpty||message.text.trim().isEmpty)return;try{await ApiService.createSupportRequest(type,title.text,message.text);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('درخواست شما ثبت شد.')));_load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}}
- String status(dynamic x)=>x=='open'?'جدید':x=='in_progress'?'در حال بررسی':x=='answered'?'پاسخ داده شد':x=='resolved'?'حل شد':'بسته';
- @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('پشتیبانی بازارک'),actions:[IconButton(onPressed:_newRequest,icon:const Icon(Icons.add_comment_outlined))]),body:loading?const Center(child:CircularProgressIndicator()):RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[Card(child:ListTile(leading:const Icon(Icons.support_agent,size:34),title:const Text('ارتباط با سازندگان بازارک'),subtitle:const Text('اشکال، پیشنهاد یا هر مشکلی دارید از همین‌جا برای ما بفرستید.'),trailing:FilledButton(onPressed:_newRequest,child:const Text('ارسال')))),const SizedBox(height:8),if(items.isEmpty)const Card(child:ListTile(title:Text('هنوز درخواستی ثبت نکرده‌اید.'))),...items.map((x)=>Card(child:ExpansionTile(title:Text(x['title']?.toString()??'-'),subtitle:Text(status(x['status'])),children:[Padding(padding:const EdgeInsets.all(14),child:Align(alignment:Alignment.centerRight,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(x['message']?.toString()??'-'),if((x['admin_reply']?.toString()??'').isNotEmpty)Padding(padding:const EdgeInsets.only(top:10),child:Text('پاسخ پشتیبانی: ${x['admin_reply']}',style:const TextStyle(fontWeight:FontWeight.bold))) ])))]))])));
-}
-
-class WalletScreen extends StatefulWidget { const WalletScreen({super.key}); @override State<WalletScreen> createState()=>_WalletScreenState(); }
-class _WalletScreenState extends State<WalletScreen>{ Map<String,dynamic> data={}; bool loading=true; @override void initState(){super.initState();_load();} Future<void> _load()async{try{final d=await ApiService.getWallet();if(mounted)setState(()=>data=d);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}finally{if(mounted)setState(()=>loading=false);}} @override Widget build(BuildContext context){final tx=List<Map<String,dynamic>>.from((data['transactions'] as List? ?? []).map((e)=>Map<String,dynamic>.from(e as Map)));return Scaffold(appBar:AppBar(title:const Text('موجودی حساب')),body:loading?const Center(child:CircularProgressIndicator()):RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[Card(child:ListTile(leading:const Icon(Icons.account_balance_wallet,size:36),title:const Text('موجودی کیف پول'),subtitle:Text('${data['wallet']?['balance_afn']??0} افغانی',style:const TextStyle(fontSize:25,fontWeight:FontWeight.bold)))),const SizedBox(height:12),const Text('تراکنش‌ها',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),if(tx.isEmpty)const Card(child:ListTile(title:Text('هنوز تراکنشی وجود ندارد.'))),...tx.map((x)=>Card(child:ListTile(title:Text('${x['amount_afn']??0} افغانی'),subtitle:Text('${x['description']??''}\n${x['created_at']??''}'),isThreeLine:true)))]));}}
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -2997,15 +3002,16 @@ class _AddProductSheetState extends State<AddProductSheet> {
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
     if (kIsWeb) {
-      final files = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
         allowMultiple: true,
+        withData: true,
       );
-      if (files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
       final remaining = 10 - imageBytes.length;
-      for (final file in files.take(remaining)) {
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) continue;
+      for (final file in result.files.take(remaining)) {
+        final bytes = file.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
         imageBytes.add(bytes);
         imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
       }
