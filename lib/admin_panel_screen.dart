@@ -177,7 +177,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
         _AdminApi.list('/admin/products', widget.token),
         _AdminApi.list('/admin/reports', widget.token),
         _AdminApi.list('/admin/warnings', widget.token),
-        _AdminApi.list('/admin/support', widget.token),
+        _AdminApi.list('/admin/support/requests', widget.token),
         _AdminApi.map('/admin/monetization', widget.token),
         _AdminApi.list('/admin/security/events', widget.token),
       ]);
@@ -417,28 +417,30 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
     switch (type) {
       case 'bug': return '🐞 گزارش اشکال';
       case 'suggestion': return '💡 پیشنهاد';
-      case 'listing_report': return '📢 گزارش آگهی یا کاربر';
+      case 'report': return '📢 گزارش آگهی یا کاربر';
       default: return '💬 پشتیبانی';
     }
   }
 
   String _supportStatus(String status) {
     switch (status) {
+      case 'open': return 'جدید';
       case 'in_progress': return 'در حال بررسی';
       case 'answered': return 'پاسخ داده شد';
       case 'resolved': return 'حل شد';
+      case 'closed': return 'بسته شد';
       default: return 'جدید';
     }
   }
 
   Future<void> _replySupport(Map<String, dynamic> item) async {
     final reply = TextEditingController(text: item['admin_reply']?.toString() ?? '');
-    String status = item['status']?.toString() ?? 'new';
+    String status = item['status']?.toString() ?? 'open';
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(item['subject']?.toString() ?? 'درخواست پشتیبانی'),
+          title: Text((item['title'] ?? item['subject'])?.toString() ?? 'درخواست پشتیبانی'),
           content: SizedBox(width: 560, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('نوع: ${_supportType(item['type']?.toString() ?? 'support')}', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -453,16 +455,17 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
               value: status,
               decoration: const InputDecoration(labelText: 'وضعیت', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'new', child: Text('جدید')),
+                DropdownMenuItem(value: 'open', child: Text('جدید')),
                 DropdownMenuItem(value: 'in_progress', child: Text('در حال بررسی')),
                 DropdownMenuItem(value: 'answered', child: Text('پاسخ داده شد')),
                 DropdownMenuItem(value: 'resolved', child: Text('حل شد')),
+                DropdownMenuItem(value: 'closed', child: Text('بسته شد')),
               ],
-              onChanged: (v) => setDialogState(() => status = v ?? 'new'),
+              onChanged: (v) => setDialogState(() => status = v ?? 'open'),
             ),
             const SizedBox(height: 12),
             TextField(controller: reply, minLines: 4, maxLines: 8, maxLength: 5000, decoration: const InputDecoration(labelText: 'پاسخ مدیر', hintText: 'پاسخ خود را برای کاربر بنویسید...', border: OutlineInputBorder())),
-          ]))),
+          ])),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
             FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('ذخیره و ارسال پاسخ')),
@@ -472,7 +475,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
     );
     if (ok == true) {
       await _run(
-        () => _AdminApi.patch('/admin/support/${item['id']}', widget.token, {'status': status, 'admin_reply': reply.text.trim()}),
+        () => _AdminApi.patch('/admin/support/requests/${item['id']}', widget.token, {'status': status, 'admin_reply': reply.text.trim()}),
         success: 'پاسخ پشتیبانی ثبت شد.',
       );
     }
@@ -481,10 +484,10 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
 
   Widget _support() => _searchableList(support, 'درخواست پشتیبانی وجود ندارد', (s) {
     final user = s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null;
-    final status = s['status']?.toString() ?? 'new';
+    final status = s['status']?.toString() ?? 'open';
     return Card(child: ListTile(
       leading: Icon(status == 'new' ? Icons.mark_email_unread_outlined : Icons.support_agent_outlined),
-      title: Text(s['subject']?.toString() ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis),
+      title: Text((s['title'] ?? s['subject'])?.toString() ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Text('${_supportType(s['type']?.toString() ?? 'support')} • ${_supportStatus(status)}\nکاربر: ${_person(user)} • ${user?['phone'] ?? '-'}\n${s['message']?.toString() ?? '-'}', maxLines: 4, overflow: TextOverflow.ellipsis),
       isThreeLine: true,
       trailing: const Icon(Icons.reply_outlined),

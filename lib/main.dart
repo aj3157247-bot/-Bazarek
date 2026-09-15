@@ -754,6 +754,65 @@ class ApiService {
     return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
   }
 
+  static Future<Map<String, dynamic>> getMyProfile() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me'), headers: headers).timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me'), headers: headers).timeout(const Duration(seconds: 15));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200 || data is! Map) {
+      throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت پروفایل.') : 'خطا در دریافت پروفایل.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Map<String, dynamic>> updateMyProfile({
+    required String fullName,
+    required String phone,
+    required String city,
+    required String shopName,
+    required String bio,
+  }) async {
+    var res = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/me'),
+      headers: headers,
+      body: jsonEncode({
+        'full_name': fullName.trim(),
+        'phone': phone.trim(),
+        'city': city.trim(),
+        'shop_name': shopName.trim(),
+        'bio': bio.trim(),
+      }),
+    ).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.patch(
+        Uri.parse('${ApiConfig.baseUrl}/me'),
+        headers: headers,
+        body: jsonEncode({
+          'full_name': fullName.trim(),
+          'phone': phone.trim(),
+          'city': city.trim(),
+          'shop_name': shopName.trim(),
+          'bio': bio.trim(),
+        }),
+      ).timeout(const Duration(seconds: 20));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200 || data is! Map) {
+      throw Exception(data is Map ? (data['error'] ?? 'خطا در ذخیره پروفایل.') : 'خطا در ذخیره پروفایل.');
+    }
+    final profile = Map<String, dynamic>.from(data);
+    AuthService.userName = profile['full_name']?.toString() ?? fullName;
+    if (profile['phone']?.toString().trim().isNotEmpty == true) {
+      AuthService.userContact = profile['phone'].toString();
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', AuthService.userName ?? fullName);
+    await prefs.setString('user_contact', AuthService.userContact ?? phone);
+    AuthService.authVersion.value++;
+    return profile;
+  }
+
   static Future<Map<String, dynamic>> getPaymentInfo() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/payment-info'), headers: headers).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401 && await refreshSession()) {
@@ -839,11 +898,14 @@ class ApiService {
 
 
   static Future<List<dynamic>> getSupportRequests() async {
-    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support'), headers: headers).timeout(const Duration(seconds: 15));
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support/requests'), headers: headers).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401 && await refreshSession()) {
-      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support'), headers: headers).timeout(const Duration(seconds: 15));
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support/requests'), headers: headers).timeout(const Duration(seconds: 15));
     }
-    final data = jsonDecode(res.body);
+    dynamic data;
+    try { data = jsonDecode(res.body); } catch (_) {
+      throw Exception('سرور پشتیبانی پاسخ JSON معتبر برنگرداند. لطفاً Backend بازارک را Deploy کنید.');
+    }
     if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت درخواست‌های پشتیبانی.') : 'خطا در دریافت درخواست‌های پشتیبانی.');
     return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
   }
@@ -856,16 +918,19 @@ class ApiService {
     var res = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/support'),
       headers: headers,
-      body: jsonEncode({'type': type, 'subject': subject, 'message': message}),
+      body: jsonEncode({'type': type, 'title': subject, 'message': message}),
     ).timeout(const Duration(seconds: 20));
     if (res.statusCode == 401 && await refreshSession()) {
       res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/support'),
         headers: headers,
-        body: jsonEncode({'type': type, 'subject': subject, 'message': message}),
+        body: jsonEncode({'type': type, 'title': subject, 'message': message}),
       ).timeout(const Duration(seconds: 20));
     }
-    final data = jsonDecode(res.body);
+    dynamic data;
+    try { data = jsonDecode(res.body); } catch (_) {
+      throw Exception('سرور پشتیبانی پاسخ JSON معتبر برنگرداند. لطفاً Backend بازارک را Deploy کنید.');
+    }
     if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ارسال درخواست ناموفق بود.') : 'ارسال درخواست ناموفق بود.');
     return Map<String, dynamic>.from(data as Map);
   }
@@ -2673,135 +2738,233 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool loading = true;
+  bool saving = false;
+  String? error;
+  Map<String, dynamic> profile = {};
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'profile'))),
-      body: ListView(
-        children: [
-          if (AuthService.isLoggedIn) ...[
-            UserAccountsDrawerHeader(
-              currentAccountPicture: GestureDetector(
-                onTap: () async {
-                  final image = await pickProfileImage();
-                  if (image == null) return;
-                  try {
-                    await ApiService.uploadAvatar(image);
-                    if (mounted) setState(() {});
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'عکس پروفایل با موفقیت تغییر کرد.', 'ستاسو د پروفایل انځور بدل شو.'))));
-                  } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
-                  }
-                },
-                child: CircleAvatar(
-                  backgroundImage: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty) ? NetworkImage(AuthService.avatarUrl!) : null,
-                  child: (AuthService.avatarUrl == null || AuthService.avatarUrl!.isEmpty) ? const Icon(Icons.person, size: 40) : null,
-                ),
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    if (!AuthService.isLoggedIn) {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
+    try {
+      final data = await ApiService.getMyProfile();
+      final avatar = data['avatar_url']?.toString() ?? '';
+      if (avatar.isNotEmpty) {
+        AuthService.avatarUrl = avatar;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('avatar_url', avatar);
+      }
+      final name = data['full_name']?.toString().trim() ?? '';
+      final phone = data['phone']?.toString().trim() ?? '';
+      if (name.isNotEmpty) AuthService.userName = name;
+      if (phone.isNotEmpty) AuthService.userContact = phone;
+      if (mounted) setState(() { profile = data; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  Future<void> _changeAvatar() async {
+    final image = await pickProfileImage();
+    if (image == null) return;
+    setState(() => saving = true);
+    try {
+      await ApiService.uploadAvatar(image);
+      await _loadProfile();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('عکس پروفایل با موفقیت تغییر کرد.')),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyNetworkError(context, e))),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _editProfile() async {
+    final name = TextEditingController(text: profile['full_name']?.toString() ?? AuthService.userName ?? '');
+    final phone = TextEditingController(text: profile['phone']?.toString() ?? '');
+    final city = TextEditingController(text: profile['city']?.toString() ?? '');
+    final shop = TextEditingController(text: profile['shop_name']?.toString() ?? '');
+    final bio = TextEditingController(text: profile['bio']?.toString() ?? '');
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ویرایش پروفایل'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(controller: name, decoration: const InputDecoration(labelText: 'نام کامل'), validator: (v) => v == null || v.trim().isEmpty ? 'نام کامل را وارد کنید.' : null),
+                  const SizedBox(height: 10),
+                  TextFormField(controller: phone, decoration: const InputDecoration(labelText: 'شماره تلفن'), keyboardType: TextInputType.phone),
+                  const SizedBox(height: 10),
+                  TextFormField(controller: city, decoration: const InputDecoration(labelText: 'شهر / ولایت')),
+                  const SizedBox(height: 10),
+                  TextFormField(controller: shop, decoration: const InputDecoration(labelText: 'نام فروشگاه')),
+                  const SizedBox(height: 10),
+                  TextFormField(controller: bio, maxLines: 3, maxLength: 500, decoration: const InputDecoration(labelText: 'درباره من', alignLabelWithHint: true)),
+                ],
               ),
-              accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
-              accountEmail: Text(AuthService.userContact ?? ''),
             ),
-            ListTile(
-              leading: const Icon(Icons.add_a_photo_outlined),
-              title: Text(psText(context, 'تغییر عکس پروفایل', 'د پروفایل انځور بدلول')),
-              subtitle: Text(psText(context, 'یک عکس از گالری انتخاب کنید.', 'له ګالري څخه یو انځور وټاکئ.')),
-              onTap: () async {
-                final image = await pickProfileImage();
-                if (image == null) return;
-                try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: Text(tr(context, 'my_ads')),
-              subtitle: Text(psText(context, 'تمام آگهی‌هایی که ثبت کرده‌اید', 'ستاسو ټول ثبت شوي اعلانونه')),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyProductsScreen()),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.notifications_outlined),
-              title: Text(psText(context, 'اعلان‌ها', 'خبرتیاوې')),
-              subtitle: Text(psText(context, 'پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها', 'د سیسټم او راپورونو خبرتیاوې')),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
-            ),
-            ListTile(
-              leading: const Icon(Icons.support_agent_outlined),
-              title: Text(psText(context, 'پشتیبانی و ارتباط با ما', 'ملاتړ او له موږ سره اړیکه')),
-              subtitle: Text(psText(context, 'گزارش اشکال، پیشنهاد و پیام به تیم بازارک', 'د ستونزې راپور، وړاندیز او د بازارک ټیم ته پیغام')),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())),
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: Text(tr(context, 'logout'), style: const TextStyle(color: Colors.red)),
-              onTap: () async {
-                await AuthService.logout();
-                setState(() {});
-              },
-            ),
-          ] else ...[
-            ListTile(
-              leading: const Icon(Icons.login),
-              title: Text(tr(context, 'login')),
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AuthScreen()),
-                );
-                setState(() {});
-              },
-            ),
-          ],
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.admin_panel_settings_outlined),
-            title: const Text('ورود مدیریت'),
-            subtitle: const Text('پنل مدیریت، کاربران، آگهی‌ها و شکایات'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen())),
           ),
-          ListTile(
-            leading: const Icon(Icons.rocket_launch),
-            title: Text('🚀 ${tr(context, 'boost')}'),
-            subtitle: Text(psText(context, 'افزایش نمایش آگهی و اشتراک ویژه', 'د اعلانونو لیدل ډېر کړئ او ځانګړی ګډون واخلئ.')),
-            onTap: () async {
-              if (!await requireAccount(context)) return;
-              if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.download_for_offline_outlined),
-            title: Text(tr(context, 'download_app')),
-            subtitle: Text(tr(context, 'download_app_desc')),
-            onTap: () async {
-              const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
-              final uri = Uri.parse(apkUrl);
-              try {
-                final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!opened && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
-                  );
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
-                  );
-                }
-              }
-            },
-          ),
-          const Divider(),
-          SwitchListTile(
-            value: Theme.of(context).brightness == Brightness.dark,
-            onChanged: (_) => BazarBuzurgApp.toggleTheme(context),
-            title: Text(tr(context, 'dark_mode')),
-            secondary: const Icon(Icons.dark_mode),
-          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
+          FilledButton(onPressed: () { if (formKey.currentState!.validate()) Navigator.pop(dialogContext, true); }, child: const Text('ذخیره')),
         ],
       ),
     );
+    if (result == true) {
+      setState(() => saving = true);
+      try {
+        profile = await ApiService.updateMyProfile(fullName: name.text, phone: phone.text, city: city.text, shopName: shop.text, bio: bio.text);
+        if (mounted) setState(() {});
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('پروفایل با موفقیت ذخیره شد.')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+      } finally {
+        if (mounted) setState(() => saving = false);
+      }
+    }
+    name.dispose(); phone.dispose(); city.dispose(); shop.dispose(); bio.dispose();
+  }
+
+  Widget _infoTile(IconData icon, String title, String value) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return ListTile(
+      dense: true,
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(value),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AuthService.isLoggedIn) {
+      return Scaffold(
+        appBar: AppBar(title: Text(tr(context, 'profile'))),
+        body: Center(child: FilledButton.icon(onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())); if (mounted) setState(() {}); }, icon: const Icon(Icons.login), label: Text(tr(context, 'login')))),
+      );
+    }
+
+    final name = profile['full_name']?.toString().trim().isNotEmpty == true ? profile['full_name'].toString() : (AuthService.userName ?? 'کاربر بازارک');
+    final city = profile['city']?.toString() ?? '';
+    final bio = profile['bio']?.toString() ?? '';
+    final shop = profile['shop_name']?.toString() ?? '';
+    final phone = profile['phone']?.toString() ?? '';
+    final avatar = AuthService.avatarUrl ?? profile['avatar_url']?.toString() ?? '';
+    final activeAds = int.tryParse('${profile['active_ads'] ?? 0}') ?? 0;
+    final totalAds = int.tryParse('${profile['total_ads'] ?? 0}') ?? 0;
+    final views = int.tryParse('${profile['total_views'] ?? 0}') ?? 0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('حساب من'),
+        actions: [IconButton(onPressed: loading || saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), tooltip: 'ویرایش پروفایل')],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadProfile,
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer),
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 54,
+                              backgroundColor: Theme.of(context).colorScheme.surface,
+                              backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                              child: avatar.isEmpty ? Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary) : null,
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Material(
+                                color: Theme.of(context).colorScheme.primary,
+                                shape: const CircleBorder(),
+                                child: IconButton(onPressed: saving ? null : _changeAvatar, icon: const Icon(Icons.camera_alt_outlined, color: Colors.white), tooltip: 'تغییر عکس'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                        if (city.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text('📍 $city', style: Theme.of(context).textTheme.bodyMedium),
+                        ],
+                        if (bio.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(bio, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+                        ],
+                        const SizedBox(height: 14),
+                        FilledButton.icon(onPressed: saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), label: const Text('ویرایش پروفایل')),
+                      ],
+                    ),
+                  ),
+                  if (error != null) Padding(padding: const EdgeInsets.all(12), child: Text(error!, style: const TextStyle(color: Colors.red))),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _statCard('فعال', '$activeAds', Icons.check_circle_outline)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _statCard('بازدید', '$views', Icons.visibility_outlined)),
+                      ],
+                    ),
+                  ),
+                  if (shop.isNotEmpty || phone.isNotEmpty || city.isNotEmpty)
+                    Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Column(children: [
+                        const ListTile(title: Text('اطلاعات پروفایل', style: TextStyle(fontWeight: FontWeight.bold)), leading: Icon(Icons.person_outline)),
+                        _infoTile(Icons.store_outlined, 'فروشگاه', shop),
+                        _infoTile(Icons.phone_outlined, 'شماره تلفن', phone),
+                        _infoTile(Icons.location_on_outlined, 'شهر / ولایت', city),
+                      ]),
+                    ),
+                  ListTile(leading: const Icon(Icons.inventory_2_outlined), title: Text(tr(context, 'my_ads')), subtitle: const Text('تمام آگهی‌هایی که ثبت کرده‌اید'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
+                  ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), subtitle: const Text('پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
+                  ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), subtitle: const Text('گزارش اشکال، پیشنهاد و پیام به تیم بازارک'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
+                  ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
+                  ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
+                  const Divider(),
+                  SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
+                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _statCard(String label, String value, IconData icon) {
+    return Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Column(children: [Icon(icon, size: 24), const SizedBox(height: 6), Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), Text(label, style: const TextStyle(fontSize: 12))])));
   }
 }
 
@@ -2839,7 +3002,7 @@ class _SupportScreenState extends State<SupportScreen> {
     switch (type) {
       case 'bug': return psText(context, '🐞 گزارش اشکال', '🐞 د ستونزې راپور');
       case 'suggestion': return psText(context, '💡 پیشنهاد', '💡 وړاندیز');
-      case 'listing_report': return psText(context, '📢 گزارش آگهی یا کاربر', '📢 د اعلان یا کارونکي راپور');
+      case 'report': return psText(context, '📢 گزارش آگهی یا کاربر', '📢 د اعلان یا کارونکي راپور');
       default: return psText(context, '💬 پیام به پشتیبانی', '💬 ملاتړ ته پیغام');
     }
   }
@@ -2873,7 +3036,7 @@ class _SupportScreenState extends State<SupportScreen> {
                 DropdownMenuItem(value: 'support', child: Text(psText(context, '💬 پیام به پشتیبانی', '💬 ملاتړ ته پیغام'))),
                 DropdownMenuItem(value: 'bug', child: Text(psText(context, '🐞 گزارش اشکال', '🐞 د ستونزې راپور'))),
                 DropdownMenuItem(value: 'suggestion', child: Text(psText(context, '💡 پیشنهاد برای بهتر شدن بازارک', '💡 د بازارک د ښه کېدو وړاندیز'))),
-                DropdownMenuItem(value: 'listing_report', child: Text(psText(context, '📢 گزارش آگهی یا کاربر', '📢 د اعلان یا کارونکي راپور'))),
+                DropdownMenuItem(value: 'report', child: Text(psText(context, '📢 گزارش آگهی یا کاربر', '📢 د اعلان یا کارونکي راپور'))),
               ],
               onChanged: (v) => setDialogState(() => type = v ?? 'support'),
             ),
@@ -2916,7 +3079,7 @@ class _SupportScreenState extends State<SupportScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(item['subject']?.toString() ?? '-'),
+        title: Text((item['title'] ?? item['subject'])?.toString() ?? '-'),
         content: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_typeLabel(item['type']?.toString() ?? 'support'), style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
@@ -2966,7 +3129,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   ...items.map((item) => Card(child: ListTile(
                     onTap: () => _showRequest(item),
                     leading: const Icon(Icons.forum_outlined),
-                    title: Text(item['subject']?.toString() ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis),
+                    title: Text((item['title'] ?? item['subject'])?.toString() ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${_typeLabel(item['type']?.toString() ?? 'support')}\n${_statusLabel(item['status']?.toString() ?? 'new')}${(item['admin_reply']?.toString() ?? '').trim().isNotEmpty ? ' • ${psText(context, 'پاسخ دارد', 'ځواب لري')}' : ''}'),
                     isThreeLine: true,
                     trailing: const Icon(Icons.chevron_left),
