@@ -39,54 +39,6 @@ jobs:
           test -f web/icons/bazarek-pwa-512.png
           grep -F '<base href="$FLUTTER_BASE_HREF">' web/index.html
 
-      - name: Configure Android release signing
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Missing Android signing secrets."
-            exit 1
-          fi
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/bazarek-release.jks
-          cat > android/key.properties <<EOF
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          storeFile=bazarek-release.jks
-          EOF
-          python3 - <<'PY2'
-          from pathlib import Path
-          p = Path('android/app/build.gradle')
-          text = p.read_text(encoding='utf-8')
-          if 'keystorePropertiesFile' not in text:
-              prefix = """def keystoreProperties = new Properties()
-def keystorePropertiesFile = rootProject.file('key.properties')
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-}
-
-"""
-              signing = """    signingConfigs {
-        release {
-            keyAlias = keystoreProperties['keyAlias']
-            keyPassword = keystoreProperties['keyPassword']
-            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword = keystoreProperties['storePassword']
-        }
-    }
-
-"""
-              text = prefix + text.replace('android {
-', 'android {
-' + signing, 1)
-          text = text.replace('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.release')
-          text = text.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
-          p.write_text(text, encoding='utf-8')
-          PY2
-
       - name: Configure Android WebView shell
         run: |
           python3 - <<'PY'
@@ -119,6 +71,57 @@ if (keystorePropertiesFile.exists()) {
       - name: Build APK
         run: flutter build apk --release
 
+      # Sign the release APK so it can be installed directly on Android.
+      # If a persistent keystore is provided through GitHub Secrets, it is used;
+      # otherwise a temporary key is generated for this build.
+      - name: Sign APK for direct installation
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          if [ ! -f "$APK" ]; then
+            APK=build/app/outputs/flutter-apk/app-release-unsigned.apk
+          fi
+          test -f "$APK"
+
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "Using the persistent Bazarek release keystore from GitHub Secrets."
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > bazarek-release.jks
+            STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
+            KEY_ALIAS="$ANDROID_KEY_ALIAS"
+            KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
+          else
+            echo "No persistent keystore secret found; generating a temporary release key for this build."
+            keytool -genkeypair -v \
+              -keystore bazarek-release.jks \
+              -storepass bazarek-temp-password \
+              -keypass bazarek-temp-password \
+              -alias bazarek \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Bazarek, OU=Mobile, O=Bazarek, L=Kabul, ST=Kabul, C=AF"
+            STORE_PASSWORD=bazarek-temp-password
+            KEY_ALIAS=bazarek
+            KEY_PASSWORD=bazarek-temp-password
+          fi
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          BUILD_TOOLS=$(ls -d "$SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/zipalign" -f 4 "$APK" build/app-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks bazarek-release.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:"$STORE_PASSWORD" \
+            --key-pass pass:"$KEY_PASSWORD" \
+            --out build/app/outputs/flutter-apk/bazarek-release-signed.apk \
+            build/app-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose build/app/outputs/flutter-apk/bazarek-release-signed.apk
+
       - name: Build Web
         run: flutter build web --release --base-href /
 
@@ -126,4 +129,4 @@ if (keystorePropertiesFile.exists()) {
         uses: actions/upload-artifact@v4
         with:
           name: bazarek-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/bazarek-release-signed.apk
