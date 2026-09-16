@@ -1081,13 +1081,13 @@ class ApiService {
     required String message,
   }) async {
     var res = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/support'),
+      Uri.parse('${ApiConfig.baseUrl}/support/requests'),
       headers: headers,
       body: jsonEncode({'type': type, 'title': subject, 'message': message}),
     ).timeout(const Duration(seconds: 20));
     if (res.statusCode == 401 && await refreshSession()) {
       res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/support'),
+        Uri.parse('${ApiConfig.baseUrl}/support/requests'),
         headers: headers,
         body: jsonEncode({'type': type, 'title': subject, 'message': message}),
       ).timeout(const Duration(seconds: 20));
@@ -1297,14 +1297,21 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
+  final GlobalKey<_HomeScreenState> _homeKey = GlobalKey<_HomeScreenState>();
 
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    SavedAdsScreen(),
-    AddProductScreen(),
-    ChatListScreen(),
-    ProfileScreen(),
+  late final List<Widget> _pages = [
+    HomeScreen(key: _homeKey),
+    const SavedAdsScreen(),
+    const AddProductScreen(),
+    const ChatListScreen(),
+    const ProfileScreen(),
   ];
+
+  Future<void> showHomeAfterPublish() async {
+    if (!mounted) return;
+    setState(() => _currentIndex = 0);
+    await _homeKey.currentState?._loadProducts();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1709,7 +1716,7 @@ class _DivarStyleListing extends StatelessWidget {
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
     final priceRaw = item['price'];
-    final priceText = (priceRaw == null || priceRaw.toString().trim().isEmpty || priceRaw.toString() == '0') ? tr(context, 'free') : '${NumberFormatHelper.format(priceRaw)} ${tr(context, 'afghani')}';
+    final priceText = NumberFormatHelper.listingPrice(context, item);
     final province = localizedProvince(context, item['province']?.toString() ?? '');
     final location = (item['location_text'] ?? '').toString().trim();
     final boost = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
@@ -1955,7 +1962,7 @@ class _SpecialCard extends StatelessWidget {
               const SizedBox(height: 8),
               LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
               const SizedBox(height: 8),
-              Text('${NumberFormatHelper.format(item['price'])} ${tr(context, 'afghani')}', style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary, fontSize: 12)),
+              Text(NumberFormatHelper.listingPrice(context, item), style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary, fontSize: 12)),
             ]))),
           ]),
         ),
@@ -1977,7 +1984,7 @@ class _ProductCard extends StatelessWidget {
       if (raw is List) images = raw;
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
-    final price = NumberFormatHelper.format(item['price']);
+    final price = NumberFormatHelper.listingPrice(context, item);
     final boostLabel = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
     final location = '${localizedProvince(context, item['province']?.toString() ?? '')}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}';
 
@@ -2011,7 +2018,7 @@ class _ProductCard extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                 const Spacer(),
-                Text(price == '0' ? tr(context, 'free') : '$price ${tr(context, 'afghani')}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary, fontSize: 13)),
+                Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary, fontSize: 13)),
                 const SizedBox(height: 4),
                 Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
               ]),
@@ -2045,8 +2052,31 @@ class _SaveAdButtonState extends State<_SaveAdButton> {
 class NumberFormatHelper {
   static String format(dynamic value) {
     final n = num.tryParse(value?.toString() ?? '') ?? 0;
-    final raw = n.toInt().toString();
-    return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+$)'), (_) => ',');
+    final raw = n == n.truncateToDouble() ? n.toInt().toString() : n.toString();
+    return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
+  }
+
+  static String persianDigits(String value) {
+    const en = '0123456789';
+    const fa = '۰۱۲۳۴۵۶۷۸۹';
+    var out = value;
+    for (var i = 0; i < en.length; i++) {
+      out = out.replaceAll(en[i], fa[i]);
+    }
+    return out;
+  }
+
+  static String listingPrice(BuildContext context, dynamic item) {
+    if (item is Map && (item['is_negotiable'] == true || item['is_negotiable'] == 1)) {
+      return psText(context, 'توافقی', 'توافقي بیه');
+    }
+    final raw = item is Map ? item['price'] : null;
+    final n = num.tryParse(raw?.toString() ?? '') ?? 0;
+    if (n == 0) return tr(context, 'free');
+    final formatted = persianDigits(format(raw));
+    final currency = (item is Map ? item['currency']?.toString().toUpperCase() : null) ?? 'AFN';
+    if (currency == 'USD') return '\$$formatted';
+    return '$formatted ${tr(context, 'afghani')}';
   }
 }
 
@@ -2250,7 +2280,7 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${product['price'] ?? 0} ${tr(context, 'afghani')}',
+                    NumberFormatHelper.listingPrice(context, product),
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -2830,7 +2860,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                 ListTile(
                                   leading: SizedBox(width: 70, height: 60, child: _imageFor(ad)),
                                   title: Text(ad['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  subtitle: Text('${NumberFormatHelper.format(ad['price'])} افغانی • ${ad['province'] ?? ''}'),
+                                  subtitle: Text('${NumberFormatHelper.listingPrice(context, ad)} • ${ad['province'] ?? ''}'),
                                   trailing: Chip(
                                     avatar: Icon(ad['is_active'] == true ? Icons.check_circle : Icons.pause_circle_outline, size: 18),
                                     label: Text(ad['is_active'] == true ? psText(context, 'فعال', 'فعال') : psText(context, 'غیرفعال', 'غیرفعال')),
@@ -4024,6 +4054,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   String category = '';
   String subcategory = '';
   String province = '';
+  String currency = 'AFN';
   bool allowChat = true;
   bool showPhone = true;
   bool isNegotiable = false;
@@ -4168,7 +4199,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (imageUrls.isEmpty) throw Exception('عکس‌ها آپلود نشدند.');
       final payload = jsonEncode({
         'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
-        'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
+        'price': double.tryParse(price.text.replaceAll(',', '').replaceAll(' ', '')) ?? 0,
+        'currency': currency,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
@@ -4190,7 +4222,23 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (response.statusCode != 201) throw Exception(data['error'] ?? tr(context, 'publish_error'));
       if (!mounted) return;
       _msg(tr(context, 'publish_success'));
-      Navigator.pop(context, true);
+      price.clear();
+      title.clear();
+      desc.clear();
+      contactPhone.clear();
+      locationText.clear();
+      socialLink.clear();
+      setState(() {
+        imageBytes = [];
+        imageNames = [];
+        imageUrls = [];
+        isNegotiable = false;
+        currency = 'AFN';
+      });
+      final mainLayout = context.findAncestorStateOfType<_MainLayoutState>();
+      if (mainLayout != null) {
+        await mainLayout.showHomeAfterPublish();
+      }
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
     } finally { if (mounted) setState(() => publishing = false); }
@@ -4236,10 +4284,33 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => province = val ?? ''),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: price,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(labelText: psText(context, 'قیمت (افغانی)', 'بیه (افغانۍ)')),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: price,
+                  enabled: !isNegotiable,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                  decoration: InputDecoration(
+                    labelText: currency == 'USD' ? '\u{1F1FA}\u{1F1F8} قیمت دلار' : '\u{1F1E6}\u{1F1EB} قیمت افغانی',
+                    hintText: currency == 'USD' ? 'مثلاً 500' : 'مثلاً 10000',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 118,
+                child: DropdownButtonFormField<String>(
+                  value: currency,
+                  decoration: const InputDecoration(labelText: 'ارز'),
+                  items: const [
+                    DropdownMenuItem(value: 'AFN', child: Text('افغانی')),
+                    DropdownMenuItem(value: 'USD', child: Text('دلار')),
+                  ],
+                  onChanged: isNegotiable ? null : (value) => setState(() => currency = value ?? 'AFN'),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           TextField(

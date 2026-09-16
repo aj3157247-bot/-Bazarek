@@ -216,7 +216,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       title: Text(p['title']?.toString() ?? 'آگهی'),
       content: SizedBox(width: 520, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _productImage(p, height: 210, width: double.infinity), const SizedBox(height: 12),
-        Text('${p['price'] ?? 0} افغانی', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+        Text('${NumberFormatLike.listing(p)}', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
         Text('دسته: ${p['category'] ?? '-'}${p['subcategory']?.toString().isNotEmpty == true ? ' / ${p['subcategory']}' : ''}'),
         Text('ولایت: ${p['province'] ?? '-'}'), const SizedBox(height: 8),
         Text(p['description']?.toString() ?? '-', maxLines: 12, overflow: TextOverflow.ellipsis),
@@ -530,6 +530,16 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
 }
 
 class NumberFormatLike {
+  static String listing(dynamic item) {
+    if (item is Map && (item['is_negotiable'] == true || item['is_negotiable'] == 1)) return 'توافقی';
+    final n = num.tryParse(item is Map ? '${item['price'] ?? 0}' : '0') ?? 0;
+    final raw = n == n.truncateToDouble() ? n.toInt().toString() : n.toString();
+    final formatted = raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
+    const faDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+    final fa = formatted.replaceAllMapped(RegExp(r'[0-9]'), (m) => faDigits[int.parse(m.group(0)!)]);
+    return (item is Map && '${item['currency'] ?? 'AFN'}'.toUpperCase() == 'USD') ? '\$$fa' : '$fa افغانی';
+  }
+
   static String afn(dynamic value) {
     final n = num.tryParse(value?.toString() ?? '') ?? 0;
     return n.toStringAsFixed(n % 1 == 0 ? 0 : 2).replaceAllMapped(RegExp(r'(?<!^)(?=(\d{3})+$)'), (_) => ',');
