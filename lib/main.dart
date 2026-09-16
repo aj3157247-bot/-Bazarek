@@ -68,6 +68,7 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     AuthService.userContact = prefs.getString('user_contact');
     AuthService.avatarUrl = prefs.getString('avatar_url');
     AuthService.refreshToken = prefs.getString('refresh_token');
+    AuthService.userId = prefs.getString('user_id');
 
     // Restore the real Supabase session after app/web restart.
     // Do not delete legacy-looking tokens here: the backend is the source of truth.
@@ -549,14 +550,16 @@ class AuthService {
   static String? userContact;
   static String? avatarUrl;
   static String? refreshToken;
+  static String? userId;
 
   static bool get isLoggedIn => token != null && token!.isNotEmpty;
 
-  static Future<void> saveUser(String tokenVal, String nameVal, String contactVal, {String? refreshTokenVal}) async {
+  static Future<void> saveUser(String tokenVal, String nameVal, String contactVal, {String? refreshTokenVal, String? userIdVal}) async {
     token = tokenVal;
     userName = nameVal;
     userContact = contactVal;
     refreshToken = refreshTokenVal;
+    if (userIdVal != null && userIdVal.isNotEmpty) userId = userIdVal;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_token', tokenVal);
     await prefs.setString('user_name', nameVal);
@@ -565,6 +568,7 @@ class AuthService {
     if (refreshTokenVal != null && refreshTokenVal.isNotEmpty) {
       await prefs.setString('refresh_token', refreshTokenVal);
     }
+    if (userId != null && userId!.isNotEmpty) await prefs.setString('user_id', userId!);
     authVersion.value++;
   }
 
@@ -574,12 +578,14 @@ class AuthService {
     userContact = null;
     avatarUrl = null;
     refreshToken = null;
+    userId = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
     await prefs.remove('user_name');
     await prefs.remove('user_contact');
     await prefs.remove('avatar_url');
     await prefs.remove('refresh_token');
+    await prefs.remove('user_id');
     authVersion.value++;
   }
 }
@@ -679,6 +685,7 @@ class ApiService {
         metadata['full_name']?.toString() ?? AuthService.userName ?? 'کاربر بازارک',
         user['email']?.toString() ?? AuthService.userContact ?? '',
         refreshTokenVal: data['refresh_token']?.toString() ?? rt,
+        userIdVal: user['id']?.toString(),
       );
       return true;
     } catch (_) {
@@ -2268,9 +2275,23 @@ class ProductDetailScreen extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: () async {
                     if (!await requireAccount(context)) return;
-                    if (context.mounted) {
+                    try {
+                      final conversation = await ApiService.startConversation(product['id'].toString());
+                      final conversationId = conversation['id']?.toString();
+                      if (!context.mounted) return;
+                      if (conversationId == null || conversationId.isEmpty) {
+                        throw Exception('گفتگو ایجاد نشد.');
+                      }
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ChatDetailScreen(
+                          conversationId: conversationId,
+                          title: product['title']?.toString() ?? 'گفتگو با فروشنده',
+                        ),
+                      ));
+                    } catch (e) {
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('بخش گفت‌وگو پس از اتصال به سیستم پیام‌رسانی آماده است.')),
+                        SnackBar(content: Text(friendlyNetworkError(context, e))),
                       );
                     }
                   },
@@ -2286,23 +2307,227 @@ class ProductDetailScreen extends StatelessWidget {
   }
 }
 
-class ChatListScreen extends StatelessWidget {
+class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  List<Map<String, dynamic>> conversations = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (!AuthService.isLoggedIn) {
+      if (mounted) setState(() { loading = false; });
+      return;
+    }
+    setState(() { loading = true; error = null; });
+    try {
+      final data = await ApiService.getConversations();
+      if (mounted) setState(() { conversations = data; loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: AuthService.authVersion,
       builder: (context, _, __) {
         if (!AuthService.isLoggedIn) {
-          return Scaffold(appBar: AppBar(title: Text(tr(context,'chat'))), body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.lock_outline, size: 64), const SizedBox(height: 16),
-            Text(psText(context,'برای ارسال و دریافت پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.','د پیغامونو لېږلو او ترلاسه کولو لپاره لومړی خپل حساب جوړ یا دننه شئ.'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 17)),
-            const SizedBox(height: 20),
-            FilledButton.icon(onPressed: () => requireAccount(context), icon: const Icon(Icons.login), label: Text(psText(context,'ورود / ثبت‌نام','ننوتل / نوم لیکنه'))),
-          ]))));
+          return Scaffold(
+            appBar: AppBar(title: Text(tr(context, 'chat'))),
+            body: Center(child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.lock_outline, size: 64),
+                const SizedBox(height: 16),
+                Text(psText(context, 'برای ارسال و دریافت پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.', 'د پیغامونو لېږلو او ترلاسه کولو لپاره لومړی خپل حساب جوړ یا دننه شئ.'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 17)),
+                const SizedBox(height: 20),
+                FilledButton.icon(onPressed: () => requireAccount(context), icon: const Icon(Icons.login), label: Text(psText(context, 'ورود / ثبت‌نام', 'ننوتل / نوم لیکنه'))),
+              ]),
+            )),
+          );
         }
-        return Scaffold(appBar: AppBar(title: Text(tr(context,'chat'))), body: Center(child: Text(psText(context,'لیست پیام‌ها خالی است','د پیغامونو لېست تش دی.'))));
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(tr(context, 'chat')),
+            actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+          ),
+          body: loading
+              ? const Center(child: CircularProgressIndicator())
+              : error != null
+                  ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Icons.error_outline, size: 54),
+                      const SizedBox(height: 12),
+                      Text(error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: Text(psText(context, 'تلاش دوباره', 'بیا هڅه'))),
+                    ])))
+                  : conversations.isEmpty
+                      ? Center(child: Text(psText(context, 'هنوز گفتگویی ندارید. از داخل یک آگهی روی «چت با فروشنده» بزنید.', 'تر اوسه کومه خبرې اترې نشته. د یوه اعلان له دننه «له پلورونکي سره چټ» ووهئ.')))
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            itemCount: conversations.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final c = conversations[index];
+                              final image = c['listing_image_url']?.toString() ?? '';
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  radius: 27,
+                                  backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
+                                  child: image.isEmpty ? const Icon(Icons.person) : null,
+                                ),
+                                title: Text(c['other_user_name']?.toString().trim().isNotEmpty == true ? c['other_user_name'].toString() : 'کاربر بازارک'),
+                                subtitle: Text(c['listing_title']?.toString() ?? 'آگهی', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                trailing: const Icon(Icons.chevron_left),
+                                onTap: () {
+                                  final id = c['id']?.toString();
+                                  if (id == null || id.isEmpty) return;
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatDetailScreen(conversationId: id, title: c['other_user_name']?.toString() ?? 'گفتگو'))).then((_) => _load());
+                                },
+                              );
+                            },
+                          ),
+                        ),
+        );
       },
+    );
+  }
+}
+
+class ChatDetailScreen extends StatefulWidget {
+  final String conversationId;
+  final String title;
+  const ChatDetailScreen({super.key, required this.conversationId, required this.title});
+
+  @override
+  State<ChatDetailScreen> createState() => _ChatDetailScreenState();
+}
+
+class _ChatDetailScreenState extends State<ChatDetailScreen> {
+  final TextEditingController controller = TextEditingController();
+  final ScrollController scrollController = ScrollController();
+  List<Map<String, dynamic>> messages = [];
+  bool loading = true;
+  bool sending = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      final data = await ApiService.getMessages(widget.conversationId);
+      if (!mounted) return;
+      setState(() { messages = data; loading = false; error = null; });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollController.hasClients) scrollController.jumpTo(scrollController.position.maxScrollExtent);
+      });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  Future<void> _send() async {
+    final text = controller.text.trim();
+    if (text.isEmpty || sending) return;
+    setState(() { sending = true; });
+    try {
+      final sent = await ApiService.sendMessage(widget.conversationId, text);
+      controller.clear();
+      if (mounted) {
+        setState(() { messages.add(sent); sending = false; });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (scrollController.hasClients) scrollController.animateTo(scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { sending = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final myId = AuthService.userId?.toString();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [IconButton(onPressed: _loadMessages, icon: const Icon(Icons.refresh))],
+      ),
+      body: Column(children: [
+        Expanded(
+          child: loading
+              ? const Center(child: CircularProgressIndicator())
+              : error != null
+                  ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Icons.error_outline, size: 54), const SizedBox(height: 12), Text(error!, textAlign: TextAlign.center), const SizedBox(height: 16),
+                      FilledButton.icon(onPressed: _loadMessages, icon: const Icon(Icons.refresh), label: Text(psText(context, 'تلاش دوباره', 'بیا هڅه'))),
+                    ])))
+                  : messages.isEmpty
+                      ? Center(child: Text(psText(context, 'گفتگو را شروع کنید.', 'خبرې اترې پیل کړئ.')))
+                      : ListView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final m = messages[index];
+                            final mine = myId != null && m['sender_id']?.toString() == myId;
+                            return Align(
+                              alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                              child: Container(
+                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .78),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: mine ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(m['message']?.toString() ?? ''),
+                              ),
+                            );
+                          },
+                        ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+            child: Row(children: [
+              Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 4, textInputAction: TextInputAction.newline, decoration: InputDecoration(hintText: psText(context, 'پیام خود را بنویسید...', 'خپل پیغام ولیکئ...'), border: OutlineInputBorder(borderRadius: BorderRadius.circular(22))))),
+              const SizedBox(width: 8),
+              IconButton.filled(onPressed: sending ? null : _send, icon: sending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send)),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -3575,6 +3800,7 @@ class _AuthScreenState extends State<AuthScreen> {
         user['name'] ?? name,
         user['email'] ?? user['user_metadata']?['phone'] ?? contact,
         refreshTokenVal: response['refresh_token'],
+        userIdVal: user['id']?.toString(),
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
