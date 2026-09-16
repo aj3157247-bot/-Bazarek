@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'admin_panel_screen.dart';
@@ -1823,8 +1824,8 @@ class _DivarStyleListing extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 128),
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 112, height: 96, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 72), fit: BoxFit.contain, filterQuality: FilterQuality.medium, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+          SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
+            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -2014,7 +2015,7 @@ class _SpecialBoostSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: SizedBox(
-              height: 156,
+              height: 188,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: special.length,
@@ -2051,7 +2052,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 78, height: 156, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 360, quality: 70), fit: BoxFit.contain, filterQuality: FilterQuality.medium, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -2084,100 +2085,47 @@ class _ProductCard extends StatelessWidget {
     final location = '${localizedProvince(context, item['province']?.toString() ?? '')}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}';
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       color: Colors.white,
       shadowColor: const Color(0x220B2A55),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: Color(0x0D0B2A55)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0x0D0B2A55))),
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 118,
-                height: 112,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(color: const Color(0xFFF1F4F8)),
-                      imageUrl.isNotEmpty
-                          ? Image.network(
-                              _optimizedImageUrl(imageUrl, width: 480, quality: 74),
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.medium,
-                              loadingBuilder: _bazarekImageLoading,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 34),
-                            )
-                          : const Icon(Icons.image_outlined, size: 36),
-                      if (images.length > 1)
-                        Positioned(
-                          left: 6,
-                          top: 6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(color: Colors.black.withOpacity(.60), borderRadius: BorderRadius.circular(8)),
-                            child: Text('${images.length}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
-                          ),
-                        ),
-                      if (boostLabel.isNotEmpty)
-                        Positioned(
-                          right: 6,
-                          top: 6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)),
-                            child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800)),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: SizedBox(
-                  height: 112,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: LocalizedText(
-                              item['title']?.toString() ?? '',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF102A43), height: 1.2),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          _SaveAdButton(item: item),
-                        ],
-                      ),
-                      const Spacer(),
-                      Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF00695C), fontSize: 14)),
-                      const SizedBox(height: 4),
-                      Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(
+            flex: 7,
+            child: Stack(fit: StackFit.expand, children: [
+              imageUrl.isNotEmpty
+                  ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                  : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
+              if (boostLabel.isNotEmpty)
+                Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
+              if (item['turbo_active'] == true)
+                Positioned(left: 8, bottom: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.58), borderRadius: BorderRadius.circular(9)), child: Text(psText(context, '⚡ توربو', '⚡ توربو'), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)))),
+              Positioned(top: 8, left: 8, child: _SaveAdButton(item: item)),
+            ]),
           ),
-        ),
+          Expanded(
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF102A43), height: 1.2)),
+                const Spacer(),
+                Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF00695C), fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
+              ]),
+            ),
+          ),
+        ]),
       ),
     );
   }
 }
+
 
 class _SaveAdButton extends StatefulWidget {
   final dynamic item;
@@ -2220,7 +2168,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   Widget build(BuildContext context) {
     final images = widget.images;
     return SizedBox(
-      height: 210,
+      height: 250,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -2230,7 +2178,6 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
             itemBuilder: (_, i) => Image.network(
               _optimizedImageUrl(images[i].toString(), width: 1200, quality: 82),
               fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
               loadingBuilder: _bazarekImageLoading,
               errorBuilder: (_, __, ___) => const ColoredBox(
                 color: Color(0xFFE9EDF3),
@@ -2671,7 +2618,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final name=profile['shop_name']?.toString().trim().isNotEmpty==true?profile['shop_name'].toString():(profile['full_name']?.toString().trim().isNotEmpty==true?profile['full_name'].toString():widget.sellerName);
     final avatar=profile['avatar_url']?.toString()??''; final followers=int.tryParse('${profile['followers_count']??0}')??0; final rating=double.tryParse('${profile['rating']??0}')??0;
     return Scaffold(appBar:AppBar(title:Text(name),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[
-      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[CircleAvatar(radius:38,child:avatar.isNotEmpty?ClipOval(child:SizedBox(width:76,height:76,child:Image.network(_optimizedImageUrl(avatar,width:300,quality:80),fit:BoxFit.contain,filterQuality:FilterQuality.medium,loadingBuilder:_bazarekImageLoading,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:38)))):const Icon(Icons.person,size:38)),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
+      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[SizedBox(width:92,height:92,child:ClipOval(child:avatar.isNotEmpty?Image.network(_optimizedImageUrl(avatar,width:160,quality:82),fit:BoxFit.contain,loadingBuilder:_bazarekImageLoading,errorBuilder:(_,__,___)=>const ColoredBox(color:Color(0xFFE9EDF3),child:Icon(Icons.person,size:46))):const ColoredBox(color:Color(0xFFE9EDF3),child:Icon(Icons.person,size:46)))),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
       Padding(padding:const EdgeInsets.fromLTRB(4,12,4,8),child:Text('آگهی‌های این فروشنده (${listings.length})',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
       if(listings.isEmpty)const Padding(padding:EdgeInsets.all(20),child:Center(child:Text('این فروشنده آگهی فعالی ندارد.'))),
       ...listings.map((x)=>_DivarStyleListing(item:x)),
@@ -3218,7 +3165,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final imgs = raw is String ? jsonDecode(raw) : raw;
       final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
       if (u.isNotEmpty) {
-        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_optimizedImageUrl(u), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading));
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_optimizedImageUrl(u), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading));
       }
     } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
@@ -3589,9 +3536,22 @@ class PickedProfileImage {
 }
 
 Future<PickedProfileImage?> pickProfileImage() async {
-  // Use the device/gallery image picker on mobile and the browser image
-  // picker on Web. The picker is restricted to images, so users do not
-  // need to browse arbitrary files.
+  // Web: use file_picker so we receive the real bytes directly instead of
+  // image_picker's temporary browser Blob URL. This fixes the Web-only
+  // "Could not load Blob from its URL" error.
+  if (kIsWeb) {
+    final file = await FilePicker.pickFile(
+      type: FileType.image,
+    );
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
+    }
+    return PickedProfileImage(bytes: bytes, name: file.name);
+  }
+
+  // Android/iOS: keep the existing image_picker flow unchanged.
   final picker = ImagePicker();
   final image = await picker.pickImage(
     source: ImageSource.gallery,
@@ -3833,23 +3793,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Stack(
                           children: [
                             CircleAvatar(
-                              radius: 36,
+                              radius: 54,
                               backgroundColor: Theme.of(context).colorScheme.surface,
-                              child: avatar.isNotEmpty
-                                  ? ClipOval(
-                                      child: SizedBox(
-                                        width: 72,
-                                        height: 72,
-                                        child: Image.network(
-                                          _optimizedImageUrl(avatar, width: 320, quality: 80),
-                                          fit: BoxFit.contain,
-                                          filterQuality: FilterQuality.medium,
-                                          loadingBuilder: _bazarekImageLoading,
-                                          errorBuilder: (_, __, ___) => Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
-                                        ),
-                                      ),
-                                    )
-                                  : Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
+                              backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                              child: avatar.isEmpty ? Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary) : null,
                             ),
                             Positioned(
                               right: 0,
@@ -4012,7 +3959,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(radius:20, child: avatar.isNotEmpty ? ClipOval(child: SizedBox(width:40,height:40,child:Image.network(_optimizedImageUrl(avatar,width:120,quality:72),fit:BoxFit.contain,filterQuality:FilterQuality.low,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:20)))) : const Icon(Icons.person,size:20)),
+                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
@@ -4432,9 +4379,25 @@ class _AddProductSheetState extends State<AddProductSheet> {
   Future<void> _pickImage() async {
     if (imageBytes.length >= 20) { _msg('حداکثر ۲۰ عکس مجاز است.'); return; }
 
-    // Open the image gallery/picker directly and allow multiple images.
-    // On Android this opens the system photo picker/gallery instead of a
-    // generic file browser. On Web it uses an image-only browser picker.
+    // Web: use file_picker so the browser gives us the actual bytes.
+    // This avoids image_picker Blob URLs, which can fail after selection.
+    if (kIsWeb) {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+      );
+      if (result.isEmpty) return;
+      final remaining = 20 - imageBytes.length;
+      for (final file in result.take(remaining)) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) continue;
+        imageBytes.add(bytes);
+        imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
+    // Android/iOS: keep the existing image_picker flow unchanged.
     final picked = await _picker.pickMultiImage(
       imageQuality: 85,
       maxWidth: 2000,
@@ -4687,7 +4650,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (var i = 0; i < imageBytes.length; i++)
               Stack(children: [
-                ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.cover)),
+                ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.contain)),
                 Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
               ]),
             if (imageBytes.length < 20) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
