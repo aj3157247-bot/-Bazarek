@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'admin_panel_screen.dart';
@@ -3590,22 +3589,9 @@ class PickedProfileImage {
 }
 
 Future<PickedProfileImage?> pickProfileImage() async {
-  // Web: use file_picker so we receive the real bytes directly instead of
-  // image_picker's temporary browser Blob URL. This fixes the Web-only
-  // "Could not load Blob from its URL" error.
-  if (kIsWeb) {
-    final file = await FilePicker.pickFile(
-      type: FileType.image,
-    );
-    if (file == null) return null;
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
-    }
-    return PickedProfileImage(bytes: bytes, name: file.name);
-  }
-
-  // Android/iOS: keep the existing image_picker flow unchanged.
+  // Use the device/gallery image picker on mobile and the browser image
+  // picker on Web. The picker is restricted to images, so users do not
+  // need to browse arbitrary files.
   final picker = ImagePicker();
   final image = await picker.pickImage(
     source: ImageSource.gallery,
@@ -4446,25 +4432,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
   Future<void> _pickImage() async {
     if (imageBytes.length >= 20) { _msg('حداکثر ۲۰ عکس مجاز است.'); return; }
 
-    // Web: use file_picker so the browser gives us the actual bytes.
-    // This avoids image_picker Blob URLs, which can fail after selection.
-    if (kIsWeb) {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-      );
-      if (result.isEmpty) return;
-      final remaining = 20 - imageBytes.length;
-      for (final file in result.take(remaining)) {
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) continue;
-        imageBytes.add(bytes);
-        imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
-      }
-      if (mounted) setState(() {});
-      return;
-    }
-
-    // Android/iOS: keep the existing image_picker flow unchanged.
+    // Open the image gallery/picker directly and allow multiple images.
+    // On Android this opens the system photo picker/gallery instead of a
+    // generic file browser. On Web it uses an image-only browser picker.
     final picked = await _picker.pickMultiImage(
       imageQuality: 85,
       maxWidth: 2000,
