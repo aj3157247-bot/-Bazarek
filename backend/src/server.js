@@ -695,7 +695,28 @@ app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db
 
 app.get('/api/support/requests', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت درخواست‌های پشتیبانی.'});}});
 app.post('/api/support/requests', requireUser, async (req,res)=>{try{const type=String(req.body?.type||'support');const allowed=['bug','suggestion','support','report'];if(!allowed.includes(type))return res.status(400).json({error:'نوع درخواست نامعتبر است.'});const title=String(req.body?.title||'').trim().slice(0,160);const message=String(req.body?.message||'').trim().slice(0,4000);if(!title||!message)return res.status(400).json({error:'موضوع و توضیح الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').insert([{user_id:req.user.id,type,title,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست پشتیبانی.'});}});
-app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*,profiles(full_name,phone,city,shop_name)').order('created_at',{ascending:false}).limit(500);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پشتیبانی.'});}});
+app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    // support_requests.user_id references auth.users, not public.profiles, so
+    // PostgREST cannot safely embed profiles here. Fetch them separately.
+    const {data:requests,error}=await db.from('support_requests').select('*').order('created_at',{ascending:false}).limit(500);
+    if(error) throw error;
+    const rows=requests||[];
+    const userIds=[...new Set(rows.map(x=>x.user_id).filter(Boolean))];
+    let profiles=[];
+    if(userIds.length){
+      const {data,error:profileError}=await db.from('profiles').select('id,full_name,phone,city,shop_name,avatar_url').in('id',userIds);
+      if(profileError) throw profileError;
+      profiles=data||[];
+    }
+    const profileMap=Object.fromEntries(profiles.map(p=>[p.id,p]));
+    res.json(rows.map(x=>({...x,profiles:profileMap[x.user_id]||null,user:profileMap[x.user_id]||null})));
+  } catch(e) {
+    console.error('admin support requests error:',e);
+    res.status(500).json({error:'خطا در دریافت پشتیبانی.'});
+  }
+});
 app.patch('/api/admin/support/requests/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'in_progress');if(!['open','in_progress','answered','resolved','closed'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const reply=String(req.body?.admin_reply||'').trim().slice(0,4000);const db=getSupabaseAdmin();const {data:old}=await db.from('support_requests').select('user_id,title').eq('id',req.params.id).maybeSingle();const {data,error}=await db.from('support_requests').update({status,admin_reply:reply,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(old?.user_id&&reply){await db.from('user_notifications').insert([{user_id:old.user_id,type:'support',title:'پاسخ پشتیبانی بازارک',message:`پاسخ درخواست «${old.title||'پشتیبانی'}» آماده شد.`}]);}res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در پاسخ به درخواست.'});}});
 
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
