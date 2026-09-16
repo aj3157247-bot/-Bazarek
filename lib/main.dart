@@ -1777,16 +1777,12 @@ Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent?
 }
 
 String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
-  final u = url.trim();
-  if (u.isEmpty) return u;
-  // Supabase Storage Image Transformations keep original files intact while
-  // delivering smaller, faster images to browsers and phones.
-  final marker = '/storage/v1/object/public/';
-  if (!u.contains(marker)) return u;
-  final transformed = u.replaceFirst(marker, '/storage/v1/render/image/public/');
-  final separator = transformed.contains('?') ? '&' : '?';
-  return '$transformed${separator}width=$width&quality=$quality';
+  // IMPORTANT: return the original image URL. Supabase image transformations
+  // can alter the rendered framing on some browsers. The UI uses BoxFit.contain,
+  // so the complete original image is always shown without crop/zoom.
+  return url.trim();
 }
+
 
 
 String _displayListingPrice(BuildContext context, dynamic item) {
@@ -2710,10 +2706,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               final c = conversations[index];
                               final image = c['listing_image_url']?.toString() ?? '';
                               return ListTile(
-                                leading: CircleAvatar(
-                                  radius: 27,
-                                  backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
-                                  child: image.isEmpty ? const Icon(Icons.person) : null,
+                                leading: SizedBox(
+                                  width: 54,
+                                  height: 54,
+                                  child: ClipOval(
+                                    child: image.isNotEmpty
+                                        ? Image.network(image, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.person))
+                                        : const Icon(Icons.person),
+                                  ),
                                 ),
                                 title: Text(c['other_user_name']?.toString().trim().isNotEmpty == true ? c['other_user_name'].toString() : 'کاربر بازارک'),
                                 subtitle: Text(c['listing_title']?.toString() ?? 'آگهی', maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -3969,7 +3969,15 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            leading: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: ClipOval(
+                                child: avatar.isNotEmpty
+                                    ? Image.network(avatar, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.person))
+                                    : const Icon(Icons.person),
+                              ),
+                            ),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
