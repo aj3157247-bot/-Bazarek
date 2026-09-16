@@ -716,6 +716,87 @@ class ApiService {
     return text;
   }
 
+  static Future<Map<String, dynamic>> startConversation(String listingId) async {
+    Future<http.Response> request() => http.post(
+      Uri.parse('${ApiConfig.baseUrl}/conversations'),
+      headers: headers,
+      body: jsonEncode({'listing_id': listingId}),
+    ).timeout(const Duration(seconds: 20));
+
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await request();
+    }
+    dynamic decoded;
+    try { decoded = jsonDecode(res.body); } catch (_) { decoded = null; }
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(decoded is Map ? (decoded['error'] ?? 'خطا در شروع گفتگو.') : 'خطا در شروع گفتگو.');
+    }
+    if (decoded is! Map) throw Exception('پاسخ گفتگو از سرور نامعتبر است.');
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  static Future<List<Map<String, dynamic>>> getConversations() async {
+    Future<http.Response> request() => http.get(
+      Uri.parse('${ApiConfig.baseUrl}/conversations'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 20));
+
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await request();
+    }
+    dynamic decoded;
+    try { decoded = jsonDecode(res.body); } catch (_) { decoded = null; }
+    if (res.statusCode != 200) {
+      throw Exception(decoded is Map ? (decoded['error'] ?? 'خطا در دریافت گفتگوها.') : 'خطا در دریافت گفتگوها.');
+    }
+    if (decoded is! List) throw Exception('پاسخ گفتگوها از سرور نامعتبر است.');
+    return decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> getMessages(String conversationId) async {
+    Future<http.Response> request() => http.get(
+      Uri.parse('${ApiConfig.baseUrl}/conversations/$conversationId/messages'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 20));
+
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await request();
+    }
+    dynamic decoded;
+    try { decoded = jsonDecode(res.body); } catch (_) { decoded = null; }
+    if (res.statusCode != 200) {
+      throw Exception(decoded is Map ? (decoded['error'] ?? 'خطا در دریافت پیام‌ها.') : 'خطا در دریافت پیام‌ها.');
+    }
+    if (decoded is! List) throw Exception('پاسخ پیام‌ها از سرور نامعتبر است.');
+    return decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  static Future<Map<String, dynamic>> sendMessage(String conversationId, String message) async {
+    final text = message.trim();
+    if (text.isEmpty) throw Exception('متن پیام خالی است.');
+
+    Future<http.Response> request() => http.post(
+      Uri.parse('${ApiConfig.baseUrl}/conversations/$conversationId/messages'),
+      headers: headers,
+      body: jsonEncode({'message': text}),
+    ).timeout(const Duration(seconds: 20));
+
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await request();
+    }
+    dynamic decoded;
+    try { decoded = jsonDecode(res.body); } catch (_) { decoded = null; }
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(decoded is Map ? (decoded['error'] ?? 'خطا در ارسال پیام.') : 'خطا در ارسال پیام.');
+    }
+    if (decoded is! Map) throw Exception('پاسخ ارسال پیام از سرور نامعتبر است.');
+    return Map<String, dynamic>.from(decoded);
+  }
+
   static Future<List<dynamic>> getProducts({
     String? category,
     String? subcategory,
