@@ -51,7 +51,6 @@ class BazarBuzurgApp extends StatefulWidget {
 class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
   Locale _locale = const Locale('fa');
   ThemeMode _themeMode = ThemeMode.light;
-  bool _authReady = false;
 
   @override
   void initState() {
@@ -68,20 +67,14 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     AuthService.userContact = prefs.getString('user_contact');
     AuthService.avatarUrl = prefs.getString('avatar_url');
     AuthService.refreshToken = prefs.getString('refresh_token');
-
-    // نشست ذخیره‌شده را قبل از نمایش برنامه بازیابی می‌کنیم.
-    // اگر access token قدیمی شده باشد، با refresh token آن را تمدید می‌کنیم.
-    if (AuthService.token != null && AuthService.token!.isNotEmpty) {
-      if (AuthService.refreshToken != null && AuthService.refreshToken!.isNotEmpty) {
-        await ApiService.refreshSession();
-      }
+    // توکن‌های ساختگی نسخه‌های قدیمی معتبر نیستند؛ آنها را پاک می‌کنیم.
+    if (AuthService.token != null && AuthService.token!.startsWith('local_')) {
+      await AuthService.logout();
     }
 
-    if (!mounted) return;
     setState(() {
       _locale = Locale(lang);
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-      _authReady = true;
     });
     AuthService.authVersion.value++;
   }
@@ -131,11 +124,7 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
         ),
         fontFamily: 'Vazirmatn',
       ),
-      home: _authReady
-          ? const MainLayout()
-          : const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
+      home: const MainLayout(),
     );
   }
 }
@@ -2179,7 +2168,9 @@ class AddProductScreen extends StatelessWidget {
 }
 
 class MyProductsScreen extends StatefulWidget {
-  const MyProductsScreen({super.key});
+  final bool activeOnly;
+  final String? customTitle;
+  const MyProductsScreen({super.key, this.activeOnly = false, this.customTitle});
   @override
   State<MyProductsScreen> createState() => _MyProductsScreenState();
 }
@@ -2214,7 +2205,10 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
     if (mounted) setState(() { loading = true; error = null; });
     try {
       final data = await ApiService.getMyProducts();
-      if (mounted) setState(() { ads = data; loading = false; error = null; });
+      final filtered = widget.activeOnly
+          ? data.where((ad) => ad is Map && ad['is_active'] == true).toList()
+          : data;
+      if (mounted) setState(() { ads = filtered; loading = false; error = null; });
     } catch (e) {
       if (mounted) setState(() { ads = []; loading = false; error = friendlyNetworkError(context, e); });
     }
@@ -2241,7 +2235,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   Widget build(BuildContext context) {
     if (!AuthService.isLoggedIn) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr(context, 'my_ads'))),
+        appBar: AppBar(title: Text(widget.customTitle ?? tr(context, 'my_ads'))),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2265,7 +2259,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr(context, 'my_ads')),
+        title: Text(widget.customTitle ?? tr(context, 'my_ads')),
         actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
       ),
       body: loading
@@ -2935,15 +2929,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   if (error != null) Padding(padding: const EdgeInsets.all(12), child: Text(error!, style: const TextStyle(color: Colors.red))),
                   Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                     child: Row(
                       children: [
-                        Expanded(child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined)),
+                        Expanded(child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())), hint: 'مشاهده همه')),
                         const SizedBox(width: 8),
-                        Expanded(child: _statCard('فعال', '$activeAds', Icons.check_circle_outline)),
+                        Expanded(child: _statCard('فعال', '$activeAds', Icons.check_circle_outline, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(activeOnly: true, customTitle: 'آگهی‌های فعال'))), hint: 'فقط فعال‌ها')),
                         const SizedBox(width: 8),
-                        Expanded(child: _statCard('بازدید', '$views', Icons.visibility_outlined)),
+                        Expanded(child: _statCard('بازدید', '$views', Icons.visibility_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(customTitle: 'آگهی‌های من و بازدیدها'))), hint: 'جزئیات آگهی‌ها')),
                       ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          Row(children: [
+                            Icon(Icons.dashboard_customize_outlined, color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: 8),
+                            const Expanded(child: Text('مرکز مدیریت حساب', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+                          ]),
+                          const SizedBox(height: 12),
+                          Wrap(spacing: 8, runSpacing: 8, children: [
+                            _quickAction('آگهی‌های من', Icons.inventory_2_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
+                            _quickAction('اعلان‌ها', Icons.notifications_none, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
+                            _quickAction('پیام‌ها', Icons.chat_bubble_outline, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()))),
+                            _quickAction('خدمات و Boost', Icons.rocket_launch_outlined, () async { if (await requireAccount(context) && context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
+                            _quickAction('پشتیبانی', Icons.support_agent_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
+                          ]),
+                        ]),
+                      ),
+                    ),
+                  ),
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: ListTile(
+                      leading: CircleAvatar(child: Icon(profile['verified'] == true ? Icons.verified : Icons.verified_user_outlined)),
+                      title: Text(profile['verified'] == true ? 'حساب تأییدشده' : 'تأیید هویت و اعتماد', style: const TextStyle(fontWeight: FontWeight.w900)),
+                      subtitle: Text(profile['verified'] == true ? 'پروفایل شما تأیید شده است.' : 'با تکمیل اطلاعات و تأیید هویت، اعتماد بیشتری ایجاد کنید.'),
+                      trailing: const Icon(Icons.chevron_left),
+                      onTap: () => _showVerificationInfo(),
+                    ),
+                  ),
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.storefront_outlined)),
+                      title: Text(shop.isNotEmpty ? shop : 'فروشگاه حرفه‌ای', style: const TextStyle(fontWeight: FontWeight.w900)),
+                      subtitle: Text(shop.isNotEmpty ? 'صفحه فروشگاه و ابزارهای فروشنده' : 'برای ساخت صفحه فروشگاه، اطلاعات کسب‌وکار خود را تکمیل کنید.'),
+                      trailing: const Icon(Icons.chevron_left),
+                      onTap: _editProfile,
                     ),
                   ),
                   if (shop.isNotEmpty || phone.isNotEmpty || city.isNotEmpty)
@@ -2956,7 +2993,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _infoTile(Icons.location_on_outlined, 'شهر / ولایت', city),
                       ]),
                     ),
-                  ListTile(leading: const Icon(Icons.inventory_2_outlined), title: Text(tr(context, 'my_ads')), subtitle: const Text('تمام آگهی‌هایی که ثبت کرده‌اید'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
                   ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), subtitle: const Text('پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                   ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), subtitle: const Text('گزارش اشکال، پیشنهاد و پیام به تیم بازارک'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
                   ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
@@ -2971,8 +3007,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon) {
-    return Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Column(children: [Icon(icon, size: 24), const SizedBox(height: 6), Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), Text(label, style: const TextStyle(fontSize: 12))])));
+  Widget _quickAction(String label, IconData icon, VoidCallback onTap) {
+    return ActionChip(avatar: Icon(icon, size: 18), label: Text(label), onPressed: onTap);
+  }
+
+  void _showVerificationInfo() {
+    showDialog(context: context, builder: (_) => AlertDialog(
+      title: const Text('تأیید هویت و اعتماد'),
+      content: const Text('اطلاعات هویتی و وضعیت تأیید حساب شما از این بخش مدیریت می‌شود. در صورت فعال شدن تأیید هویت در بازارک، وضعیت آن همین‌جا نمایش داده خواهد شد.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('باشه'))],
+    ));
+  }
+
+  Widget _statCard(String label, String value, IconData icon, {VoidCallback? onTap, String? hint}) {
+    final card = Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 6),
+          child: Column(children: [
+            Icon(icon, size: 25),
+            const SizedBox(height: 6),
+            Text(value, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            if (hint != null) ...[
+              const SizedBox(height: 3),
+              Text(hint, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+            ],
+          ]),
+        ),
+      ),
+    );
+    return card;
   }
 }
 
