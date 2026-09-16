@@ -519,7 +519,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -528,8 +528,10 @@ app.get('/api/admin/products', requireAdmin, async (_, res) => {
 app.patch('/api/admin/products/:id/status', requireAdmin, async (req, res) => {
   try {
     const isActive = Boolean(req.body?.is_active);
+    const reason = String(req.body?.reason || '').trim().slice(0, 500);
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
+    const patch = { is_active: isActive, moderation_disabled: !isActive, moderation_reason: !isActive ? (reason || 'آگهی توسط مدیریت بازارک غیرفعال شد.') : null, updated_at: new Date().toISOString() };
+    const { data, error } = await db.from('products').update(patch).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تغییر وضعیت آگهی.' }); }
@@ -671,7 +673,7 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
     const thankReporter=Boolean(req.body?.thank_reporter);
     const resolutionNote=String(req.body?.resolution_note||'').trim().slice(0,1000);
     const {data:listing}=await db.from('products').select('id,title,vendor_id').eq('id',report.listing_id).maybeSingle();
-    if(disableListing && listing) await db.from('products').update({is_active:false,updated_at:new Date().toISOString()}).eq('id',listing.id);
+    if(disableListing && listing) await db.from('products').update({is_active:false,moderation_disabled:true,moderation_reason:String(report.reason||'آگهی به دلیل گزارش و بررسی قوانین بازارک غیرفعال شد.').slice(0,500),updated_at:new Date().toISOString()}).eq('id',listing.id);
     if(warningMessage && listing?.vendor_id) {
       await db.from('user_warnings').insert([{user_id:listing.vendor_id,message:warningMessage}]);
       await db.from('user_notifications').insert([{
@@ -870,6 +872,21 @@ app.post('/api/products', requireUser, async (req, res) => {
     if (error) throw error;
     res.status(201).json(data);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ثبت محصول.' }); }
+});
+
+app.patch('/api/products/:id/status', requireUser, async (req, res) => {
+  try {
+    const isActive = Boolean(req.body?.is_active);
+    const db = getSupabaseAdmin();
+    const { data: listing, error: le } = await db.from('products').select('id,vendor_id,is_active,moderation_disabled').eq('id', req.params.id).maybeSingle();
+    if (le) throw le;
+    if (!listing) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (listing.vendor_id !== req.user.id) return res.status(403).json({ error: 'این آگهی متعلق به شما نیست.' });
+    if (isActive && listing.moderation_disabled === true) return res.status(403).json({ error: 'این آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شده و فعلاً قابل فعال‌سازی نیست.' });
+    const { data, error } = await db.from('products').update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('id', req.params.id).eq('vendor_id', req.user.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تغییر وضعیت آگهی.' }); }
 });
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
