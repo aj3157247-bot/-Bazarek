@@ -1081,13 +1081,13 @@ class ApiService {
     required String message,
   }) async {
     var res = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/support/requests'),
+      Uri.parse('${ApiConfig.baseUrl}/support'),
       headers: headers,
       body: jsonEncode({'type': type, 'title': subject, 'message': message}),
     ).timeout(const Duration(seconds: 20));
     if (res.statusCode == 401 && await refreshSession()) {
       res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/support/requests'),
+        Uri.parse('${ApiConfig.baseUrl}/support'),
         headers: headers,
         body: jsonEncode({'type': type, 'title': subject, 'message': message}),
       ).timeout(const Duration(seconds: 20));
@@ -1297,21 +1297,14 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
-  final GlobalKey<_HomeScreenState> _homeKey = GlobalKey<_HomeScreenState>();
 
-  late final List<Widget> _pages = [
-    HomeScreen(key: _homeKey),
-    const SavedAdsScreen(),
-    const AddProductScreen(),
-    const ChatListScreen(),
-    const ProfileScreen(),
+  final List<Widget> _pages = const [
+    HomeScreen(),
+    SavedAdsScreen(),
+    AddProductScreen(),
+    ChatListScreen(),
+    ProfileScreen(),
   ];
-
-  Future<void> showHomeAfterPublish() async {
-    if (!mounted) return;
-    setState(() => _currentIndex = 0);
-    await _homeKey.currentState?._loadProducts();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1682,24 +1675,53 @@ Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent?
   if (progress == null) return child;
   final expected = progress.expectedTotalBytes;
   final value = expected != null && expected > 0
-      ? progress.cumulativeBytesLoaded / expected
+      ? (progress.cumulativeBytesLoaded / expected).clamp(0.0, 1.0)
       : null;
   return Container(
-    color: const Color(0xFFE9EDF3),
+    color: const Color(0xFFEAF2FF),
     alignment: Alignment.center,
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 30,
-          height: 30,
-          child: CircularProgressIndicator(strokeWidth: 3, value: value),
+        const SizedBox(
+          width: 34,
+          height: 34,
+          child: CircularProgressIndicator(strokeWidth: 3.5),
         ),
-        const SizedBox(height: 8),
-        const Text('در حال بارگذاری عکس...', style: TextStyle(fontSize: 10, color: Colors.black54)),
+        const SizedBox(height: 7),
+        Text(
+          'در حال بارگذاری عکس...',
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF174A8B)),
+        ),
+        if (value != null) ...[
+          const SizedBox(height: 5),
+          SizedBox(width: 90, child: LinearProgressIndicator(value: value, minHeight: 4)),
+        ],
       ],
     ),
   );
+}
+
+String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
+  final u = url.trim();
+  if (u.isEmpty) return u;
+  // Supabase Storage Image Transformations keep original files intact while
+  // delivering smaller, faster images to browsers and phones.
+  final marker = '/storage/v1/object/public/';
+  if (!u.contains(marker)) return u;
+  final transformed = u.replaceFirst(marker, '/storage/v1/render/image/public/');
+  final separator = transformed.contains('?') ? '&' : '?';
+  return '$transformed${separator}width=$width&quality=$quality';
+}
+
+
+String _displayListingPrice(BuildContext context, dynamic item) {
+  final raw = item['price'];
+  final n = num.tryParse(raw?.toString() ?? '') ?? 0;
+  final negotiable = item['is_negotiable'] == true;
+  final currency = (item['currency']?.toString().toUpperCase() == 'USD') ? 'USD' : 'AFN';
+  final amount = n <= 0 ? tr(context, 'free') : (currency == 'USD' ? '\$${NumberFormatHelper.format(n)}' : '${NumberFormatHelper.format(n)} ${tr(context, 'afghani')}');
+  return negotiable ? '$amount • ${tr(context, 'price_negotiable')}' : amount;
 }
 
 class _DivarStyleListing extends StatelessWidget {
@@ -1716,7 +1738,7 @@ class _DivarStyleListing extends StatelessWidget {
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
     final priceRaw = item['price'];
-    final priceText = NumberFormatHelper.listingPrice(context, item);
+    final priceText = _displayListingPrice(context, item);
     final province = localizedProvince(context, item['province']?.toString() ?? '');
     final location = (item['location_text'] ?? '').toString().trim();
     final boost = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
@@ -1729,7 +1751,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -1956,13 +1978,13 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
               LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
               const SizedBox(height: 8),
-              Text(NumberFormatHelper.listingPrice(context, item), style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary, fontSize: 12)),
+              Text(_displayListingPrice(context, item), style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF00695C), fontSize: 13)),
             ]))),
           ]),
         ),
@@ -1984,7 +2006,7 @@ class _ProductCard extends StatelessWidget {
       if (raw is List) images = raw;
     } catch (_) {}
     final imageUrl = images.isNotEmpty ? images.first.toString() : '';
-    final price = NumberFormatHelper.listingPrice(context, item);
+    final price = _displayListingPrice(context, item);
     final boostLabel = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
     final location = '${localizedProvince(context, item['province']?.toString() ?? '')}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}';
 
@@ -2002,7 +2024,7 @@ class _ProductCard extends StatelessWidget {
             flex: 7,
             child: Stack(fit: StackFit.expand, children: [
               imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                  ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
@@ -2016,9 +2038,9 @@ class _ProductCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF102A43), height: 1.2)),
                 const Spacer(),
-                Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary, fontSize: 13)),
+                Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF00695C), fontSize: 14)),
                 const SizedBox(height: 4),
                 Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
               ]),
@@ -2052,31 +2074,8 @@ class _SaveAdButtonState extends State<_SaveAdButton> {
 class NumberFormatHelper {
   static String format(dynamic value) {
     final n = num.tryParse(value?.toString() ?? '') ?? 0;
-    final raw = n == n.truncateToDouble() ? n.toInt().toString() : n.toString();
-    return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
-  }
-
-  static String persianDigits(String value) {
-    const en = '0123456789';
-    const fa = '۰۱۲۳۴۵۶۷۸۹';
-    var out = value;
-    for (var i = 0; i < en.length; i++) {
-      out = out.replaceAll(en[i], fa[i]);
-    }
-    return out;
-  }
-
-  static String listingPrice(BuildContext context, dynamic item) {
-    if (item is Map && (item['is_negotiable'] == true || item['is_negotiable'] == 1)) {
-      return psText(context, 'توافقی', 'توافقي بیه');
-    }
-    final raw = item is Map ? item['price'] : null;
-    final n = num.tryParse(raw?.toString() ?? '') ?? 0;
-    if (n == 0) return tr(context, 'free');
-    final formatted = persianDigits(format(raw));
-    final currency = (item is Map ? item['currency']?.toString().toUpperCase() : null) ?? 'AFN';
-    if (currency == 'USD') return '\$$formatted';
-    return '$formatted ${tr(context, 'afghani')}';
+    final raw = n.toInt().toString();
+    return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+$)'), (_) => '.');
   }
 }
 
@@ -2103,7 +2102,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
             itemCount: images.length,
             onPageChanged: (index) => setState(() => currentPage = index),
             itemBuilder: (_, i) => Image.network(
-              images[i].toString(),
+              _optimizedImageUrl(images[i].toString(), width: 1200, quality: 82),
               fit: BoxFit.cover,
               loadingBuilder: _bazarekImageLoading,
               errorBuilder: (_, __, ___) => const ColoredBox(
@@ -2276,15 +2275,15 @@ class ProductDetailScreen extends StatelessWidget {
                 children: [
                   LocalizedText(
                     product['title']?.toString() ?? '',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF102A43), height: 1.2),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    NumberFormatHelper.listingPrice(context, product),
+                    _displayListingPrice(context, product),
                     style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF00695C),
                     ),
                   ),
                   const Divider(height: 32),
@@ -2860,7 +2859,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                 ListTile(
                                   leading: SizedBox(width: 70, height: 60, child: _imageFor(ad)),
                                   title: Text(ad['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  subtitle: Text('${NumberFormatHelper.listingPrice(context, ad)} • ${ad['province'] ?? ''}'),
+                                  subtitle: Text(_displayListingPrice(context, ad) + ' • ${ad['province'] ?? ''}'),
                                   trailing: Chip(
                                     avatar: Icon(ad['is_active'] == true ? Icons.check_circle : Icons.pause_circle_outline, size: 18),
                                     label: Text(ad['is_active'] == true ? psText(context, 'فعال', 'فعال') : psText(context, 'غیرفعال', 'غیرفعال')),
@@ -2953,7 +2952,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final imgs = raw is String ? jsonDecode(raw) : raw;
       final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
       if (u.isNotEmpty) {
-        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading));
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_optimizedImageUrl(u), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading));
       }
     } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
@@ -4054,10 +4053,10 @@ class _AddProductSheetState extends State<AddProductSheet> {
   String category = '';
   String subcategory = '';
   String province = '';
-  String currency = 'AFN';
   bool allowChat = true;
   bool showPhone = true;
   bool isNegotiable = false;
+  String currency = 'AFN';
   bool uploading = false;
 
   List<Uint8List> imageBytes = [];
@@ -4199,12 +4198,11 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (imageUrls.isEmpty) throw Exception('عکس‌ها آپلود نشدند.');
       final payload = jsonEncode({
         'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
-        'price': double.tryParse(price.text.replaceAll(',', '').replaceAll(' ', '')) ?? 0,
-        'currency': currency,
+        'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
-        'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'external_link': socialLink.text.trim(),
+        'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
       });
       var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
         'Content-Type':'application/json',
@@ -4222,23 +4220,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (response.statusCode != 201) throw Exception(data['error'] ?? tr(context, 'publish_error'));
       if (!mounted) return;
       _msg(tr(context, 'publish_success'));
-      price.clear();
-      title.clear();
-      desc.clear();
-      contactPhone.clear();
-      locationText.clear();
-      socialLink.clear();
-      setState(() {
-        imageBytes = [];
-        imageNames = [];
-        imageUrls = [];
-        isNegotiable = false;
-        currency = 'AFN';
-      });
-      final mainLayout = context.findAncestorStateOfType<_MainLayoutState>();
-      if (mainLayout != null) {
-        await mainLayout.showHomeAfterPublish();
-      }
+      Navigator.pop(context, true);
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
     } finally { if (mounted) setState(() => publishing = false); }
@@ -4284,33 +4266,38 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => province = val ?? ''),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: price,
-                  enabled: !isNegotiable,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                  decoration: InputDecoration(
-                    labelText: currency == 'USD' ? '\u{1F1FA}\u{1F1F8} قیمت دلار' : '\u{1F1E6}\u{1F1EB} قیمت افغانی',
-                    hintText: currency == 'USD' ? 'مثلاً 500' : 'مثلاً 10000',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 118,
-                child: DropdownButtonFormField<String>(
-                  value: currency,
-                  decoration: const InputDecoration(labelText: 'ارز'),
-                  items: const [
-                    DropdownMenuItem(value: 'AFN', child: Text('افغانی')),
-                    DropdownMenuItem(value: 'USD', child: Text('دلار')),
-                  ],
-                  onChanged: isNegotiable ? null : (value) => setState(() => currency = value ?? 'AFN'),
-                ),
-              ),
-            ],
+          TextField(
+            controller: price,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: psText(context, 'قیمت', 'بیه'),
+              hintText: psText(context, 'مثلاً 10000', 'لکه 10000'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5FF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFD7E2FF)),
+            ),
+            child: Row(children: [
+              Expanded(child: ChoiceChip(
+                label: Text(psText(context, 'افغانی (AFN)', 'افغانۍ (AFN)')),
+                selected: currency == 'AFN',
+                onSelected: (_) => setState(() => currency = 'AFN'),
+                selectedColor: const Color(0xFF1565C0),
+                labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800),
+              )),
+              Expanded(child: ChoiceChip(
+                label: const Text('دلار (USD)'),
+                selected: currency == 'USD',
+                onSelected: (_) => setState(() => currency = 'USD'),
+                selectedColor: const Color(0xFF1565C0),
+                labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800),
+              )),
+            ]),
           ),
           const SizedBox(height: 12),
           TextField(
