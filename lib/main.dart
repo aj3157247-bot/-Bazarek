@@ -2559,7 +2559,38 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
   Future<void> _rate() async {
     if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
     int value=5;
-    final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('امتیاز به فروشنده'),content:StatefulBuilder(builder:(c,set)=>Row(mainAxisAlignment:MainAxisAlignment.center,children:List.generate(5,(i)=>IconButton(onPressed:()=>set(()=>value=i+1),icon:Icon(i<value?Icons.star:Icons.star_border,color:Colors.amber,size:30)))),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('انصراف')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('ثبت'))]));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('امتیاز به فروشنده'),
+        content: StatefulBuilder(
+          builder: (c, set) => Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              5,
+              (i) => IconButton(
+                onPressed: () => set(() => value = i + 1),
+                icon: Icon(
+                  i < value ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 30,
+                ),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('انصراف'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('ثبت'),
+          ),
+        ],
+      ),
+    );
     if(ok!=true)return;
     try{await ApiService.rateSeller(widget.sellerId,value);await _load();if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('امتیاز شما ثبت شد.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}
   }
