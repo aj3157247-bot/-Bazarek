@@ -2618,7 +2618,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final name=profile['shop_name']?.toString().trim().isNotEmpty==true?profile['shop_name'].toString():(profile['full_name']?.toString().trim().isNotEmpty==true?profile['full_name'].toString():widget.sellerName);
     final avatar=profile['avatar_url']?.toString()??''; final followers=int.tryParse('${profile['followers_count']??0}')??0; final rating=double.tryParse('${profile['rating']??0}')??0;
     return Scaffold(appBar:AppBar(title:Text(name),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[
-      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[SizedBox(width:92,height:92,child:ClipOval(child:avatar.isNotEmpty?Image.network(_optimizedImageUrl(avatar,width:160,quality:82),fit:BoxFit.contain,loadingBuilder:_bazarekImageLoading,errorBuilder:(_,__,___)=>const ColoredBox(color:Color(0xFFE9EDF3),child:Icon(Icons.person,size:46))):const ColoredBox(color:Color(0xFFE9EDF3),child:Icon(Icons.person,size:46)))),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
+      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[SizedBox(width:92,height:92,child:ClipOval(child:Container(color:Theme.of(context).colorScheme.surface,child:avatar.isNotEmpty?Image.network(_optimizedImageUrl(avatar,width:220,quality:82),fit:BoxFit.contain,loadingBuilder:_bazarekImageLoading,errorBuilder:(_,__,___)=>const Center(child:Icon(Icons.person,size:46))):const Center(child:Icon(Icons.person,size:46))))),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
       Padding(padding:const EdgeInsets.fromLTRB(4,12,4,8),child:Text('آگهی‌های این فروشنده (${listings.length})',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
       if(listings.isEmpty)const Padding(padding:EdgeInsets.all(20),child:Center(child:Text('این فروشنده آگهی فعالی ندارد.'))),
       ...listings.map((x)=>_DivarStyleListing(item:x)),
@@ -3792,11 +3792,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Stack(
                           children: [
-                            CircleAvatar(
-                              radius: 54,
-                              backgroundColor: Theme.of(context).colorScheme.surface,
-                              backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
-                              child: avatar.isEmpty ? Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary) : null,
+                            SizedBox(
+                              width: 108,
+                              height: 108,
+                              child: ClipOval(
+                                child: Container(
+                                  color: Theme.of(context).colorScheme.surface,
+                                  child: avatar.isNotEmpty
+                                      ? Image.network(
+                                          _optimizedImageUrl(avatar, width: 240, quality: 82),
+                                          fit: BoxFit.contain,
+                                          loadingBuilder: _bazarekImageLoading,
+                                          errorBuilder: (_, __, ___) => Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
+                                        )
+                                      : Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
+                                ),
+                              ),
                             ),
                             Positioned(
                               right: 0,
@@ -3959,7 +3970,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            leading: SizedBox(width: 48, height: 48, child: ClipOval(child: Container(color: Theme.of(context).colorScheme.surface, child: avatar.isNotEmpty ? Image.network(_optimizedImageUrl(avatar, width: 120, quality: 82), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const Icon(Icons.person)) : const Icon(Icons.person)))),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
