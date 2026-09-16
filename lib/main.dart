@@ -797,6 +797,69 @@ class ApiService {
     return Map<String, dynamic>.from(decoded);
   }
 
+  static Future<Map<String, dynamic>> getSellerProfile(String sellerId) async {
+    Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId'), headers: headers).timeout(const Duration(seconds: 15));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت پروفایل فروشنده.') : 'خطا در دریافت پروفایل فروشنده.');
+    return Map<String,dynamic>.from(data as Map);
+  }
+
+  static Future<List<dynamic>> getSellerListings(String sellerId) async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/listings'), headers: headers).timeout(const Duration(seconds: 15));
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌های فروشنده.') : 'خطا در دریافت آگهی‌های فروشنده.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
+  static Future<Map<String,dynamic>> toggleSellerFollow(String sellerId, bool follow) async {
+    Future<http.Response> request() => follow
+      ? http.post(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/follow'), headers: headers)
+      : http.delete(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/follow'), headers: headers);
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'تغییر دنبال‌کردن فروشنده ناموفق بود.') : 'تغییر دنبال‌کردن فروشنده ناموفق بود.');
+    return data is Map ? Map<String,dynamic>.from(data) : <String,dynamic>{};
+  }
+
+  static Future<Map<String,dynamic>> toggleListingLike(String listingId, bool like) async {
+    Future<http.Response> request() => like
+      ? http.post(Uri.parse('${ApiConfig.baseUrl}/listings/$listingId/like'), headers: headers)
+      : http.delete(Uri.parse('${ApiConfig.baseUrl}/listings/$listingId/like'), headers: headers);
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'تغییر پسندیدن ناموفق بود.') : 'تغییر پسندیدن ناموفق بود.');
+    return data is Map ? Map<String,dynamic>.from(data) : <String,dynamic>{};
+  }
+
+  static Future<List<dynamic>> getSellerComments(String sellerId) async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/comments'), headers: headers).timeout(const Duration(seconds: 15));
+    dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت دیدگاه‌ها.') : 'خطا در دریافت دیدگاه‌ها.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
+  static Future<Map<String,dynamic>> addSellerComment(String sellerId, String text) async {
+    Future<http.Response> request() => http.post(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/comments'), headers: headers, body: jsonEncode({'comment': text.trim()}));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت دیدگاه ناموفق بود.') : 'ثبت دیدگاه ناموفق بود.');
+    return Map<String,dynamic>.from(data as Map);
+  }
+
+  static Future<Map<String,dynamic>> rateSeller(String sellerId, int rating) async {
+    Future<http.Response> request() => http.post(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/rating'), headers: headers, body: jsonEncode({'rating': rating}));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت امتیاز ناموفق بود.') : 'ثبت امتیاز ناموفق بود.');
+    return Map<String,dynamic>.from(data as Map);
+  }
+
   static Future<List<dynamic>> getProducts({
     String? category,
     String? subcategory,
@@ -2286,6 +2349,10 @@ class ProductDetailScreen extends StatelessWidget {
                       color: const Color(0xFF00695C),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  _SellerCard(product: product),
+                  const SizedBox(height: 10),
+                  _ListingLikeBar(listingId: product['id']?.toString() ?? ''),
                   const Divider(height: 32),
                   Text(
                     tr(context, 'description'),
@@ -2414,6 +2481,110 @@ class ProductDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SellerCard extends StatelessWidget {
+  final dynamic product;
+  const _SellerCard({required this.product});
+  @override
+  Widget build(BuildContext context) {
+    final sellerId = product['vendor_id']?.toString() ?? '';
+    final name = product['seller_name']?.toString().trim().isNotEmpty == true ? product['seller_name'].toString() : 'فروشنده بازارک';
+    if (sellerId.isEmpty) return const SizedBox.shrink();
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: const Text('مشاهده پروفایل فروشنده، آگهی‌ها و امتیاز'),
+        trailing: const Icon(Icons.chevron_left),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfileScreen(sellerId: sellerId, sellerName: name))),
+      ),
+    );
+  }
+}
+
+class _ListingLikeBar extends StatefulWidget {
+  final String listingId;
+  const _ListingLikeBar({required this.listingId});
+  @override State<_ListingLikeBar> createState() => _ListingLikeBarState();
+}
+class _ListingLikeBarState extends State<_ListingLikeBar> {
+  bool liked = false;
+  int count = 0;
+  bool loading = false;
+  @override
+  void initState() { super.initState(); }
+  Future<void> _toggle() async {
+    if (widget.listingId.isEmpty || loading) return;
+    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    setState(() { loading = true; });
+    try {
+      final result = await ApiService.toggleListingLike(widget.listingId, !liked);
+      if (mounted) setState(() { liked = result['liked'] == true; count = int.tryParse('${result['likes_count'] ?? count}') ?? count; loading = false; });
+    } catch (e) {
+      if (mounted) { setState(() => loading = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
+    }
+  }
+  @override Widget build(BuildContext context) => Card(child: ListTile(onTap: _toggle, leading: Icon(liked ? Icons.thumb_up : Icons.thumb_up_outlined), title: Text(liked ? 'پسندیده شد' : 'پسندیدن آگهی'), trailing: Text('$count پسند', style: const TextStyle(fontWeight: FontWeight.w800))));
+}
+
+class SellerProfileScreen extends StatefulWidget {
+  final String sellerId;
+  final String sellerName;
+  const SellerProfileScreen({super.key, required this.sellerId, this.sellerName = 'فروشنده بازارک'});
+  @override State<SellerProfileScreen> createState() => _SellerProfileScreenState();
+}
+class _SellerProfileScreenState extends State<SellerProfileScreen> {
+  bool loading = true, following = false, busy = false;
+  Map<String,dynamic> profile = {};
+  List<dynamic> listings = [], comments = [];
+  String? error;
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    try {
+      final p = await ApiService.getSellerProfile(widget.sellerId);
+      final l = await ApiService.getSellerListings(widget.sellerId);
+      final c = await ApiService.getSellerComments(widget.sellerId);
+      if (mounted) setState(() { profile=p; listings=l; comments=c; following=p['is_following']==true; loading=false; error=null; });
+    } catch(e) { if(mounted) setState(() {loading=false; error=friendlyNetworkError(context,e);}); }
+  }
+  Future<void> _follow() async {
+    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    setState(()=>busy=true);
+    try { final r=await ApiService.toggleSellerFollow(widget.sellerId,!following); if(mounted)setState(()=>following=r['following']==true); }
+    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+  Future<void> _rate() async {
+    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    int value=5;
+    final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('امتیاز به فروشنده'),content:StatefulBuilder(builder:(c,set)=>Row(mainAxisAlignment:MainAxisAlignment.center,children:List.generate(5,(i)=>IconButton(onPressed:()=>set(()=>value=i+1),icon:Icon(i<value?Icons.star:Icons.star_border,color:Colors.amber,size:30)))),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('انصراف')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('ثبت'))]));
+    if(ok!=true)return;
+    try{await ApiService.rateSeller(widget.sellerId,value);await _load();if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('امتیاز شما ثبت شد.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}
+  }
+  Future<void> _comment() async {
+    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    final c=TextEditingController();
+    final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('دیدگاه شما'),content:TextField(controller:c,maxLines:4,maxLength:500,decoration:const InputDecoration(hintText:'نظر خود را بنویسید...')),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('انصراف')),FilledButton(onPressed:()=>Navigator.pop(d,c.text.trim().isNotEmpty),child:const Text('ثبت دیدگاه'))]));
+    if(ok!=true)return;
+    try{await ApiService.addSellerComment(widget.sellerId,c.text);await _load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}finally{c.dispose();}
+  }
+  @override Widget build(BuildContext context){
+    if(loading)return Scaffold(appBar:AppBar(title:Text(widget.sellerName)),body:const Center(child:CircularProgressIndicator()));
+    if(error!=null)return Scaffold(appBar:AppBar(title:Text(widget.sellerName)),body:Center(child:Text(error!,textAlign:TextAlign.center)));
+    final name=profile['shop_name']?.toString().trim().isNotEmpty==true?profile['shop_name'].toString():(profile['full_name']?.toString().trim().isNotEmpty==true?profile['full_name'].toString():widget.sellerName);
+    final avatar=profile['avatar_url']?.toString()??''; final followers=int.tryParse('${profile['followers_count']??0}')??0; final rating=double.tryParse('${profile['rating']??0}')??0;
+    return Scaffold(appBar:AppBar(title:Text(name),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[
+      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[CircleAvatar(radius:46,backgroundImage:avatar.isNotEmpty?NetworkImage(avatar):null,child:avatar.isEmpty?const Icon(Icons.person,size:46):null),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
+      Padding(padding:const EdgeInsets.fromLTRB(4,12,4,8),child:Text('آگهی‌های این فروشنده (${listings.length})',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
+      if(listings.isEmpty)const Padding(padding:EdgeInsets.all(20),child:Center(child:Text('این فروشنده آگهی فعالی ندارد.'))),
+      ...listings.map((x)=>_DivarStyleListing(item:x)),
+      const Divider(height:28),
+      const Text('دیدگاه‌ها',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900)),
+      if(comments.isEmpty)const Padding(padding:EdgeInsets.all(16),child:Text('هنوز دیدگاهی ثبت نشده است.')),
+      ...comments.map((x)=>ListTile(leading:const CircleAvatar(child:Icon(Icons.person,size:18)),title:Text(x['user_name']?.toString()??'کاربر بازارک',style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text(x['comment']?.toString()??''),trailing:x['rating']!=null?Text('⭐ ${x['rating']}'):null)),
+    ])));
   }
 }
 
