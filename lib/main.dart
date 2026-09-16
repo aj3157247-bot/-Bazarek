@@ -1825,7 +1825,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 68), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -2052,7 +2052,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 68), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -2098,7 +2098,7 @@ class _ProductCard extends StatelessWidget {
             flex: 7,
             child: Stack(fit: StackFit.expand, children: [
               imageUrl.isNotEmpty
-                  ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                  ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 68), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
@@ -2165,6 +2165,28 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   int currentPage = 0;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _preloadNearbyImages();
+  }
+
+  void _preloadNearbyImages() {
+    final images = widget.images;
+    if (images.isEmpty) return;
+    final start = currentPage;
+    final end = (start + 2).clamp(0, images.length - 1);
+    for (var i = start; i <= end; i++) {
+      final url = images[i].toString();
+      if (url.isNotEmpty) {
+        precacheImage(
+          NetworkImage(_optimizedImageUrl(url, width: 1200, quality: 82)),
+          context,
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final images = widget.images;
     return SizedBox(
@@ -2174,7 +2196,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
         children: [
           PageView.builder(
             itemCount: images.length,
-            onPageChanged: (index) => setState(() => currentPage = index),
+            onPageChanged: (index) { setState(() => currentPage = index); _preloadNearbyImages(); },
             itemBuilder: (_, i) => Image.network(
               _optimizedImageUrl(images[i].toString(), width: 1200, quality: 82),
               fit: BoxFit.cover,
@@ -3795,7 +3817,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             CircleAvatar(
                               radius: 54,
                               backgroundColor: Theme.of(context).colorScheme.surface,
-                              backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                              backgroundImage: avatar.isNotEmpty ? NetworkImage(_optimizedImageUrl(avatar, width: 256, quality: 72)) : null,
                               child: avatar.isEmpty ? Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary) : null,
                             ),
                             Positioned(
@@ -3959,7 +3981,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(_optimizedImageUrl(avatar, width: 256, quality: 72)) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
