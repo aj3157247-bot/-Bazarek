@@ -519,7 +519,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at,currency').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -587,7 +587,7 @@ app.get('/api/translate', async (req, res) => {
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,currency,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -884,15 +884,11 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, currency = 'AFN', cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN' } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
-    const normalizedCurrency = String(currency || 'AFN').trim().toUpperCase();
-    if (!['AFN', 'USD'].includes(normalizedCurrency)) return res.status(400).json({ error: 'واحد پول باید افغانی یا دلار باشد.' });
-    const numericPrice = Number(price);
-    if (!is_negotiable && (!Number.isFinite(numericPrice) || numericPrice < 0)) return res.status(400).json({ error: 'قیمت آگهی نامعتبر است.' });
-    const payload = { vendor_id: req.user.id, title: title.trim().slice(0,120), price: Math.max(0, Number.isFinite(numericPrice) ? numericPrice : 0), currency: normalizedCurrency, cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,5000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     res.status(201).json(data);
@@ -959,18 +955,11 @@ app.delete('/api/me/account', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'currency', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable', 'currency'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
-    if (payload.price !== undefined) {
-      const p = Number(payload.price);
-      if (!Number.isFinite(p) || p < 0) return res.status(400).json({ error: 'قیمت نامعتبر است.' });
-      payload.price = p;
-    }
-    if (payload.currency !== undefined) {
-      payload.currency = String(payload.currency).trim().toUpperCase();
-      if (!['AFN', 'USD'].includes(payload.currency)) return res.status(400).json({ error: 'واحد پول نامعتبر است.' });
-    }
+    if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
+    if (payload.currency !== undefined) payload.currency = String(payload.currency).toUpperCase() === 'USD' ? 'USD' : 'AFN';
     if (payload.cost_price !== undefined) payload.cost_price = Math.max(0, Number(payload.cost_price) || 0);
     if (payload.stock !== undefined) payload.stock = Math.max(0, Math.trunc(Number(payload.stock) || 0));
     payload.updated_at = new Date().toISOString();
