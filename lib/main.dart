@@ -860,6 +860,17 @@ class ApiService {
     return Map<String,dynamic>.from(data as Map);
   }
 
+  static Future<List<dynamic>> getMySocialList(String type) async {
+    final allowed = {'followers','following','ratings','comments','likes'};
+    if (!allowed.contains(type)) throw Exception('نوع فهرست نامعتبر است.');
+    Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/me/social/$type'), headers: headers).timeout(const Duration(seconds: 15));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت اطلاعات.') : 'خطا در دریافت اطلاعات.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
   static Future<List<dynamic>> getProducts({
     String? category,
     String? subcategory,
@@ -3725,6 +3736,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _openSocialStat(String type, String title) async {
+    if (!AuthService.isLoggedIn) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _SocialStatDialog(type: type, title: title),
+    );
+  }
+
   Widget _infoTile(IconData icon, String title, String value) {
     if (value.trim().isEmpty) return const SizedBox.shrink();
     return ListTile(
@@ -3826,12 +3845,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             SizedBox(width: cardWidth, child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())))),
                             SizedBox(width: cardWidth, child: _statCard('فعال', '$activeAds', Icons.check_circle_outline, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(activeOnly: true))))),
                             SizedBox(width: cardWidth, child: _statCard('بازدید', '$views', Icons.visibility_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(sortByViews: true))))),
-                            SizedBox(width: cardWidth, child: _statCard('دنبال‌کننده', '$followers', Icons.people_alt_outlined, () {})),
-                            SizedBox(width: cardWidth, child: _statCard('دنبال‌شونده', '$following', Icons.person_add_alt_1_outlined, () {})),
-                            SizedBox(width: cardWidth, child: _statCard('امتیاز', rating > 0 ? '${rating.toStringAsFixed(1)} ★' : '—', Icons.star_outline, () {})),
-                            SizedBox(width: cardWidth, child: _statCard('امتیازها', '$ratingsCount', Icons.rate_review_outlined, () {})),
-                            SizedBox(width: cardWidth, child: _statCard('دیدگاه‌ها', '$comments', Icons.comment_outlined, () {})),
-                            SizedBox(width: cardWidth, child: _statCard('پسندیده‌ها', '$likesReceived', Icons.thumb_up_outlined, () {})),
+                            SizedBox(width: cardWidth, child: _statCard('دنبال‌کننده', '$followers', Icons.people_alt_outlined, () => _openSocialStat('followers', 'دنبال‌کننده‌های من'))),
+                            SizedBox(width: cardWidth, child: _statCard('دنبال‌شونده', '$following', Icons.person_add_alt_1_outlined, () => _openSocialStat('following', 'دنبال‌شونده‌های من'))),
+                            SizedBox(width: cardWidth, child: _statCard('امتیاز', rating > 0 ? '${rating.toStringAsFixed(1)} ★' : '—', Icons.star_outline, () => _openSocialStat('ratings', 'امتیازهای من'))),
+                            SizedBox(width: cardWidth, child: _statCard('امتیازها', '$ratingsCount', Icons.rate_review_outlined, () => _openSocialStat('ratings', 'امتیازهای دریافت‌شده'))),
+                            SizedBox(width: cardWidth, child: _statCard('دیدگاه‌ها', '$comments', Icons.comment_outlined, () => _openSocialStat('comments', 'دیدگاه‌های من'))),
+                            SizedBox(width: cardWidth, child: _statCard('پسندیده‌ها', '$likesReceived', Icons.thumb_up_outlined, () => _openSocialStat('likes', 'پسندیده‌های آگهی‌های من'))),
                           ],
                         );
                       },
@@ -3885,6 +3904,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ]),
         ),
       ),
+    );
+  }
+}
+
+
+class _SocialStatDialog extends StatefulWidget {
+  final String type;
+  final String title;
+  const _SocialStatDialog({required this.type, required this.title});
+  @override State<_SocialStatDialog> createState() => _SocialStatDialogState();
+}
+
+class _SocialStatDialogState extends State<_SocialStatDialog> {
+  bool loading = true;
+  String? error;
+  List<dynamic> items = [];
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    try {
+      final data = await ApiService.getMySocialList(widget.type);
+      if (mounted) setState(() { items = data; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  String _name(Map m) => (m['shop_name']?.toString().trim().isNotEmpty == true
+      ? m['shop_name'].toString()
+      : (m['full_name']?.toString().trim().isNotEmpty == true ? m['full_name'].toString() : 'کاربر بازارک'));
+
+  @override Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        height: 420,
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(error!, textAlign: TextAlign.center), const SizedBox(height: 12), OutlinedButton(onPressed: _load, child: const Text('تلاش دوباره'))]))
+                : items.isEmpty
+                    ? const Center(child: Text('هنوز موردی وجود ندارد.'))
+                    : ListView.separated(
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final raw = items[i];
+                          final m = raw is Map ? raw : <String,dynamic>{};
+                          final avatar = m['avatar_url']?.toString() ?? '';
+                          final rating = m['rating'];
+                          final comment = m['comment']?.toString() ?? '';
+                          final listingTitle = m['listing_title']?.toString() ?? '';
+                          return ListTile(
+                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
+                            trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
+                          );
+                        },
+                      ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('بستن'))],
     );
   }
 }
