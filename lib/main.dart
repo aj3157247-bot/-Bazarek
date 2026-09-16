@@ -1777,12 +1777,11 @@ Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent?
 }
 
 String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
-  // IMPORTANT: return the original image URL. Supabase image transformations
-  // can alter the rendered framing on some browsers. The UI uses BoxFit.contain,
-  // so the complete original image is always shown without crop/zoom.
+  // IMPORTANT: always use the original public image URL.
+  // Supabase image transformations are intentionally disabled here so the
+  // displayed photo is never resized/cropped by a server-side transform.
   return url.trim();
 }
-
 
 
 String _displayListingPrice(BuildContext context, dynamic item) {
@@ -2709,10 +2708,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 leading: SizedBox(
                                   width: 54,
                                   height: 54,
-                                  child: ClipOval(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
                                     child: image.isNotEmpty
-                                        ? Image.network(image, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.person))
-                                        : const Icon(Icons.person),
+                                        ? Image.network(image, fit: BoxFit.contain, alignment: Alignment.center)
+                                        : const ColoredBox(color: Colors.black12, child: Icon(Icons.person)),
                                   ),
                                 ),
                                 title: Text(c['other_user_name']?.toString().trim().isNotEmpty == true ? c['other_user_name'].toString() : 'کاربر بازارک'),
@@ -3797,13 +3797,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               height: 108,
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.surface,
-                                shape: BoxShape.circle,
+                                borderRadius: BorderRadius.circular(18),
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: avatar.isNotEmpty
                                   ? Image.network(
                                       avatar,
                                       fit: BoxFit.contain,
+                                      alignment: Alignment.center,
+                                      filterQuality: FilterQuality.high,
                                       errorBuilder: (_, __, ___) => Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
                                     )
                                   : Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
@@ -3970,12 +3972,13 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
                             leading: SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: ClipOval(
+                              width: 48,
+                              height: 48,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(9),
                                 child: avatar.isNotEmpty
-                                    ? Image.network(avatar, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.person))
-                                    : const Icon(Icons.person),
+                                    ? Image.network(avatar, fit: BoxFit.contain, alignment: Alignment.center)
+                                    : const ColoredBox(color: Colors.black12, child: Icon(Icons.person)),
                               ),
                             ),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
