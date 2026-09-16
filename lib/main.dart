@@ -1569,7 +1569,7 @@ class _InlineBoostCard extends StatelessWidget {
   @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF173C91), Color(0xFF0B72E7)]), borderRadius: BorderRadius.circular(16)), child: Row(children: [const Text('🚀', style: TextStyle(fontSize: 22)), const SizedBox(width: 8), Expanded(child: Text(psText(context, 'آگهی‌ات را ویژه کن و بیشتر دیده شو.', 'خپل اعلان ځانګړی کړه او ډېر ولیدل شه.'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))), TextButton(onPressed: onTap, child: Text(psText(context, 'ویژه‌سازی', 'ځانګړی کول'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)))]));
 }
 
-Widget _bazarekImageLoading(Widget child, ImageChunkEvent? progress) {
+Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent? progress) {
   if (progress == null) return child;
   return Container(
     color: const Color(0xFFE9EDF4),
@@ -1948,114 +1948,6 @@ class NumberFormatHelper {
   }
 }
 
-class _ListingImageGallery extends StatefulWidget {
-  final List<dynamic> images;
-  const _ListingImageGallery({required this.images});
-
-  @override
-  State<_ListingImageGallery> createState() => _ListingImageGalleryState();
-}
-
-class _ListingImageGalleryState extends State<_ListingImageGallery> {
-  final PageController _controller = PageController();
-  int _current = 0;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _goTo(int index) {
-    if (index < 0 || index >= widget.images.length) return;
-    _controller.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOut,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final total = widget.images.length;
-    return Column(
-      children: [
-        SizedBox(
-          height: 250,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: total,
-            onPageChanged: (i) => setState(() => _current = i),
-            itemBuilder: (_, i) => Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.network(
-                  widget.images[i].toString(),
-                  fit: BoxFit.cover,
-                  loadingBuilder: _bazarekImageLoading,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Color(0xFFE9EDF4),
-                    child: Icon(Icons.image_not_supported_outlined, size: 56),
-                  ),
-                ),
-                if (total > 1)
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(.68),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Text(
-                        '${_current + 1} / $total',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        if (total > 1)
-          Container(
-            height: 46,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: const BoxDecoration(color: Colors.white),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  tooltip: 'عکس قبلی',
-                  onPressed: _current > 0 ? () => _goTo(_current - 1) : null,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-                Container(
-                  constraints: const BoxConstraints(minWidth: 72),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${_current + 1} / $total',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'عکس بعدی',
-                  onPressed: _current < total - 1 ? () => _goTo(_current + 1) : null,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class ProductDetailScreen extends StatelessWidget {
   final dynamic product;
   const ProductDetailScreen({super.key, required this.product});
@@ -2172,7 +2064,13 @@ class ProductDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (images.isNotEmpty)
-              _ListingImageGallery(images: images)
+              SizedBox(
+                height: 250,
+                child: PageView.builder(
+                  itemCount: images.length,
+                  itemBuilder: (_, i) => Image.network(images[i], fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 56))),
+                ),
+              )
             else
               Container(
                 height: 200,
@@ -3763,7 +3661,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickImage() async {
-    if (imageBytes.length >= 10) { _msg('حداکثر ۱۰ عکس مجاز است.'); return; }
+    if (imageBytes.length >= 20) { _msg('حداکثر ۲۰ عکس مجاز است.'); return; }
 
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
@@ -3772,7 +3670,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         type: FileType.image,
       );
       if (result.isEmpty) return;
-      final remaining = 10 - imageBytes.length;
+      final remaining = 20 - imageBytes.length;
       for (final file in result.take(remaining)) {
         final bytes = await file.readAsBytes();
         if (bytes.isEmpty) continue;
@@ -3790,7 +3688,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       maxHeight: 2000,
     );
     if (picked.isEmpty) return;
-    final remaining = 10 - imageBytes.length;
+    final remaining = 20 - imageBytes.length;
     for (final image in picked.take(remaining)) {
       imageBytes.add(await image.readAsBytes());
       imageNames.add(image.name);
@@ -4003,7 +3901,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => isNegotiable = val),
           ),
           const SizedBox(height: 12),
-          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (var i = 0; i < imageBytes.length; i++)
@@ -4011,7 +3909,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.cover)),
                 Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
               ]),
-            if (imageBytes.length < 10) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
+            if (imageBytes.length < 20) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
           ]),
           const SizedBox(height: 18),
           FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.publish), label: Text(publishing ? 'در حال انتشار...' : 'ثبت و انتشار آگهی')),
