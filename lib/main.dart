@@ -979,13 +979,13 @@ class ApiService {
     required String message,
   }) async {
     var res = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/support'),
+      Uri.parse('${ApiConfig.baseUrl}/support/requests'),
       headers: headers,
       body: jsonEncode({'type': type, 'title': subject, 'message': message}),
     ).timeout(const Duration(seconds: 20));
     if (res.statusCode == 401 && await refreshSession()) {
       res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/support'),
+        Uri.parse('${ApiConfig.baseUrl}/support/requests'),
         headers: headers,
         body: jsonEncode({'type': type, 'title': subject, 'message': message}),
       ).timeout(const Duration(seconds: 20));

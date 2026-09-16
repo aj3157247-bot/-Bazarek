@@ -171,13 +171,14 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   Future<void> _loadAll() async {
     setState(() { loading = true; loadError = null; });
     try {
+      // Load the core admin sections first. A problem in one optional section
+      // (especially support) must not blank the whole management panel.
       final results = await Future.wait([
         _AdminApi.map('/admin/stats', widget.token),
         _AdminApi.list('/admin/users', widget.token),
         _AdminApi.list('/admin/products', widget.token),
         _AdminApi.list('/admin/reports', widget.token),
         _AdminApi.list('/admin/warnings', widget.token),
-        _AdminApi.list('/admin/support/requests', widget.token),
         _AdminApi.map('/admin/monetization', widget.token),
         _AdminApi.list('/admin/security/events', widget.token),
       ]);
@@ -188,11 +189,20 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
         products = List<Map<String, dynamic>>.from(results[2] as List);
         reports = List<Map<String, dynamic>>.from(results[3] as List);
         warnings = List<Map<String, dynamic>>.from(results[4] as List);
-        support = List<Map<String, dynamic>>.from(results[5] as List);
-        money = Map<String, dynamic>.from(results[6] as Map);
-        securityEvents = List<Map<String, dynamic>>.from(results[7] as List);
+        money = Map<String, dynamic>.from(results[5] as Map);
+        securityEvents = List<Map<String, dynamic>>.from(results[6] as List);
         loading = false;
       });
+      try {
+        final loadedSupport = await _AdminApi.list('/admin/support/requests', widget.token);
+        if (mounted) setState(() => support = loadedSupport);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('پشتیبانی بارگذاری نشد: ${_adminFriendlyError(e)}')),
+          );
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() { loading = false; loadError = _adminFriendlyError(e); });
@@ -398,7 +408,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   Widget _dashboardCard(IconData icon, String title, String subtitle, int index) => Card(child: InkWell(onTap: () => _go(index), borderRadius: BorderRadius.circular(16), child: ListTile(leading: Icon(icon, size: 36), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(subtitle), trailing: const Icon(Icons.chevron_left))));
   Widget _stat(String title, dynamic value, IconData icon) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [Icon(icon, size: 32), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title), const SizedBox(height: 4), Text('$value', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold))]))])));
 
-  Widget _products() => _searchableList(products, 'آگهی‌ای وجود ندارد', (p) => Card(child: ListTile(leading: _productImage(p), onTap: () => _showListing(p), title: Text(p['title']?.toString() ?? 'بدون عنوان', maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text('${p['price'] ?? 0} افغانی • ${p['province'] ?? ''}\n${p['is_active'] == true ? 'فعال' : 'غیرفعال'}${p['moderation_disabled'] == true ? ' • 🚫 محدودیت مدیریت' : ''}${p['is_featured'] == true ? ' • ویژه' : ''}${p['is_pinned'] == true ? ' • پین' : ''}${_boostTiming(p).isNotEmpty ? '\n${_boostTiming(p)}' : ''}${p['moderation_reason']?.toString().trim().isNotEmpty == true ? '\nدلیل: ${p['moderation_reason']}' : ''}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (v) { if (v == 'view') _showListing(p); if (v == 'status') _run(() => _AdminApi.patch('/admin/products/${p['id']}/status', widget.token, {'is_active': p['is_active'] != true, 'reason': p['is_active'] == true ? 'آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شد.' : ''}), success: p['is_active'] == true ? 'آگهی غیرفعال شد و تحت محدودیت مدیریت قرار گرفت.' : 'آگهی فعال شد و محدودیت مدیریت برداشته شد.'); if (v == 'promotion') _promotion(p); if (v == 'delete') _confirmDelete(p); }, itemBuilder: (_) => [const PopupMenuItem(value: 'view', child: Text('مشاهده آگهی')), PopupMenuItem(value: 'status', child: Text(p['is_active'] == true ? '🚫 غیرفعال کردن به دلیل قوانین' : '✅ فعال کردن و رفع محدودیت')), const PopupMenuItem(value: 'promotion', child: Text('ویژه / پین')), const PopupMenuItem(value: 'delete', child: Text('حذف آگهی'))]))));
+  Widget _products() => _searchableList(products, 'آگهی‌ای وجود ندارد', (p) => Card(child: ListTile(leading: _productImage(p), onTap: () => _showListing(p), title: Text(p['title']?.toString() ?? 'بدون عنوان', maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text('${p['price'] ?? 0} افغانی • ${p['province'] ?? ''}\n${p['is_active'] == true ? 'فعال' : 'غیرفعال'}${p['is_featured'] == true ? ' • ویژه' : ''}${p['is_pinned'] == true ? ' • پین' : ''}${_boostTiming(p).isNotEmpty ? '\n${_boostTiming(p)}' : ''}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (v) { if (v == 'view') _showListing(p); if (v == 'status') _run(() => _AdminApi.patch('/admin/products/${p['id']}/status', widget.token, {'is_active': p['is_active'] != true}), success: p['is_active'] == true ? 'آگهی غیرفعال شد.' : 'آگهی فعال شد.'); if (v == 'promotion') _promotion(p); if (v == 'delete') _confirmDelete(p); }, itemBuilder: (_) => [const PopupMenuItem(value: 'view', child: Text('مشاهده آگهی')), PopupMenuItem(value: 'status', child: Text(p['is_active'] == true ? 'غیرفعال کردن' : 'فعال کردن')), const PopupMenuItem(value: 'promotion', child: Text('ویژه / پین')), const PopupMenuItem(value: 'delete', child: Text('حذف آگهی'))]))));
 
   Widget _users() => _searchableList(users, 'کاربری وجود ندارد', (u) => Card(child: ListTile(leading: CircleAvatar(child: Text((_person(u).isEmpty ? 'ک' : _person(u)).characters.first)), title: Text(_person(u)), subtitle: Text('${u['phone'] ?? ''}\n${u['city'] ?? ''}${u['is_blocked'] == true ? '\n🚫 مسدود: ${u['block_reason'] ?? ''}' : ''}'), isThreeLine: true, trailing: PopupMenuButton<String>(onSelected: (v) { if (v == 'block') _blockUser(u); if (v == 'warn') _warnUser(u); if (v == 'wallet') _creditWallet(u); }, itemBuilder: (_) => [PopupMenuItem(value: 'block', child: Text(u['is_blocked'] == true ? 'رفع مسدودی' : 'مسدود کردن')), const PopupMenuItem(value: 'warn', child: Text('ارسال هشدار')), const PopupMenuItem(value: 'wallet', child: Text('شارژ کیف پول'))]))));
 
@@ -483,7 +493,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   }
 
   Widget _support() => _searchableList(support, 'درخواست پشتیبانی وجود ندارد', (s) {
-    final user = s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null;
+    final user = s['profiles'] is Map ? Map<String, dynamic>.from(s['profiles']) : (s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null);
     final status = s['status']?.toString() ?? 'open';
     return Card(child: ListTile(
       leading: Icon(status == 'new' ? Icons.mark_email_unread_outlined : Icons.support_agent_outlined),
