@@ -483,7 +483,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   }
 
   Widget _support() => _searchableList(support, 'درخواست پشتیبانی وجود ندارد', (s) {
-    final user = s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null;
+    final user = s['profiles'] is Map ? Map<String, dynamic>.from(s['profiles']) : (s['user'] is Map ? Map<String, dynamic>.from(s['user']) : null);
     final status = s['status']?.toString() ?? 'open';
     return Card(child: ListTile(
       leading: Icon(status == 'new' ? Icons.mark_email_unread_outlined : Icons.support_agent_outlined),
