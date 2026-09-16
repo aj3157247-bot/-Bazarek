@@ -745,6 +745,45 @@ app.get('/api/sellers/:id/comments', async (req,res)=>{try{const db=getSupabaseA
 app.post('/api/sellers/:id/comments', requireUser, async (req,res)=>{try{const comment=String(req.body?.comment||'').trim().slice(0,500);if(!comment)return res.status(400).json({error:'دیدگاه خالی است.'});if(req.params.id===req.user.id)return res.status(400).json({error:'نمی‌توانید برای خودتان دیدگاه ثبت کنید.'});const db=getSupabaseAdmin();const {data,error}=await db.from('seller_comments').insert([{seller_id:req.params.id,user_id:req.user.id,comment}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'ثبت دیدگاه ناموفق بود.'});}});
 app.post('/api/sellers/:id/rating', requireUser, async (req,res)=>{try{const rating=Math.trunc(Number(req.body?.rating));if(rating<1||rating>5)return res.status(400).json({error:'امتیاز باید بین ۱ تا ۵ باشد.'});if(req.params.id===req.user.id)return res.status(400).json({error:'نمی‌توانید به خودتان امتیاز بدهید.'});const db=getSupabaseAdmin();const {data,error}=await db.from('seller_ratings').upsert([{seller_id:req.params.id,user_id:req.user.id,rating}],{onConflict:'seller_id,user_id'}).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'ثبت امتیاز ناموفق بود.'});}});
 
+
+// Current user's social lists used by the clickable statistics on «حساب من».
+app.get('/api/me/social/:type', requireUser, async (req,res)=>{
+  try {
+    const type=String(req.params.type||'');
+    const db=getSupabaseAdmin();
+    let rows=[];
+    if(type==='followers'){
+      const {data,error}=await db.from('seller_follows').select('user_id,created_at').eq('seller_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+      if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);const map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));rows=(data||[]).map(x=>({...map[x.user_id],created_at:x.created_at}));}
+    } else if(type==='following'){
+      const {data,error}=await db.from('seller_follows').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
+      if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);const map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));rows=(data||[]).map(x=>({...map[x.seller_id],created_at:x.created_at}));}
+    } else if(type==='ratings'){
+      const {data,error}=await db.from('seller_ratings').select('id,user_id,rating,created_at').eq('seller_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+      let map={}; if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));}
+      rows=(data||[]).map(x=>({...map[x.user_id],rating:x.rating,created_at:x.created_at}));
+    } else if(type==='comments'){
+      const {data,error}=await db.from('seller_comments').select('id,user_id,comment,created_at').eq('seller_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+      let map={}; if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));}
+      rows=(data||[]).map(x=>({...map[x.user_id],comment:x.comment,created_at:x.created_at}));
+    } else if(type==='likes'){
+      const {data:ads,error:adsError}=await db.from('products').select('id,title,price,currency,image_url,created_at').eq('vendor_id',req.user.id).limit(500);
+      if(adsError) throw adsError;
+      const ids=(ads||[]).map(x=>x.id).filter(Boolean);
+      if(ids.length){const {data,error}=await db.from('listing_likes').select('id,listing_id,user_id,created_at').in('listing_id',ids).order('created_at',{ascending:false}).limit(1000);if(error) throw error;const adMap=Object.fromEntries((ads||[]).map(x=>[x.id,x]));rows=(data||[]).map(x=>({...adMap[x.listing_id],listing_id:x.listing_id,user_id:x.user_id,created_at:x.created_at,listing_title:adMap[x.listing_id]?.title||'آگهی'}));}
+    } else return res.status(400).json({error:'نوع فهرست نامعتبر است.'});
+    res.json(rows.filter(Boolean));
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت اطلاعات اجتماعی.'}); }
+});
+
 app.get('/api/support/requests', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت درخواست‌های پشتیبانی.'});}});
 app.post('/api/support/requests', requireUser, async (req,res)=>{try{const type=String(req.body?.type||'support');const allowed=['bug','suggestion','support','report'];if(!allowed.includes(type))return res.status(400).json({error:'نوع درخواست نامعتبر است.'});const title=String(req.body?.title||'').trim().slice(0,160);const message=String(req.body?.message||'').trim().slice(0,4000);if(!title||!message)return res.status(400).json({error:'موضوع و توضیح الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').insert([{user_id:req.user.id,type,title,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست پشتیبانی.'});}});
 app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{
