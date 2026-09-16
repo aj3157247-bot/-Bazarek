@@ -693,6 +693,32 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
 app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('admin_login_events').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت رویدادهای امنیتی.'});}});
 
 
+// Marketplace social layer: seller profiles, follows, listing likes, ratings and comments.
+app.get('/api/sellers/:id', async (req,res)=>{
+  try{
+    const db=getSupabaseAdmin(); const id=String(req.params.id);
+    const {data:profile,error}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,created_at').eq('id',id).maybeSingle();
+    if(error) throw error; if(!profile) return res.status(404).json({error:'فروشنده پیدا نشد.'});
+    const [{count:followers_count},{data:ratings}]=await Promise.all([
+      db.from('seller_follows').select('*',{count:'exact',head:true}).eq('seller_id',id),
+      db.from('seller_ratings').select('rating').eq('seller_id',id)
+    ]);
+    const vals=(ratings||[]).map(x=>Number(x.rating)).filter(x=>Number.isFinite(x));
+    const rating=vals.length?vals.reduce((a,x)=>a+x,0)/vals.length:0;
+    let is_following=false;
+    if(req.user?.id){ const {data:f}=await db.from('seller_follows').select('user_id').eq('user_id',req.user.id).eq('seller_id',id).maybeSingle(); is_following=!!f; }
+    res.json({...profile,followers_count:followers_count||0,rating,is_following});
+  }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پروفایل فروشنده.'});}
+});
+app.get('/api/sellers/:id/listings', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province').eq('vendor_id',req.params.id).eq('is_active',true).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آگهی‌های فروشنده.'});}});
+app.post('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const sellerId=String(req.params.id);if(sellerId===req.user.id)return res.status(400).json({error:'نمی‌توانید خودتان را دنبال کنید.'});const db=getSupabaseAdmin();const {data:seller}=await db.from('profiles').select('id').eq('id',sellerId).maybeSingle();if(!seller)return res.status(404).json({error:'فروشنده پیدا نشد.'});const {error}=await db.from('seller_follows').upsert([{user_id:req.user.id,seller_id:sellerId}],{onConflict:'user_id,seller_id'});if(error)throw error;res.status(201).json({following:true});}catch(e){console.error(e);res.status(500).json({error:'دنبال‌کردن فروشنده ناموفق بود.'});}});
+app.delete('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('seller_follows').delete().eq('user_id',req.user.id).eq('seller_id',req.params.id);if(error)throw error;res.json({following:false});}catch(e){console.error(e);res.status(500).json({error:'لغو دنبال‌کردن ناموفق بود.'});}});
+app.post('/api/listings/:id/like', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('listing_likes').upsert([{user_id:req.user.id,listing_id:req.params.id}],{onConflict:'user_id,listing_id'});if(error)throw error;const {count}=await db.from('listing_likes').select('*',{count:'exact',head:true}).eq('listing_id',req.params.id);res.status(201).json({liked:true,likes_count:count||0});}catch(e){console.error(e);res.status(500).json({error:'پسندیدن آگهی ناموفق بود.'});}});
+app.delete('/api/listings/:id/like', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('listing_likes').delete().eq('user_id',req.user.id).eq('listing_id',req.params.id);if(error)throw error;const {count}=await db.from('listing_likes').select('*',{count:'exact',head:true}).eq('listing_id',req.params.id);res.json({liked:false,likes_count:count||0});}catch(e){console.error(e);res.status(500).json({error:'لغو پسندیدن ناموفق بود.'});}});
+app.get('/api/sellers/:id/comments', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('seller_comments').select('id,user_id,comment,created_at').eq('seller_id',req.params.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];let profiles=[];if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name').in('id',ids);profiles=r.data||[];}const map=Object.fromEntries(profiles.map(x=>[x.id,x]));res.json((data||[]).map(x=>({...x,user_name:map[x.user_id]?.shop_name||map[x.user_id]?.full_name||'کاربر بازارک'})));}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت دیدگاه‌ها.'});}});
+app.post('/api/sellers/:id/comments', requireUser, async (req,res)=>{try{const comment=String(req.body?.comment||'').trim().slice(0,500);if(!comment)return res.status(400).json({error:'دیدگاه خالی است.'});if(req.params.id===req.user.id)return res.status(400).json({error:'نمی‌توانید برای خودتان دیدگاه ثبت کنید.'});const db=getSupabaseAdmin();const {data,error}=await db.from('seller_comments').insert([{seller_id:req.params.id,user_id:req.user.id,comment}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'ثبت دیدگاه ناموفق بود.'});}});
+app.post('/api/sellers/:id/rating', requireUser, async (req,res)=>{try{const rating=Math.trunc(Number(req.body?.rating));if(rating<1||rating>5)return res.status(400).json({error:'امتیاز باید بین ۱ تا ۵ باشد.'});if(req.params.id===req.user.id)return res.status(400).json({error:'نمی‌توانید به خودتان امتیاز بدهید.'});const db=getSupabaseAdmin();const {data,error}=await db.from('seller_ratings').upsert([{seller_id:req.params.id,user_id:req.user.id,rating}],{onConflict:'seller_id,user_id'}).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'ثبت امتیاز ناموفق بود.'});}});
+
 app.get('/api/support/requests', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت درخواست‌های پشتیبانی.'});}});
 app.post('/api/support/requests', requireUser, async (req,res)=>{try{const type=String(req.body?.type||'support');const allowed=['bug','suggestion','support','report'];if(!allowed.includes(type))return res.status(400).json({error:'نوع درخواست نامعتبر است.'});const title=String(req.body?.title||'').trim().slice(0,160);const message=String(req.body?.message||'').trim().slice(0,4000);if(!title||!message)return res.status(400).json({error:'موضوع و توضیح الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').insert([{user_id:req.user.id,type,title,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست پشتیبانی.'});}});
 app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{
@@ -891,6 +917,15 @@ app.post('/api/products', requireUser, async (req, res) => {
     const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
+    try {
+      const { data: followers } = await db.from('seller_follows').select('user_id').eq('seller_id', req.user.id);
+      if (followers?.length) {
+        await db.from('user_notifications').insert(followers.map(f => ({
+          user_id: f.user_id, type: 'seller_new_listing', title: 'آگهی جدید از فروشنده مورد علاقه شما',
+          message: `فروشنده «${title.trim()}» یک آگهی جدید منتشر کرد.`
+        })));
+      }
+    } catch (notifyError) { console.warn('seller follower notification error:', notifyError?.message || notifyError); }
     res.status(201).json(data);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ثبت محصول.' }); }
 });
