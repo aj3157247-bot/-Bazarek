@@ -616,15 +616,24 @@ _DetectedImageType? _detectImageType(Uint8List b, String? reportedMime, String r
   if (m == 'image/jpeg') return const _DetectedImageType('image/jpeg', 'jpg');
   if (m == 'image/png') return const _DetectedImageType('image/png', 'png');
   if (m == 'image/webp') return const _DetectedImageType('image/webp', 'webp');
+  if (m == 'image/heic') return const _DetectedImageType('image/heic', 'heic');
+  if (m == 'image/heif') return const _DetectedImageType('image/heif', 'heif');
   if (m == 'image/gif') return const _DetectedImageType('image/gif', 'gif');
   final n = reportedName.toLowerCase();
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return const _DetectedImageType('image/jpeg', 'jpg');
   if (n.endsWith('.png')) return const _DetectedImageType('image/png', 'png');
   if (n.endsWith('.webp')) return const _DetectedImageType('image/webp', 'webp');
+  if (n.endsWith('.heic')) return const _DetectedImageType('image/heic', 'heic');
+  if (n.endsWith('.heif')) return const _DetectedImageType('image/heif', 'heif');
   if (n.endsWith('.gif')) return const _DetectedImageType('image/gif', 'gif');
   if (b.length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return const _DetectedImageType('image/jpeg', 'jpg');
   if (b.length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) return const _DetectedImageType('image/png', 'png');
   if (b.length >= 12 && String.fromCharCodes(b.sublist(0,4)) == 'RIFF' && String.fromCharCodes(b.sublist(8,12)) == 'WEBP') return const _DetectedImageType('image/webp', 'webp');
+  if (b.length >= 12 && String.fromCharCodes(b.sublist(4,8)) == 'ftyp') {
+    final brand = String.fromCharCodes(b.sublist(8,12));
+    if (brand == 'heic' || brand == 'heix' || brand == 'hevc' || brand == 'hevx') return const _DetectedImageType('image/heic', 'heic');
+    if (brand == 'heif' || brand == 'heis' || brand == 'hevm' || brand == 'hevs') return const _DetectedImageType('image/heif', 'heif');
+  }
   if (b.length >= 6) { final sig = String.fromCharCodes(b.sublist(0,6)); if (sig == 'GIF87a' || sig == 'GIF89a') return const _DetectedImageType('image/gif', 'gif'); }
   return null;
 }
@@ -1069,7 +1078,7 @@ class ApiService {
       final bytes = image.bytes;
       final detected = _detectImageType(bytes, image.mimeType, image.name);
       if (detected == null) {
-        throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG یا WEBP انتخاب کنید.');
+        throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG، WEBP یا HEIC انتخاب کنید.');
       }
       final mime = detected.mime;
       final filename = 'avatar-${DateTime.now().millisecondsSinceEpoch}.${detected.ext}';
@@ -1825,7 +1834,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 68), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 72), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -2052,7 +2061,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 68), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 360, quality: 70), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -2098,7 +2107,7 @@ class _ProductCard extends StatelessWidget {
             flex: 7,
             child: Stack(fit: StackFit.expand, children: [
               imageUrl.isNotEmpty
-                  ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 68), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                  ? Image.network(_optimizedImageUrl(imageUrl, width: 640, quality: 74), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
@@ -2165,41 +2174,19 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   int currentPage = 0;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _preloadNearbyImages();
-  }
-
-  void _preloadNearbyImages() {
-    final images = widget.images;
-    if (images.isEmpty) return;
-    final start = currentPage;
-    final end = (start + 2).clamp(0, images.length - 1);
-    for (var i = start; i <= end; i++) {
-      final url = images[i].toString();
-      if (url.isNotEmpty) {
-        precacheImage(
-          NetworkImage(_optimizedImageUrl(url, width: 1200, quality: 82)),
-          context,
-        );
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final images = widget.images;
     return SizedBox(
-      height: 250,
+      height: 220,
       child: Stack(
         fit: StackFit.expand,
         children: [
           PageView.builder(
             itemCount: images.length,
-            onPageChanged: (index) { setState(() => currentPage = index); _preloadNearbyImages(); },
+            onPageChanged: (index) => setState(() => currentPage = index),
             itemBuilder: (_, i) => Image.network(
               _optimizedImageUrl(images[i].toString(), width: 1200, quality: 82),
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               loadingBuilder: _bazarekImageLoading,
               errorBuilder: (_, __, ___) => const ColoredBox(
                 color: Color(0xFFE9EDF3),
@@ -3570,7 +3557,9 @@ Future<PickedProfileImage?> pickProfileImage() async {
     if (bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
-    return PickedProfileImage(bytes: bytes, name: file.name);
+    final ext = (file.extension ?? '').toLowerCase();
+    final webMime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : ext == 'heic' ? 'image/heic' : ext == 'heif' ? 'image/heif' : null;
+    return PickedProfileImage(bytes: bytes, name: file.name, mimeType: webMime);
   }
 
   // Android/iOS: keep the existing image_picker flow unchanged.
@@ -3814,11 +3803,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Stack(
                           children: [
-                            CircleAvatar(
-                              radius: 54,
-                              backgroundColor: Theme.of(context).colorScheme.surface,
-                              backgroundImage: avatar.isNotEmpty ? NetworkImage(_optimizedImageUrl(avatar, width: 256, quality: 72)) : null,
-                              child: avatar.isEmpty ? Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary) : null,
+                            Container(
+                              width: 108,
+                              height: 108,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Theme.of(context).colorScheme.surface,
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: avatar.isNotEmpty
+                                  ? Image.network(
+                                      _optimizedImageUrl(avatar, width: 220, quality: 82),
+                                      fit: BoxFit.contain,
+                                      loadingBuilder: _bazarekImageLoading,
+                                      errorBuilder: (_, __, ___) => Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
+                                    )
+                                  : Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
                             ),
                             Positioned(
                               right: 0,
@@ -3981,7 +3981,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(_optimizedImageUrl(avatar, width: 256, quality: 72)) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
