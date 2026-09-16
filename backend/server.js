@@ -12,7 +12,7 @@ const requireAdmin = require('./middlewares/adminAuth');
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 20 } });
 const IMAGE_BUCKET = 'listing-images';
 const AVATAR_BUCKET = 'profile-avatars';
 
@@ -189,11 +189,11 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/upload-images', requireUser, upload.array('images', 10), async (req, res) => {
+app.post('/api/upload-images', requireUser, upload.array('images', 20), async (req, res) => {
   try {
     const files = Array.isArray(req.files) ? req.files : [];
     if (!files.length) return res.status(400).json({ error: 'حداقل یک عکس انتخاب کنید.' });
-    if (files.length > 10) return res.status(400).json({ error: 'حداکثر ۱۰ عکس مجاز است.' });
+    if (files.length > 20) return res.status(400).json({ error: 'حداکثر ۲۰ عکس مجاز است.' });
     const imageExts = new Set(['jpg','jpeg','png','webp','gif','heic','heif']);
     for (const file of files) {
       const ext = (file.originalname.split('.').pop() || '').toLowerCase();
@@ -269,15 +269,17 @@ app.get('/api/me', requireUser, async (req, res) => {
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('profiles').select('*').eq('id', req.user.id).single();
     if (error) throw error;
+    const { data: ads } = await db.from('products').select('is_active,views_count').eq('vendor_id', req.user.id);
+    const list=ads||[]; data.active_ads=list.filter(a=>a.is_active===true).length; data.total_ads=list.length; data.total_views=list.reduce((n,a)=>n+Number(a.views_count||0),0);
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در دریافت پروفایل.' }); }
 });
 
 app.patch('/api/me', requireUser, async (req, res) => {
   try {
-    const { full_name, shop_name, phone, city } = req.body || {};
+    const { full_name, shop_name, phone, city, bio } = req.body || {};
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('profiles').update({ full_name, shop_name, phone, city, updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
+    const { data, error } = await db.from('profiles').update({ full_name: String(full_name||'').trim().slice(0,120), shop_name: String(shop_name||'').trim().slice(0,120), phone: String(phone||'').trim().slice(0,30), city: String(city||'').trim().slice(0,120), bio: String(bio||'').trim().slice(0,500), updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
@@ -517,7 +519,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -526,8 +528,10 @@ app.get('/api/admin/products', requireAdmin, async (_, res) => {
 app.patch('/api/admin/products/:id/status', requireAdmin, async (req, res) => {
   try {
     const isActive = Boolean(req.body?.is_active);
+    const reason = String(req.body?.reason || '').trim().slice(0, 500);
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
+    const patch = { is_active: isActive, moderation_disabled: !isActive, moderation_reason: !isActive ? (reason || 'آگهی توسط مدیریت بازارک غیرفعال شد.') : null, updated_at: new Date().toISOString() };
+    const { data, error } = await db.from('products').update(patch).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تغییر وضعیت آگهی.' }); }
@@ -669,7 +673,7 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
     const thankReporter=Boolean(req.body?.thank_reporter);
     const resolutionNote=String(req.body?.resolution_note||'').trim().slice(0,1000);
     const {data:listing}=await db.from('products').select('id,title,vendor_id').eq('id',report.listing_id).maybeSingle();
-    if(disableListing && listing) await db.from('products').update({is_active:false,updated_at:new Date().toISOString()}).eq('id',listing.id);
+    if(disableListing && listing) await db.from('products').update({is_active:false,moderation_disabled:true,moderation_reason:String(report.reason||'آگهی به دلیل گزارش و بررسی قوانین بازارک غیرفعال شد.').slice(0,500),updated_at:new Date().toISOString()}).eq('id',listing.id);
     if(warningMessage && listing?.vendor_id) {
       await db.from('user_warnings').insert([{user_id:listing.vendor_id,message:warningMessage}]);
       await db.from('user_notifications').insert([{
@@ -687,6 +691,12 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
 });
 
 app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('admin_login_events').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت رویدادهای امنیتی.'});}});
+
+
+app.get('/api/support/requests', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت درخواست‌های پشتیبانی.'});}});
+app.post('/api/support/requests', requireUser, async (req,res)=>{try{const type=String(req.body?.type||'support');const allowed=['bug','suggestion','support','report'];if(!allowed.includes(type))return res.status(400).json({error:'نوع درخواست نامعتبر است.'});const title=String(req.body?.title||'').trim().slice(0,160);const message=String(req.body?.message||'').trim().slice(0,4000);if(!title||!message)return res.status(400).json({error:'موضوع و توضیح الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').insert([{user_id:req.user.id,type,title,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست پشتیبانی.'});}});
+app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*,profiles(full_name,phone,city,shop_name)').order('created_at',{ascending:false}).limit(500);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پشتیبانی.'});}});
+app.patch('/api/admin/support/requests/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'in_progress');if(!['open','in_progress','answered','resolved','closed'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const reply=String(req.body?.admin_reply||'').trim().slice(0,4000);const db=getSupabaseAdmin();const {data:old}=await db.from('support_requests').select('user_id,title').eq('id',req.params.id).maybeSingle();const {data,error}=await db.from('support_requests').update({status,admin_reply:reply,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(old?.user_id&&reply){await db.from('user_notifications').insert([{user_id:old.user_id,type:'support',title:'پاسخ پشتیبانی بازارک',message:`پاسخ درخواست «${old.title||'پشتیبانی'}» آماده شد.`}]);}res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در پاسخ به درخواست.'});}});
 
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   try {
@@ -862,6 +872,64 @@ app.post('/api/products', requireUser, async (req, res) => {
     if (error) throw error;
     res.status(201).json(data);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ثبت محصول.' }); }
+});
+
+app.patch('/api/products/:id/status', requireUser, async (req, res) => {
+  try {
+    const isActive = req.body?.is_active === true;
+    const db = getSupabaseAdmin();
+    const { data: listing, error: le } = await db
+      .from('products')
+      .select('id,vendor_id,is_active,moderation_disabled,moderation_reason')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (le) throw le;
+    if (!listing) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (String(listing.vendor_id) !== String(req.user.id)) return res.status(403).json({ error: 'این آگهی متعلق به شما نیست.' });
+    if (isActive && listing.moderation_disabled === true) {
+      return res.status(403).json({ error: 'این آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شده و فعلاً قابل فعال‌سازی نیست.' });
+    }
+
+    // Update without relying on Supabase's returned-row behaviour. This avoids
+    // the generic "status change failed" error on deployments where the
+    // products table has restrictive RETURNING/RLS behaviour.
+    const { error: updateError } = await db
+      .from('products')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('vendor_id', req.user.id);
+    if (updateError) throw updateError;
+
+    const { data: updated, error: readError } = await db
+      .from('products')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('vendor_id', req.user.id)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!updated) return res.status(404).json({ error: 'آگهی پس از تغییر وضعیت پیدا نشد.' });
+    res.json(updated);
+  } catch (e) {
+    console.error('Listing status change error:', e);
+    res.status(500).json({ error: `خطا در تغییر وضعیت آگهی${e?.message ? `: ${e.message}` : '.'}` });
+  }
+});
+
+// Permanently delete the authenticated user's account and its related data.
+// All user-owned tables in the Bazarek schema reference auth.users with
+// ON DELETE CASCADE, so deleting the auth user removes the linked profile,
+// listings, favorites, reports, messages, wallet records, etc.
+app.delete('/api/me/account', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const userId = String(req.user.id);
+    const { error } = await db.auth.admin.deleteUser(userId);
+    if (error) throw error;
+    res.json({ ok: true, message: 'حساب شما برای همیشه حذف شد.' });
+  } catch (e) {
+    console.error('Account deletion error:', e);
+    res.status(500).json({ error: 'حذف حساب انجام نشد. لطفاً دوباره تلاش کنید.' });
+  }
 });
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
