@@ -1571,24 +1571,24 @@ class _InlineBoostCard extends StatelessWidget {
 
 Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent? progress) {
   if (progress == null) return child;
+  final expected = progress.expectedTotalBytes;
+  final value = expected != null && expected > 0
+      ? progress.cumulativeBytesLoaded / expected
+      : null;
   return Container(
-    color: const Color(0xFFE9EDF4),
-    child: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'در حال بارگذاری تصویر...',
-            style: TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+    color: const Color(0xFFE9EDF3),
+    alignment: Alignment.center,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 30,
+          height: 30,
+          child: CircularProgressIndicator(strokeWidth: 3, value: value),
+        ),
+        const SizedBox(height: 8),
+        const Text('در حال بارگذاری عکس...', style: TextStyle(fontSize: 10, color: Colors.black54)),
+      ],
     ),
   );
 }
@@ -1948,6 +1948,72 @@ class NumberFormatHelper {
   }
 }
 
+class _ProductImageGallery extends StatefulWidget {
+  final List<dynamic> images;
+  const _ProductImageGallery({required this.images});
+
+  @override
+  State<_ProductImageGallery> createState() => _ProductImageGalleryState();
+}
+
+class _ProductImageGalleryState extends State<_ProductImageGallery> {
+  int currentPage = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final images = widget.images;
+    return SizedBox(
+      height: 250,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            itemCount: images.length,
+            onPageChanged: (index) => setState(() => currentPage = index),
+            itemBuilder: (_, i) => Image.network(
+              images[i].toString(),
+              fit: BoxFit.cover,
+              loadingBuilder: _bazarekImageLoading,
+              errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xFFE9EDF3),
+                child: Center(child: Icon(Icons.image_not_supported_outlined, size: 52)),
+              ),
+            ),
+          ),
+          if (images.length > 1)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(14)),
+                child: Text('${currentPage + 1} / ${images.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+              ),
+            ),
+          if (images.length > 1)
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  images.length > 12 ? 12 : images.length,
+                  (i) => Container(
+                    width: i == currentPage ? 16 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(color: i == currentPage ? Colors.white : Colors.white54, borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class ProductDetailScreen extends StatelessWidget {
   final dynamic product;
   const ProductDetailScreen({super.key, required this.product});
@@ -2064,13 +2130,7 @@ class ProductDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (images.isNotEmpty)
-              SizedBox(
-                height: 250,
-                child: PageView.builder(
-                  itemCount: images.length,
-                  itemBuilder: (_, i) => Image.network(images[i], fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 56))),
-                ),
-              )
+              _ProductImageGallery(images: images)
             else
               Container(
                 height: 200,
@@ -2543,7 +2603,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final imgs = raw is String ? jsonDecode(raw) : raw;
       final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
       if (u.isNotEmpty) {
-        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined))));
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading));
       }
     } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
@@ -3219,6 +3279,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), subtitle: const Text('پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                   ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), subtitle: const Text('گزارش اشکال، پیشنهاد و پیام به تیم بازارک'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
+                  ListTile(leading: const Icon(Icons.admin_panel_settings_outlined), title: const Text('ورود مدیریت بازارک'), subtitle: const Text('پنل مدیریت، بررسی آگهی‌ها و گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()))),
                   ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
                   ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
                   const Divider(),
