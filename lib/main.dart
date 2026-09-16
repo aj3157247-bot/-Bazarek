@@ -69,15 +69,14 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
     AuthService.avatarUrl = prefs.getString('avatar_url');
     AuthService.refreshToken = prefs.getString('refresh_token');
 
-    // نشست ذخیره‌شده را قبل از نمایش برنامه بازیابی می‌کنیم.
-    // اگر access token منقضی شده باشد، با refresh token آن را تمدید می‌کنیم.
-    // در صورت قطع بودن اینترنت، نشست ذخیره‌شده را بی‌دلیل حذف نمی‌کنیم.
+    // Restore the real Supabase session after app/web restart.
+    // Do not delete legacy-looking tokens here: the backend is the source of truth.
     if (AuthService.token != null && AuthService.token!.isNotEmpty &&
         AuthService.refreshToken != null && AuthService.refreshToken!.isNotEmpty) {
       try {
         await ApiService.refreshSession().timeout(const Duration(seconds: 8));
       } catch (_) {
-        // نشست محلی را نگه می‌داریم؛ درخواست‌های بعدی در صورت نیاز دوباره تلاش می‌کنند.
+        // Keep the stored session locally; normal API calls can retry later.
       }
     }
 
@@ -767,6 +766,69 @@ class ApiService {
     final data = jsonDecode(res.body);
     if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌های شما.') : 'خطا در دریافت آگهی‌های شما.');
     return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
+  }
+
+  static Future<Map<String, dynamic>> setMyProductStatus({required String id, required bool isActive}) async {
+    var res = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/products/$id/status'),
+      headers: headers,
+      body: jsonEncode({'is_active': isActive}),
+    ).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.patch(
+        Uri.parse('${ApiConfig.baseUrl}/products/$id/status'),
+        headers: headers,
+        body: jsonEncode({'is_active': isActive}),
+      ).timeout(const Duration(seconds: 20));
+    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200 || data is! Map) {
+      throw Exception(data is Map ? (data['error'] ?? 'خطا در تغییر وضعیت آگهی.') : 'خطا در تغییر وضعیت آگهی.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+
+  static Future<void> deleteMyAccount() async {
+    var res = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/me/account'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 30));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/me/account'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 30));
+    }
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    if (res.statusCode != 200) {
+      throw Exception(data?['error'] ?? 'حذف حساب انجام نشد.');
+    }
+  }
+
+  static Future<void> deleteMyProduct({required String id}) async {
+    var res = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/products/$id'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/products/$id'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 20));
+    }
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    if (res.statusCode != 200) {
+      throw Exception(data?['error'] ?? 'حذف آگهی ناموفق بود.');
+    }
   }
 
   static Future<Map<String, dynamic>> getMyProfile() async {
@@ -1521,6 +1583,30 @@ class _InlineBoostCard extends StatelessWidget {
   @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF173C91), Color(0xFF0B72E7)]), borderRadius: BorderRadius.circular(16)), child: Row(children: [const Text('🚀', style: TextStyle(fontSize: 22)), const SizedBox(width: 8), Expanded(child: Text(psText(context, 'آگهی‌ات را ویژه کن و بیشتر دیده شو.', 'خپل اعلان ځانګړی کړه او ډېر ولیدل شه.'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))), TextButton(onPressed: onTap, child: Text(psText(context, 'ویژه‌سازی', 'ځانګړی کول'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)))]));
 }
 
+Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent? progress) {
+  if (progress == null) return child;
+  final expected = progress.expectedTotalBytes;
+  final value = expected != null && expected > 0
+      ? progress.cumulativeBytesLoaded / expected
+      : null;
+  return Container(
+    color: const Color(0xFFE9EDF3),
+    alignment: Alignment.center,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 30,
+          height: 30,
+          child: CircularProgressIndicator(strokeWidth: 3, value: value),
+        ),
+        const SizedBox(height: 8),
+        const Text('در حال بارگذاری عکس...', style: TextStyle(fontSize: 10, color: Colors.black54)),
+      ],
+    ),
+  );
+}
+
 class _DivarStyleListing extends StatelessWidget {
   final dynamic item;
   const _DivarStyleListing({required this.item});
@@ -1548,7 +1634,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -1775,7 +1861,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -1821,7 +1907,7 @@ class _ProductCard extends StatelessWidget {
             flex: 7,
             child: Stack(fit: StackFit.expand, children: [
               imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                  ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
@@ -1873,6 +1959,72 @@ class NumberFormatHelper {
     final n = num.tryParse(value?.toString() ?? '') ?? 0;
     final raw = n.toInt().toString();
     return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+$)'), (_) => ',');
+  }
+}
+
+class _ProductImageGallery extends StatefulWidget {
+  final List<dynamic> images;
+  const _ProductImageGallery({required this.images});
+
+  @override
+  State<_ProductImageGallery> createState() => _ProductImageGalleryState();
+}
+
+class _ProductImageGalleryState extends State<_ProductImageGallery> {
+  int currentPage = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final images = widget.images;
+    return SizedBox(
+      height: 250,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            itemCount: images.length,
+            onPageChanged: (index) => setState(() => currentPage = index),
+            itemBuilder: (_, i) => Image.network(
+              images[i].toString(),
+              fit: BoxFit.cover,
+              loadingBuilder: _bazarekImageLoading,
+              errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xFFE9EDF3),
+                child: Center(child: Icon(Icons.image_not_supported_outlined, size: 52)),
+              ),
+            ),
+          ),
+          if (images.length > 1)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(14)),
+                child: Text('${currentPage + 1} / ${images.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+              ),
+            ),
+          if (images.length > 1)
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  images.length > 12 ? 12 : images.length,
+                  (i) => Container(
+                    width: i == currentPage ? 16 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(color: i == currentPage ? Colors.white : Colors.white54, borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1992,13 +2144,7 @@ class ProductDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (images.isNotEmpty)
-              SizedBox(
-                height: 250,
-                child: PageView.builder(
-                  itemCount: images.length,
-                  itemBuilder: (_, i) => Image.network(images[i], fit: BoxFit.cover),
-                ),
-              )
+              _ProductImageGallery(images: images)
             else
               Container(
                 height: 200,
@@ -2183,7 +2329,9 @@ class AddProductScreen extends StatelessWidget {
 }
 
 class MyProductsScreen extends StatefulWidget {
-  const MyProductsScreen({super.key});
+  final bool activeOnly;
+  final bool sortByViews;
+  const MyProductsScreen({super.key, this.activeOnly = false, this.sortByViews = false});
   @override
   State<MyProductsScreen> createState() => _MyProductsScreenState();
 }
@@ -2192,6 +2340,8 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   List<dynamic> ads = [];
   bool loading = true;
   String? error;
+  final Map<String, Timer> _pendingDeleteTimers = {};
+  final Map<String, dynamic> _pendingDeleteItems = {};
 
   @override
   void initState() {
@@ -2207,6 +2357,11 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   @override
   void dispose() {
     AuthService.authVersion.removeListener(_authChanged);
+    for (final timer in _pendingDeleteTimers.values) {
+      timer.cancel();
+    }
+    _pendingDeleteTimers.clear();
+    _pendingDeleteItems.clear();
     super.dispose();
   }
 
@@ -2218,9 +2373,84 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
     if (mounted) setState(() { loading = true; error = null; });
     try {
       final data = await ApiService.getMyProducts();
-      if (mounted) setState(() { ads = data; loading = false; error = null; });
+      final filtered = data.where((item) {
+        if (!widget.activeOnly) return true;
+        final m = item is Map ? item : const <String, dynamic>{};
+        final value = m['is_active'];
+        return value == true || value.toString().toLowerCase() == 'true' || value.toString() == '1';
+      }).toList();
+      if (widget.sortByViews) {
+        filtered.sort((a, b) {
+          final av = int.tryParse('${a is Map ? a['views_count'] ?? 0 : 0}') ?? 0;
+          final bv = int.tryParse('${b is Map ? b['views_count'] ?? 0 : 0}') ?? 0;
+          return bv.compareTo(av);
+        });
+      }
+      if (mounted) setState(() { ads = filtered; loading = false; error = null; });
     } catch (e) {
       if (mounted) setState(() { ads = []; loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  Future<void> _confirmDelete(dynamic ad) async {
+    final id = ad['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final title = ad['title']?.toString().trim().isNotEmpty == true ? ad['title'].toString() : psText(context, 'این آگهی', 'دا اعلان');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(psText(context, 'حذف دائمی آگهی', 'د اعلان دایمي حذف')),
+        content: Text(psText(context, 'آیا مطمئن هستید «$title» را حذف کنید؟ این آگهی برای همیشه حذف خواهد شد. بعد از تأیید، ۵ ثانیه برای بازگردانی فرصت دارید.', 'ایا ډاډه یاست چې «$title» حذف کړئ؟ دا اعلان به د تل لپاره حذف شي. له تایید وروسته د بېرته راګرځولو لپاره ۵ ثانیې وخت لرئ.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(psText(context, 'انصراف', 'لغوه'))),
+          FilledButton.icon(onPressed: () => Navigator.pop(dialogContext, true), icon: const Icon(Icons.delete_forever), label: Text(psText(context, 'حذف', 'حذف'))),
+        ],
+      ),
+    ) ?? false;
+    if (!confirmed || !mounted) return;
+
+    _pendingDeleteTimers[id]?.cancel();
+    _pendingDeleteItems[id] = ad;
+    setState(() => ads.removeWhere((x) => x is Map && x['id']?.toString() == id));
+
+    late Timer timer;
+    timer = Timer(const Duration(seconds: 5), () async {
+      _pendingDeleteTimers.remove(id);
+      final item = _pendingDeleteItems.remove(id);
+      try {
+        await ApiService.deleteMyProduct(id: id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'آگهی برای همیشه حذف شد.', 'اعلان د تل لپاره حذف شو.'))));
+        }
+      } catch (e) {
+        if (mounted && item != null) {
+          setState(() => ads.insert(0, item));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+        }
+      }
+    });
+    _pendingDeleteTimers[id] = timer;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 5),
+          content: Text(psText(context, 'آگهی حذف می‌شود؛ ۵ ثانیه برای بازگردانی فرصت دارید.', 'اعلان به حذفېدو روان دی؛ د بېرته راګرځولو لپاره ۵ ثانیې وخت لرئ.')),
+          action: SnackBarAction(
+            label: psText(context, 'بازگردانی', 'بېرته راوستل'),
+            onPressed: () {
+              final pending = _pendingDeleteTimers.remove(id);
+              pending?.cancel();
+              final item = _pendingDeleteItems.remove(id);
+              if (item != null && mounted) {
+                setState(() => ads.insert(0, item));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'آگهی بازگردانی شد.', 'اعلان بېرته راوګرځول شو.'))));
+              }
+            },
+          ),
+        ),
+      );
     }
   }
 
@@ -2295,6 +2525,52 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                   leading: SizedBox(width: 70, height: 60, child: _imageFor(ad)),
                                   title: Text(ad['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
                                   subtitle: Text('${NumberFormatHelper.format(ad['price'])} افغانی • ${ad['province'] ?? ''}'),
+                                  trailing: Chip(
+                                    avatar: Icon(ad['is_active'] == true ? Icons.check_circle : Icons.pause_circle_outline, size: 18),
+                                    label: Text(ad['is_active'] == true ? psText(context, 'فعال', 'فعال') : psText(context, 'غیرفعال', 'غیرفعال')),
+                                  ),
+                                ),
+                                if (ad['moderation_disabled'] == true)
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Theme.of(context).colorScheme.errorContainer),
+                                    child: Text('⚠️ ${psText(context, 'این آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شده است.', 'دا اعلان د بازارک مدیریت له خوا د قوانینو د کتنې له امله غیر فعال شوی دی.')}\n${ad['moderation_reason']?.toString().trim().isNotEmpty == true ? ad['moderation_reason'] : ''}'),
+                                  ),
+                                SwitchListTile.adaptive(
+                                  value: ad['is_active'] == true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                  title: Text(ad['is_active'] == true ? psText(context, 'آگهی فعال است', 'اعلان فعال دی') : psText(context, 'آگهی غیرفعال است', 'اعلان غیر فعال دی')),
+                                  subtitle: Text(ad['moderation_disabled'] == true
+                                      ? psText(context, 'این آگهی توسط مدیریت محدود شده و تا رفع محدودیت قابل فعال‌سازی نیست.', 'دا اعلان د مدیریت له خوا محدود شوی او تر لرې کېدو پورې نه شي فعالېدای.')
+                                      : psText(context, 'هر زمان خواستید می‌توانید نمایش آگهی را متوقف یا دوباره فعال کنید.', 'هر وخت کولای شئ اعلان ودروئ یا بېرته فعال یې کړئ.')),
+                                  onChanged: ad['moderation_disabled'] == true
+                                      ? null
+                                      : (value) async {
+                                          final previous = ad['is_active'] == true;
+                                          setState(() => ad['is_active'] = value);
+                                          try {
+                                            final updated = await ApiService.setMyProductStatus(id: ad['id'].toString(), isActive: value);
+                                            setState(() => ad.addAll(updated));
+                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value ? psText(context, 'آگهی فعال شد.', 'اعلان فعال شو.') : psText(context, 'آگهی غیرفعال شد.', 'اعلان غیر فعال شو.'))));
+                                          } catch (e) {
+                                            setState(() => ad['is_active'] = previous);
+                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+                                          }
+                                        },
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _confirmDelete(ad),
+                                      style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                                      icon: const Icon(Icons.delete_outline),
+                                      label: Text(psText(context, 'حذف دائمی آگهی', 'د اعلان دایمي حذف')),
+                                    ),
+                                  ),
                                 ),
                                 if (badge.isNotEmpty)
                                   Align(
@@ -2341,7 +2617,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final imgs = raw is String ? jsonDecode(raw) : raw;
       final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
       if (u.isNotEmpty) {
-        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover));
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading));
       }
     } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
@@ -2768,6 +3044,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     try {
       final data = await ApiService.getMyProfile();
+      // Calculate statistics from the same authenticated /products endpoint
+      // used by «آگهی‌های من». This keeps the counters correct even when the
+      // deployed backend's /api/me response does not yet include statistics.
+      try {
+        final myProducts = await ApiService.getMyProducts();
+        final activeCount = myProducts.where((item) {
+          final m = item is Map ? item : const <String, dynamic>{};
+          final value = m['is_active'];
+          return value == true || value.toString().toLowerCase() == 'true' || value.toString() == '1';
+        }).length;
+        final totalViews = myProducts.fold<int>(0, (sum, item) {
+          final m = item is Map ? item : const <String, dynamic>{};
+          return sum + (int.tryParse('${m['views_count'] ?? 0}') ?? 0);
+        });
+        data['total_ads'] = myProducts.length;
+        data['active_ads'] = activeCount;
+        data['total_views'] = totalViews;
+      } catch (_) {
+        // Keep server-provided counters as a fallback.
+      }
       final avatar = data['avatar_url']?.toString() ?? '';
       if (avatar.isNotEmpty) {
         AuthService.avatarUrl = avatar;
@@ -2857,6 +3153,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     name.dispose(); phone.dispose(); city.dispose(); shop.dispose(); bio.dispose();
   }
 
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف همیشگی حساب'),
+        content: const Text(
+          'با حذف حساب، پروفایل، آگهی‌ها و اطلاعات مرتبط با حساب شما برای همیشه حذف می‌شود و این کار قابل بازگردانی نیست.\n\nآیا مطمئن هستید که می‌خواهید حساب خود را برای همیشه حذف کنید؟',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('بله، حسابم را برای همیشه حذف کن'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => saving = true);
+    try {
+      await ApiService.deleteMyAccount();
+      await AuthService.logout();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حساب شما برای همیشه حذف شد.')));
+        setState(() { profile = {}; error = null; });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
   Widget _infoTile(IconData icon, String title, String value) {
     if (value.trim().isEmpty) return const SizedBox.shrink();
     return ListTile(
@@ -2942,11 +3273,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
-                        Expanded(child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined)),
+                        Expanded(child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())))),
                         const SizedBox(width: 8),
-                        Expanded(child: _statCard('فعال', '$activeAds', Icons.check_circle_outline)),
+                        Expanded(child: _statCard('فعال', '$activeAds', Icons.check_circle_outline, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(activeOnly: true))))),
                         const SizedBox(width: 8),
-                        Expanded(child: _statCard('بازدید', '$views', Icons.visibility_outlined)),
+                        Expanded(child: _statCard('بازدید', '$views', Icons.visibility_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(sortByViews: true))))),
                       ],
                     ),
                   ),
@@ -2960,14 +3291,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _infoTile(Icons.location_on_outlined, 'شهر / ولایت', city),
                       ]),
                     ),
-                  ListTile(leading: const Icon(Icons.inventory_2_outlined), title: Text(tr(context, 'my_ads')), subtitle: const Text('تمام آگهی‌هایی که ثبت کرده‌اید'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
                   ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), subtitle: const Text('پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                   ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), subtitle: const Text('گزارش اشکال، پیشنهاد و پیام به تیم بازارک'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
+                  ListTile(leading: const Icon(Icons.admin_panel_settings_outlined), title: const Text('ورود مدیریت بازارک'), subtitle: const Text('پنل مدیریت، بررسی آگهی‌ها و گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()))),
                   ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
                   ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
                   const Divider(),
                   SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
-                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
+                    title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'),
+                    onTap: saving ? null : _deleteAccount,
+                  ),
                   const SizedBox(height: 30),
                 ],
               ),
@@ -2975,8 +3312,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon) {
-    return Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Column(children: [Icon(icon, size: 24), const SizedBox(height: 6), Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), Text(label, style: const TextStyle(fontSize: 12))])));
+  Widget _statCard(String label, String value, IconData icon, VoidCallback onTap) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Column(children: [
+            Icon(icon, size: 24),
+            const SizedBox(height: 6),
+            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(label, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 3),
+            const Icon(Icons.touch_app_outlined, size: 14),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
@@ -3383,7 +3736,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickImage() async {
-    if (imageBytes.length >= 10) { _msg('حداکثر ۱۰ عکس مجاز است.'); return; }
+    if (imageBytes.length >= 20) { _msg('حداکثر ۲۰ عکس مجاز است.'); return; }
 
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
@@ -3392,7 +3745,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         type: FileType.image,
       );
       if (result.isEmpty) return;
-      final remaining = 10 - imageBytes.length;
+      final remaining = 20 - imageBytes.length;
       for (final file in result.take(remaining)) {
         final bytes = await file.readAsBytes();
         if (bytes.isEmpty) continue;
@@ -3410,7 +3763,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       maxHeight: 2000,
     );
     if (picked.isEmpty) return;
-    final remaining = 10 - imageBytes.length;
+    final remaining = 20 - imageBytes.length;
     for (final image in picked.take(remaining)) {
       imageBytes.add(await image.readAsBytes());
       imageNames.add(image.name);
@@ -3623,7 +3976,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => isNegotiable = val),
           ),
           const SizedBox(height: 12),
-          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (var i = 0; i < imageBytes.length; i++)
@@ -3631,7 +3984,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.cover)),
                 Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
               ]),
-            if (imageBytes.length < 10) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
+            if (imageBytes.length < 20) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
           ]),
           const SizedBox(height: 18),
           FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.publish), label: Text(publishing ? 'در حال انتشار...' : 'ثبت و انتشار آگهی')),
