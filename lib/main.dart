@@ -775,6 +775,27 @@ class ApiService {
   }
 
 
+  static Future<void> deleteMyAccount() async {
+    var res = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/me/account'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 30));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/me/account'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 30));
+    }
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    if (res.statusCode != 200) {
+      throw Exception(data?['error'] ?? 'حذف حساب انجام نشد.');
+    }
+  }
+
   static Future<void> deleteMyProduct({required String id}) async {
     var res = await http.delete(
       Uri.parse('${ApiConfig.baseUrl}/products/$id'),
@@ -3034,6 +3055,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     name.dispose(); phone.dispose(); city.dispose(); shop.dispose(); bio.dispose();
   }
 
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف همیشگی حساب'),
+        content: const Text(
+          'با حذف حساب، پروفایل، آگهی‌ها و اطلاعات مرتبط با حساب شما برای همیشه حذف می‌شود و این کار قابل بازگردانی نیست.\n\nآیا مطمئن هستید که می‌خواهید حساب خود را برای همیشه حذف کنید؟',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('بله، حسابم را برای همیشه حذف کن'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => saving = true);
+    try {
+      await ApiService.deleteMyAccount();
+      await AuthService.logout();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حساب شما برای همیشه حذف شد.')));
+        setState(() { profile = {}; error = null; });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
   Widget _infoTile(IconData icon, String title, String value) {
     if (value.trim().isEmpty) return const SizedBox.shrink();
     return ListTile(
@@ -3143,7 +3199,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
                   const Divider(),
                   SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
-                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
+                    title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'),
+                    onTap: saving ? null : _deleteAccount,
+                  ),
                   const SizedBox(height: 30),
                 ],
               ),
