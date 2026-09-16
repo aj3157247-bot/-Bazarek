@@ -876,17 +876,60 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id/status', requireUser, async (req, res) => {
   try {
-    const isActive = Boolean(req.body?.is_active);
+    const isActive = req.body?.is_active === true;
     const db = getSupabaseAdmin();
-    const { data: listing, error: le } = await db.from('products').select('id,vendor_id,is_active,moderation_disabled').eq('id', req.params.id).maybeSingle();
+    const { data: listing, error: le } = await db
+      .from('products')
+      .select('id,vendor_id,is_active,moderation_disabled,moderation_reason')
+      .eq('id', req.params.id)
+      .maybeSingle();
     if (le) throw le;
     if (!listing) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
-    if (listing.vendor_id !== req.user.id) return res.status(403).json({ error: 'این آگهی متعلق به شما نیست.' });
-    if (isActive && listing.moderation_disabled === true) return res.status(403).json({ error: 'این آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شده و فعلاً قابل فعال‌سازی نیست.' });
-    const { data, error } = await db.from('products').update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('id', req.params.id).eq('vendor_id', req.user.id).select().single();
+    if (String(listing.vendor_id) !== String(req.user.id)) return res.status(403).json({ error: 'این آگهی متعلق به شما نیست.' });
+    if (isActive && listing.moderation_disabled === true) {
+      return res.status(403).json({ error: 'این آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شده و فعلاً قابل فعال‌سازی نیست.' });
+    }
+
+    // Update without relying on Supabase's returned-row behaviour. This avoids
+    // the generic "status change failed" error on deployments where the
+    // products table has restrictive RETURNING/RLS behaviour.
+    const { error: updateError } = await db
+      .from('products')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('vendor_id', req.user.id);
+    if (updateError) throw updateError;
+
+    const { data: updated, error: readError } = await db
+      .from('products')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('vendor_id', req.user.id)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!updated) return res.status(404).json({ error: 'آگهی پس از تغییر وضعیت پیدا نشد.' });
+    res.json(updated);
+  } catch (e) {
+    console.error('Listing status change error:', e);
+    res.status(500).json({ error: `خطا در تغییر وضعیت آگهی${e?.message ? `: ${e.message}` : '.'}` });
+  }
+});
+
+// Permanently delete the authenticated user's account and its related data.
+// All user-owned tables in the Bazarek schema reference auth.users with
+// ON DELETE CASCADE, so deleting the auth user removes the linked profile,
+// listings, favorites, reports, messages, wallet records, etc.
+app.delete('/api/me/account', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const userId = String(req.user.id);
+    const { error } = await db.auth.admin.deleteUser(userId);
     if (error) throw error;
-    res.json(data);
-  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در تغییر وضعیت آگهی.' }); }
+    res.json({ ok: true, message: 'حساب شما برای همیشه حذف شد.' });
+  } catch (e) {
+    console.error('Account deletion error:', e);
+    res.status(500).json({ error: 'حذف حساب انجام نشد. لطفاً دوباره تلاش کنید.' });
+  }
 });
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
