@@ -775,27 +775,6 @@ class ApiService {
   }
 
 
-  static Future<void> deleteMyAccount() async {
-    var res = await http.delete(
-      Uri.parse('${ApiConfig.baseUrl}/me/account'),
-      headers: headers,
-    ).timeout(const Duration(seconds: 30));
-    if (res.statusCode == 401 && await refreshSession()) {
-      res = await http.delete(
-        Uri.parse('${ApiConfig.baseUrl}/me/account'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 30));
-    }
-    Map<String, dynamic>? data;
-    try {
-      final decoded = jsonDecode(res.body);
-      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
-    } catch (_) {}
-    if (res.statusCode != 200) {
-      throw Exception(data?['error'] ?? 'حذف حساب انجام نشد.');
-    }
-  }
-
   static Future<void> deleteMyProduct({required String id}) async {
     var res = await http.delete(
       Uri.parse('${ApiConfig.baseUrl}/products/$id'),
@@ -3055,41 +3034,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     name.dispose(); phone.dispose(); city.dispose(); shop.dispose(); bio.dispose();
   }
 
-  Future<void> _deleteAccount() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('حذف همیشگی حساب'),
-        content: const Text(
-          'با حذف حساب، پروفایل، آگهی‌ها و اطلاعات مرتبط با حساب شما برای همیشه حذف می‌شود و این کار قابل بازگردانی نیست.\n\nآیا مطمئن هستید که می‌خواهید حساب خود را برای همیشه حذف کنید؟',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('بله، حسابم را برای همیشه حذف کن'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() => saving = true);
-    try {
-      await ApiService.deleteMyAccount();
-      await AuthService.logout();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حساب شما برای همیشه حذف شد.')));
-        setState(() { profile = {}; error = null; });
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
-    } finally {
-      if (mounted) setState(() => saving = false);
-    }
-  }
-
   Widget _infoTile(IconData icon, String title, String value) {
     if (value.trim().isEmpty) return const SizedBox.shrink();
     return ListTile(
@@ -3199,13 +3143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
                   const Divider(),
                   SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
-                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
-                    title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'),
-                    onTap: saving ? null : _deleteAccount,
-                  ),
+                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: () async { await AuthService.logout(); if (mounted) setState(() {}); }),
                   const SizedBox(height: 30),
                 ],
               ),
@@ -3637,7 +3575,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickImage() async {
-    if (imageBytes.length >= 10) { _msg('حداکثر ۱۰ عکس مجاز است.'); return; }
+    if (imageBytes.length >= 20) { _msg('حداکثر ۲۰ عکس مجاز است.'); return; }
 
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
@@ -3646,7 +3584,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         type: FileType.image,
       );
       if (result.isEmpty) return;
-      final remaining = 10 - imageBytes.length;
+      final remaining = 20 - imageBytes.length;
       for (final file in result.take(remaining)) {
         final bytes = await file.readAsBytes();
         if (bytes.isEmpty) continue;
@@ -3664,7 +3602,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       maxHeight: 2000,
     );
     if (picked.isEmpty) return;
-    final remaining = 10 - imageBytes.length;
+    final remaining = 20 - imageBytes.length;
     for (final image in picked.take(remaining)) {
       imageBytes.add(await image.readAsBytes());
       imageNames.add(image.name);
@@ -3877,7 +3815,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => isNegotiable = val),
           ),
           const SizedBox(height: 12),
-          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (var i = 0; i < imageBytes.length; i++)
@@ -3885,7 +3823,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.cover)),
                 Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
               ]),
-            if (imageBytes.length < 10) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
+            if (imageBytes.length < 20) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
           ]),
           const SizedBox(height: 18),
           FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.publish), label: Text(publishing ? 'در حال انتشار...' : 'ثبت و انتشار آگهی')),
