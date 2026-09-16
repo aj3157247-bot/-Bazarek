@@ -616,24 +616,15 @@ _DetectedImageType? _detectImageType(Uint8List b, String? reportedMime, String r
   if (m == 'image/jpeg') return const _DetectedImageType('image/jpeg', 'jpg');
   if (m == 'image/png') return const _DetectedImageType('image/png', 'png');
   if (m == 'image/webp') return const _DetectedImageType('image/webp', 'webp');
-  if (m == 'image/heic') return const _DetectedImageType('image/heic', 'heic');
-  if (m == 'image/heif') return const _DetectedImageType('image/heif', 'heif');
   if (m == 'image/gif') return const _DetectedImageType('image/gif', 'gif');
   final n = reportedName.toLowerCase();
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return const _DetectedImageType('image/jpeg', 'jpg');
   if (n.endsWith('.png')) return const _DetectedImageType('image/png', 'png');
   if (n.endsWith('.webp')) return const _DetectedImageType('image/webp', 'webp');
-  if (n.endsWith('.heic')) return const _DetectedImageType('image/heic', 'heic');
-  if (n.endsWith('.heif')) return const _DetectedImageType('image/heif', 'heif');
   if (n.endsWith('.gif')) return const _DetectedImageType('image/gif', 'gif');
   if (b.length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return const _DetectedImageType('image/jpeg', 'jpg');
   if (b.length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) return const _DetectedImageType('image/png', 'png');
   if (b.length >= 12 && String.fromCharCodes(b.sublist(0,4)) == 'RIFF' && String.fromCharCodes(b.sublist(8,12)) == 'WEBP') return const _DetectedImageType('image/webp', 'webp');
-  if (b.length >= 12 && String.fromCharCodes(b.sublist(4,8)) == 'ftyp') {
-    final brand = String.fromCharCodes(b.sublist(8,12));
-    if (brand == 'heic' || brand == 'heix' || brand == 'hevc' || brand == 'hevx') return const _DetectedImageType('image/heic', 'heic');
-    if (brand == 'heif' || brand == 'heis' || brand == 'hevm' || brand == 'hevs') return const _DetectedImageType('image/heif', 'heif');
-  }
   if (b.length >= 6) { final sig = String.fromCharCodes(b.sublist(0,6)); if (sig == 'GIF87a' || sig == 'GIF89a') return const _DetectedImageType('image/gif', 'gif'); }
   return null;
 }
@@ -1078,7 +1069,7 @@ class ApiService {
       final bytes = image.bytes;
       final detected = _detectImageType(bytes, image.mimeType, image.name);
       if (detected == null) {
-        throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG، WEBP یا HEIC انتخاب کنید.');
+        throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG یا WEBP انتخاب کنید.');
       }
       final mime = detected.mime;
       final filename = 'avatar-${DateTime.now().millisecondsSinceEpoch}.${detected.ext}';
@@ -1833,8 +1824,8 @@ class _DivarStyleListing extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 128),
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 72), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+          SizedBox(width: 112, height: 96, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
+            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 72), fit: BoxFit.contain, filterQuality: FilterQuality.medium, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -2024,7 +2015,7 @@ class _SpecialBoostSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: SizedBox(
-              height: 188,
+              height: 156,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: special.length,
@@ -2061,7 +2052,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 360, quality: 70), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 78, height: 156, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 360, quality: 70), fit: BoxFit.contain, filterQuality: FilterQuality.medium, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -2094,47 +2085,100 @@ class _ProductCard extends StatelessWidget {
     final location = '${localizedProvince(context, item['province']?.toString() ?? '')}${(item['location_text'] ?? '').toString().isNotEmpty ? ' • ${item['location_text']}' : ''}';
 
     return Card(
-      margin: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       color: Colors.white,
       shadowColor: const Color(0x220B2A55),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0x0D0B2A55))),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0x0D0B2A55)),
+      ),
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(
-            flex: 7,
-            child: Stack(fit: StackFit.expand, children: [
-              imageUrl.isNotEmpty
-                  ? Image.network(_optimizedImageUrl(imageUrl, width: 640, quality: 74), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
-                  : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
-              if (boostLabel.isNotEmpty)
-                Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
-              if (item['turbo_active'] == true)
-                Positioned(left: 8, bottom: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.58), borderRadius: BorderRadius.circular(9)), child: Text(psText(context, '⚡ توربو', '⚡ توربو'), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)))),
-              Positioned(top: 8, left: 8, child: _SaveAdButton(item: item)),
-            ]),
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 118,
+                height: 112,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Container(color: const Color(0xFFF1F4F8)),
+                      imageUrl.isNotEmpty
+                          ? Image.network(
+                              _optimizedImageUrl(imageUrl, width: 480, quality: 74),
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.medium,
+                              loadingBuilder: _bazarekImageLoading,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 34),
+                            )
+                          : const Icon(Icons.image_outlined, size: 36),
+                      if (images.length > 1)
+                        Positioned(
+                          left: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(.60), borderRadius: BorderRadius.circular(8)),
+                            child: Text('${images.length}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      if (boostLabel.isNotEmpty)
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)),
+                            child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: SizedBox(
+                  height: 112,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: LocalizedText(
+                              item['title']?.toString() ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF102A43), height: 1.2),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          _SaveAdButton(item: item),
+                        ],
+                      ),
+                      const Spacer(),
+                      Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF00695C), fontSize: 14)),
+                      const SizedBox(height: 4),
+                      Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          Expanded(
-            flex: 5,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF102A43), height: 1.2)),
-                const Spacer(),
-                Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF00695C), fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
-              ]),
-            ),
-          ),
-        ]),
+        ),
       ),
     );
   }
 }
-
 
 class _SaveAdButton extends StatefulWidget {
   final dynamic item;
@@ -2177,7 +2221,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   Widget build(BuildContext context) {
     final images = widget.images;
     return SizedBox(
-      height: 220,
+      height: 210,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -2187,6 +2231,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
             itemBuilder: (_, i) => Image.network(
               _optimizedImageUrl(images[i].toString(), width: 1200, quality: 82),
               fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
               loadingBuilder: _bazarekImageLoading,
               errorBuilder: (_, __, ___) => const ColoredBox(
                 color: Color(0xFFE9EDF3),
@@ -2627,7 +2672,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final name=profile['shop_name']?.toString().trim().isNotEmpty==true?profile['shop_name'].toString():(profile['full_name']?.toString().trim().isNotEmpty==true?profile['full_name'].toString():widget.sellerName);
     final avatar=profile['avatar_url']?.toString()??''; final followers=int.tryParse('${profile['followers_count']??0}')??0; final rating=double.tryParse('${profile['rating']??0}')??0;
     return Scaffold(appBar:AppBar(title:Text(name),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[
-      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[CircleAvatar(radius:46,backgroundImage:avatar.isNotEmpty?NetworkImage(avatar):null,child:avatar.isEmpty?const Icon(Icons.person,size:46):null),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
+      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[CircleAvatar(radius:38,child:avatar.isNotEmpty?ClipOval(child:SizedBox(width:76,height:76,child:Image.network(_optimizedImageUrl(avatar,width:300,quality:80),fit:BoxFit.contain,filterQuality:FilterQuality.medium,loadingBuilder:_bazarekImageLoading,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:38)))):const Icon(Icons.person,size:38)),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
       Padding(padding:const EdgeInsets.fromLTRB(4,12,4,8),child:Text('آگهی‌های این فروشنده (${listings.length})',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
       if(listings.isEmpty)const Padding(padding:EdgeInsets.all(20),child:Center(child:Text('این فروشنده آگهی فعالی ندارد.'))),
       ...listings.map((x)=>_DivarStyleListing(item:x)),
@@ -3557,9 +3602,7 @@ Future<PickedProfileImage?> pickProfileImage() async {
     if (bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
-    final ext = (file.extension ?? '').toLowerCase();
-    final webMime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : ext == 'heic' ? 'image/heic' : ext == 'heif' ? 'image/heif' : null;
-    return PickedProfileImage(bytes: bytes, name: file.name, mimeType: webMime);
+    return PickedProfileImage(bytes: bytes, name: file.name);
   }
 
   // Android/iOS: keep the existing image_picker flow unchanged.
@@ -3803,22 +3846,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Stack(
                           children: [
-                            Container(
-                              width: 108,
-                              height: 108,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Theme.of(context).colorScheme.surface,
-                              ),
-                              clipBehavior: Clip.antiAlias,
+                            CircleAvatar(
+                              radius: 36,
+                              backgroundColor: Theme.of(context).colorScheme.surface,
                               child: avatar.isNotEmpty
-                                  ? Image.network(
-                                      _optimizedImageUrl(avatar, width: 220, quality: 82),
-                                      fit: BoxFit.contain,
-                                      loadingBuilder: _bazarekImageLoading,
-                                      errorBuilder: (_, __, ___) => Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
+                                  ? ClipOval(
+                                      child: SizedBox(
+                                        width: 72,
+                                        height: 72,
+                                        child: Image.network(
+                                          _optimizedImageUrl(avatar, width: 320, quality: 80),
+                                          fit: BoxFit.contain,
+                                          filterQuality: FilterQuality.medium,
+                                          loadingBuilder: _bazarekImageLoading,
+                                          errorBuilder: (_, __, ___) => Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
+                                        ),
+                                      ),
                                     )
-                                  : Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
+                                  : Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
                             ),
                             Positioned(
                               right: 0,
@@ -3981,7 +4026,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            leading: CircleAvatar(radius:20, child: avatar.isNotEmpty ? ClipOval(child: SizedBox(width:40,height:40,child:Image.network(_optimizedImageUrl(avatar,width:120,quality:72),fit:BoxFit.contain,filterQuality:FilterQuality.low,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:20)))) : const Icon(Icons.person,size:20)),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
