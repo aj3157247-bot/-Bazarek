@@ -775,6 +775,27 @@ class ApiService {
   }
 
 
+  static Future<void> deleteMyAccount() async {
+    var res = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/me/account'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 30));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/me/account'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 30));
+    }
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    if (res.statusCode != 200) {
+      throw Exception(data?['error'] ?? 'حذف حساب انجام نشد.');
+    }
+  }
+
   static Future<void> deleteMyProduct({required String id}) async {
     var res = await http.delete(
       Uri.parse('${ApiConfig.baseUrl}/products/$id'),
@@ -1548,6 +1569,30 @@ class _InlineBoostCard extends StatelessWidget {
   @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF173C91), Color(0xFF0B72E7)]), borderRadius: BorderRadius.circular(16)), child: Row(children: [const Text('🚀', style: TextStyle(fontSize: 22)), const SizedBox(width: 8), Expanded(child: Text(psText(context, 'آگهی‌ات را ویژه کن و بیشتر دیده شو.', 'خپل اعلان ځانګړی کړه او ډېر ولیدل شه.'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))), TextButton(onPressed: onTap, child: Text(psText(context, 'ویژه‌سازی', 'ځانګړی کول'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)))]));
 }
 
+Widget _bazarekImageLoading(Widget child, ImageChunkEvent? progress) {
+  if (progress == null) return child;
+  return Container(
+    color: const Color(0xFFE9EDF4),
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'در حال بارگذاری تصویر...',
+            style: TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _DivarStyleListing extends StatelessWidget {
   final dynamic item;
   const _DivarStyleListing({required this.item});
@@ -1575,7 +1620,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -1802,7 +1847,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -1848,7 +1893,7 @@ class _ProductCard extends StatelessWidget {
             flex: 7,
             child: Stack(fit: StackFit.expand, children: [
               imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                  ? Image.network(imageUrl, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
                   : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
@@ -1900,6 +1945,114 @@ class NumberFormatHelper {
     final n = num.tryParse(value?.toString() ?? '') ?? 0;
     final raw = n.toInt().toString();
     return raw.replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+$)'), (_) => ',');
+  }
+}
+
+class _ListingImageGallery extends StatefulWidget {
+  final List<dynamic> images;
+  const _ListingImageGallery({required this.images});
+
+  @override
+  State<_ListingImageGallery> createState() => _ListingImageGalleryState();
+}
+
+class _ListingImageGalleryState extends State<_ListingImageGallery> {
+  final PageController _controller = PageController();
+  int _current = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int index) {
+    if (index < 0 || index >= widget.images.length) return;
+    _controller.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.images.length;
+    return Column(
+      children: [
+        SizedBox(
+          height: 250,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: total,
+            onPageChanged: (i) => setState(() => _current = i),
+            itemBuilder: (_, i) => Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.network(
+                  widget.images[i].toString(),
+                  fit: BoxFit.cover,
+                  loadingBuilder: _bazarekImageLoading,
+                  errorBuilder: (_, __, ___) => const ColoredBox(
+                    color: Color(0xFFE9EDF4),
+                    child: Icon(Icons.image_not_supported_outlined, size: 56),
+                  ),
+                ),
+                if (total > 1)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(.68),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Text(
+                        '${_current + 1} / $total',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (total > 1)
+          Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: const BoxDecoration(color: Colors.white),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'عکس قبلی',
+                  onPressed: _current > 0 ? () => _goTo(_current - 1) : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 72),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${_current + 1} / $total',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'عکس بعدی',
+                  onPressed: _current < total - 1 ? () => _goTo(_current + 1) : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -2019,13 +2172,7 @@ class ProductDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (images.isNotEmpty)
-              SizedBox(
-                height: 250,
-                child: PageView.builder(
-                  itemCount: images.length,
-                  itemBuilder: (_, i) => Image.network(images[i], fit: BoxFit.cover),
-                ),
-              )
+              _ListingImageGallery(images: images)
             else
               Container(
                 height: 200,
@@ -2498,7 +2645,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final imgs = raw is String ? jsonDecode(raw) : raw;
       final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
       if (u.isNotEmpty) {
-        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover));
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined))));
       }
     } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
@@ -3034,6 +3181,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     name.dispose(); phone.dispose(); city.dispose(); shop.dispose(); bio.dispose();
   }
 
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف همیشگی حساب'),
+        content: const Text(
+          'با حذف حساب، پروفایل، آگهی‌ها و اطلاعات مرتبط با حساب شما برای همیشه حذف می‌شود و این کار قابل بازگردانی نیست.\n\nآیا مطمئن هستید که می‌خواهید حساب خود را برای همیشه حذف کنید؟',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('بله، حسابم را برای همیشه حذف کن'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => saving = true);
+    try {
+      await ApiService.deleteMyAccount();
+      await AuthService.logout();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حساب شما برای همیشه حذف شد.')));
+        setState(() { profile = {}; error = null; });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
   Widget _infoTile(IconData icon, String title, String value) {
     if (value.trim().isEmpty) return const SizedBox.shrink();
     return ListTile(
@@ -3143,7 +3325,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
                   const Divider(),
                   SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
-                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
+                    title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'),
+                    onTap: saving ? null : _deleteAccount,
+                  ),
                   const SizedBox(height: 30),
                 ],
               ),
@@ -3575,7 +3763,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickImage() async {
-    if (imageBytes.length >= 20) { _msg('حداکثر ۲۰ عکس مجاز است.'); return; }
+    if (imageBytes.length >= 10) { _msg('حداکثر ۱۰ عکس مجاز است.'); return; }
 
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
@@ -3584,7 +3772,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         type: FileType.image,
       );
       if (result.isEmpty) return;
-      final remaining = 20 - imageBytes.length;
+      final remaining = 10 - imageBytes.length;
       for (final file in result.take(remaining)) {
         final bytes = await file.readAsBytes();
         if (bytes.isEmpty) continue;
@@ -3602,7 +3790,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       maxHeight: 2000,
     );
     if (picked.isEmpty) return;
-    final remaining = 20 - imageBytes.length;
+    final remaining = 10 - imageBytes.length;
     for (final image in picked.take(remaining)) {
       imageBytes.add(await image.readAsBytes());
       imageNames.add(image.name);
@@ -3815,7 +4003,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             onChanged: (val) => setState(() => isNegotiable = val),
           ),
           const SizedBox(height: 12),
-          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (var i = 0; i < imageBytes.length; i++)
@@ -3823,7 +4011,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.cover)),
                 Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
               ]),
-            if (imageBytes.length < 20) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
+            if (imageBytes.length < 10) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
           ]),
           const SizedBox(height: 18),
           FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.publish), label: Text(publishing ? 'در حال انتشار...' : 'ثبت و انتشار آگهی')),
