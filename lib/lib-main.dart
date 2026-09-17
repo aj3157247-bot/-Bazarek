@@ -294,7 +294,6 @@ const List<Map<String, dynamic>> categories = [
   {'id': 'social_pages', 'title': 'صفحات مجازی', 'icon': Icons.public},
 ];
 
-
 const Map<String, List<Map<String, String>>> subcategories = {
   'real_estate': [
     {'id':'house_rent','title':'خانه کرایی'},
@@ -525,8 +524,6 @@ class ApiService {
     return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
   }
 
-  // Payment methods are read-only configuration for the future online
-  // payment integration. Manual payment remains enabled regardless.
   static Future<Map<String, dynamic>> getPaymentMethods() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/payment-methods'), headers: headers).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401 && await refreshSession()) {
@@ -642,7 +639,6 @@ class ApiService {
     return data is List ? data : List<dynamic>.from(data['data'] ?? const []);
   }
 }
-
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -952,10 +948,35 @@ class _ProductCard extends StatelessWidget {
                   ]),
                 ),
               ),
-              SizedBox(width: 128, height: 126, child: Stack(fit: StackFit.expand, children: [
-                imageUrl.isNotEmpty ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)) : Container(color: Colors.grey.shade300, child: const Icon(Icons.image, size: 42)),
-                if (boostLabel.isNotEmpty) Positioned(top: 7, right: 7, child: DecoratedBox(decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))))),
-              ])),
+              SizedBox(
+                width: 128,
+                height: 126,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    imageUrl.isNotEmpty
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                          )
+                        : Container(color: Colors.grey.shade300, child: const Icon(Icons.image, size: 42)),
+                    if (boostLabel.isNotEmpty)
+                      Positioned(
+                        top: 7,
+                        right: 7,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                            child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -998,7 +1019,11 @@ class ProductDetailScreen extends StatelessWidget {
                 height: 250,
                 child: PageView.builder(
                   itemCount: images.length,
-                  itemBuilder: (_, i) => Image.network(images[i], fit: BoxFit.cover),
+                  itemBuilder: (_, i) => Image.network(
+                    images[i],
+                    fit: BoxFit.contain,
+                    alignment: Alignment.center,
+                  ),
                 ),
               )
             else
@@ -1079,7 +1104,6 @@ class ProductDetailScreen extends StatelessWidget {
                       return;
                     }
 
-                    // تبدیل ارقام فارسی/عربی به ارقام انگلیسی برای tel:
                     const fa = '۰۱۲۳۴۵۶۷۸۹';
                     const ar = '٠١٢٣٤٥٦٧٨٩';
                     const en = '0123456789';
@@ -1319,7 +1343,14 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final imgs = raw is String ? jsonDecode(raw) : raw;
       final u = imgs is List && imgs.isNotEmpty ? imgs.first.toString() : '';
       if (u.isNotEmpty) {
-        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(u, fit: BoxFit.cover));
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            u,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+          ),
+        );
       }
     } catch (_) {}
     return const DecoratedBox(decoration: BoxDecoration(color: Colors.black12), child: Icon(Icons.image));
@@ -1357,8 +1388,6 @@ class _BoostScreenState extends State<BoostScreen> {
     try { payment = await ApiService.getPaymentInfo(); } catch (_) {}
     final bank = payment['bank'] is Map ? Map<String, dynamic>.from(payment['bank']) : <String, dynamic>{};
     final card = (payment['card_number'] ?? bank['card_number'] ?? payment['account_number'] ?? bank['account_number'] ?? '').toString();
-    // شماره کارت را از هر فاصله/کاراکتر قالب‌بندی جدا می‌کنیم تا ترتیب منطقی اعداد
-    // هنگام کپی در محیط‌های RTL تغییر نکند. مقدار Clipboard فقط رقم‌های واقعی است.
     final cardDigits = card
         .replaceAll('۰', '0').replaceAll('۱', '1').replaceAll('۲', '2').replaceAll('۳', '3').replaceAll('۴', '4')
         .replaceAll('۵', '5').replaceAll('۶', '6').replaceAll('۷', '7').replaceAll('۸', '8').replaceAll('۹', '9')
@@ -1401,7 +1430,6 @@ class _BoostScreenState extends State<BoostScreen> {
                   IconButton(
                     tooltip: ps ? 'کاپي' : 'کپی',
                     onPressed: cardDigits.isEmpty ? null : () async {
-                      // عمداً فقط رقم‌ها کپی می‌شوند؛ هیچ فاصله یا کاراکتر RTL داخل Clipboard نمی‌رود.
                       await Clipboard.setData(ClipboardData(text: cardDigits));
                       if (dialogContext.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1604,9 +1632,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
                   }
                 },
-                child: CircleAvatar(
-                  backgroundImage: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty) ? NetworkImage(AuthService.avatarUrl!) : null,
-                  child: (AuthService.avatarUrl == null || AuthService.avatarUrl!.isEmpty) ? const Icon(Icons.person, size: 40) : null,
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    shape: BoxShape.circle,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
+                      ? Image.network(
+                          AuthService.avatarUrl!,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          width: 72,
+                          height: 72,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 40),
+                        )
+                      : const Icon(Icons.person, size: 40),
                 ),
               ),
               accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
@@ -1966,8 +2009,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   Future<bool> _ensureAuthenticated() async {
     if (AuthService.isLoggedIn) {
-      // اگر access token فعلی معتبر نیست، refresh token را امتحان می‌کنیم.
-      // در صورت نبود refresh token، ورود مجدد لازم است.
       return true;
     }
 
@@ -1984,7 +2025,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   Future<bool> _refreshIfPossible() async {
     if (!AuthService.isLoggedIn) return false;
-    // فقط زمانی که refresh token داریم می‌توانیم نشست را تمدید کنیم.
     if (AuthService.refreshToken == null || AuthService.refreshToken!.isEmpty) {
       return true;
     }
@@ -1999,8 +2039,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
     if (province.isEmpty) { _msg('ولایت آگهی را انتخاب کنید.'); return; }
     if (imageBytes.isEmpty) { _msg('حداقل یک عکس برای آگهی انتخاب کنید.'); return; }
 
-    // انتشار و آپلود عکس‌ها نیاز به حساب کاربری دارد. اگر وارد نشده،
-    // ابتدا صفحه ورود را باز می‌کنیم و پس از ورود ادامه می‌دهیم.
     if (!await _ensureAuthenticated()) {
       if (mounted) _msg('برای انتشار آگهی ابتدا وارد حساب خود شوید.');
       return;
