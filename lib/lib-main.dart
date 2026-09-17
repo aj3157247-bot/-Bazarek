@@ -1622,34 +1622,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
               currentAccountPicture: GestureDetector(
                 onTap: () async {
                   final picker = ImagePicker();
-                  final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1000);
+                  final image = await picker.pickImage(
+                    source: ImageSource.gallery,
+                    imageQuality: 85,
+                    maxWidth: 1000,
+                  );
                   if (image == null) return;
                   try {
                     await ApiService.uploadAvatar(image);
                     if (mounted) setState(() {});
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(psText(context, 'عکس پروفایل با موفقیت تغییر کرد.', 'ستاسو د پروفایل انځور بدل شو.'))));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            psText(
+                              context,
+                              'عکس پروفایل با موفقیت تغییر کرد.',
+                              'ستاسو د پروفایل انځور بدل شو.',
+                            ),
+                          ),
+                        ),
+                      );
+                    }
                   } catch (e) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(e.toString().replaceFirst('Exception: ', '')),
+                        ),
+                      );
+                    }
                   }
                 },
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
+                child: ClipOval(
+                  child: Container(
+                    width: 72,
+                    height: 72,
                     color: Theme.of(context).colorScheme.surface,
-                    shape: BoxShape.circle,
+                    child: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
+                        ? Image.network(
+                            AuthService.avatarUrl!,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 40),
+                          )
+                        : const Icon(Icons.person, size: 40),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
-                      ? Image.network(
-                          AuthService.avatarUrl!,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          width: 72,
-                          height: 72,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 40),
-                        )
-                      : const Icon(Icons.person, size: 40),
                 ),
               ),
               accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
