@@ -1776,6 +1776,17 @@ Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent?
   );
 }
 
+String _originalImageUrl(String url) {
+  final u = url.trim();
+  if (u.isEmpty) return u;
+  const renderMarker = '/storage/v1/render/image/public/';
+  const objectMarker = '/storage/v1/object/public/';
+  if (u.contains(renderMarker)) {
+    return u.split('?').first.replaceFirst(renderMarker, objectMarker);
+  }
+  return u.split('?').first;
+}
+
 String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
   final u = url.trim();
   if (u.isEmpty) return u;
