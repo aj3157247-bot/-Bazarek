@@ -1020,9 +1020,7 @@ class ProductDetailScreen extends StatelessWidget {
                 child: PageView.builder(
                   itemCount: images.length,
                   itemBuilder: (_, i) => Image.network(
-                    images[i],
-                    fit: BoxFit.contain,
-                    alignment: Alignment.center,
+                    images[i], fit: BoxFit.cover,
                   ),
                 ),
               )
@@ -1345,10 +1343,7 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       if (u.isNotEmpty) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            u,
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
+          child: Image.network(u, fit: BoxFit.cover,
           ),
         );
       }

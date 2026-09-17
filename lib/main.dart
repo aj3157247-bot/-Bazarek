@@ -1776,21 +1776,16 @@ Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent?
   );
 }
 
-String _originalImageUrl(String url) {
+String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
   final u = url.trim();
   if (u.isEmpty) return u;
-  const renderMarker = '/storage/v1/render/image/public/';
-  const objectMarker = '/storage/v1/object/public/';
-  if (u.contains(renderMarker)) {
-    return u.split('?').first.replaceFirst(renderMarker, objectMarker);
-  }
-  return u.split('?').first;
-}
-
-String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
-  // Existing callers intentionally receive the original file, never a
-  // transformed/cropped Supabase image.
-  return _originalImageUrl(url);
+  // Supabase Storage Image Transformations keep original files intact while
+  // delivering smaller, faster images to browsers and phones.
+  final marker = '/storage/v1/object/public/';
+  if (!u.contains(marker)) return u;
+  final transformed = u.replaceFirst(marker, '/storage/v1/render/image/public/');
+  final separator = transformed.contains('?') ? '&' : '?';
+  return '$transformed${separator}width=$width&quality=$quality';
 }
 
 String _displayListingPrice(BuildContext context, dynamic item) {

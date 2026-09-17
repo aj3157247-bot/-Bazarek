@@ -523,7 +523,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
   Widget _productImage(Map<String, dynamic> p, {double? height, double? width}) {
     String? url;
     try { final v = jsonDecode(p['image_url']?.toString() ?? ''); if (v is List && v.isNotEmpty) url = v.first.toString(); else if (p['image_url']?.toString().startsWith('http') == true) url = p['image_url'].toString(); } catch (_) {}
-    return SizedBox(width: width ?? 64, height: height ?? 64, child: ClipRRect(borderRadius: BorderRadius.circular(8), child: url != null ? Image.network(url, fit: BoxFit.contain, alignment: Alignment.center, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined)) : const Icon(Icons.image_outlined)));
+    return SizedBox(width: width ?? 64, height: height ?? 64, child: ClipRRect(borderRadius: BorderRadius.circular(8), child: url != null ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined)) : const Icon(Icons.image_outlined)));
   }
 
   Widget _statusChip(String s) => Chip(label: Text(s == 'open' ? 'باز' : s == 'reviewed' ? 'بررسی‌شده' : 'ردشده'));
