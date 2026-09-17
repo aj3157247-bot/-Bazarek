@@ -1666,7 +1666,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     image: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
                         ? DecorationImage(
-                            image: NetworkImage(AuthService.avatarUrl!),
+                            image: NetworkImage('${AuthService.avatarUrl!}?v=${DateTime.now().millisecondsSinceEpoch}'),
                             fit: BoxFit.contain,
                           )
                         : null,
