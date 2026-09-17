@@ -1105,7 +1105,7 @@ class ProductDetailScreen extends StatelessWidget {
                     }
 
                     const fa = '۰۱۲۳۴۵۶۷۸۹';
-                    const ar = '٠١٢٣٤٥٦٧٨٩';
+                    const ar = '٠١٢٣٤٥٦٧۸۹';
                     const en = '0123456789';
                     for (var i = 0; i < 10; i++) {
                       phone = phone.replaceAll(fa[i], en[i]).replaceAll(ar[i], en[i]);
@@ -1615,7 +1615,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final picker = ImagePicker();
     final image = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 90, // بدون برش‌خوردگی
+      imageQuality: 90,
     );
     if (image == null) return;
     try {
@@ -1655,19 +1655,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             UserAccountsDrawerHeader(
               currentAccountPicture: GestureDetector(
                 onTap: _pickAndUploadAvatar,
-                child: ClipOval(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    color: Theme.of(context).colorScheme.surface,
-                    child: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
-                        ? Image.network(
-                            '${AuthService.avatarUrl!}?v=${DateTime.now().millisecondsSinceEpoch}',
-                            fit: BoxFit.cover,
-                            alignment: Alignment.topCenter,
-                          )
-                        : const Icon(Icons.person, size: 40),
-                  ),
+                child: CircleAvatar(
+                  radius: 36,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  backgroundImage: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
+                      ? NetworkImage('${AuthService.avatarUrl!}?v=${DateTime.now().millisecondsSinceEpoch}')
+                      : null,
+                  child: (AuthService.avatarUrl == null || AuthService.avatarUrl!.isEmpty)
+                      ? const Icon(Icons.person, size: 40)
+                      : null,
                 ),
               ),
               accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
