@@ -1776,22 +1776,18 @@ Widget _bazarekImageLoading(BuildContext context, Widget child, ImageChunkEvent?
   );
 }
 
-String _originalImageUrl(String url) {
+String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
   final u = url.trim();
   if (u.isEmpty) return u;
-  const renderMarker = '/storage/v1/render/image/public/';
-  const objectMarker = '/storage/v1/object/public/';
-  if (u.contains(renderMarker)) {
-    return u.split('?').first.replaceFirst(renderMarker, objectMarker);
-  }
-  return u.split('?').first;
+  // Supabase Storage Image Transformations keep original files intact while
+  // delivering smaller, faster images to browsers and phones.
+  final marker = '/storage/v1/object/public/';
+  if (!u.contains(marker)) return u;
+  final transformed = u.replaceFirst(marker, '/storage/v1/render/image/public/');
+  final separator = transformed.contains('?') ? '&' : '?';
+  return '$transformed${separator}width=$width&quality=$quality';
 }
 
-String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
-  // Existing callers intentionally receive the original file, never a
-  // transformed/cropped Supabase image.
-  return _originalImageUrl(url);
-}
 
 String _displayListingPrice(BuildContext context, dynamic item) {
   final raw = item['price'];
@@ -2622,7 +2618,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final name=profile['shop_name']?.toString().trim().isNotEmpty==true?profile['shop_name'].toString():(profile['full_name']?.toString().trim().isNotEmpty==true?profile['full_name'].toString():widget.sellerName);
     final avatar=profile['avatar_url']?.toString()??''; final followers=int.tryParse('${profile['followers_count']??0}')??0; final rating=double.tryParse('${profile['rating']??0}')??0;
     return Scaffold(appBar:AppBar(title:Text(name),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[
-      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[SizedBox(width:92,height:92,child:avatar.isNotEmpty?Image.network(_originalImageUrl(avatar),width:92,height:92,fit:BoxFit.contain,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:46)):const Icon(Icons.person,size:46)),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
+      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[SizedBox(width:92,height:92,child:ClipOval(child:avatar.isNotEmpty?Image.network(avatar,fit:kIsWeb ? BoxFit.scaleDown : BoxFit.contain,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:46)):const Icon(Icons.person,size:46))),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
       Padding(padding:const EdgeInsets.fromLTRB(4,12,4,8),child:Text('آگهی‌های این فروشنده (${listings.length})',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
       if(listings.isEmpty)const Padding(padding:EdgeInsets.all(20),child:Center(child:Text('این فروشنده آگهی فعالی ندارد.'))),
       ...listings.map((x)=>_DivarStyleListing(item:x)),
@@ -2716,7 +2712,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               return ListTile(
                                 leading: CircleAvatar(
                                   radius: 27,
-                                  backgroundImage: image.isNotEmpty ? NetworkImage(_originalImageUrl(image)) : null,
+                                  backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
                                   child: image.isEmpty ? const Icon(Icons.person) : null,
                                 ),
                                 title: Text(c['other_user_name']?.toString().trim().isNotEmpty == true ? c['other_user_name'].toString() : 'کاربر بازارک'),
@@ -3799,14 +3795,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Container(
                               width: 108,
                               height: 108,
-                              alignment: Alignment.center,
-                              color: Theme.of(context).colorScheme.surface,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                shape: BoxShape.circle,
+                              ),
+                              clipBehavior: Clip.antiAlias,
                               child: avatar.isNotEmpty
                                   ? Image.network(
-                                      _originalImageUrl(avatar),
-                                      width: 108,
-                                      height: 108,
-                                      fit: BoxFit.contain,
+                                      avatar,
+                                      fit: kIsWeb ? BoxFit.scaleDown : BoxFit.contain,
                                       errorBuilder: (_, __, ___) => Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
                                     )
                                   : Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
@@ -3972,7 +3969,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           final comment = m['comment']?.toString() ?? '';
                           final listingTitle = m['listing_title']?.toString() ?? '';
                           return ListTile(
-                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(_originalImageUrl(avatar)) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
+                            leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
