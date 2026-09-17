@@ -6,6 +6,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer = require('multer');
 const crypto = require('crypto');
+const sharp = require('sharp');
 const { requireUser, getSupabaseAdmin } = require('./middlewares/auth');
 const requireAdmin = require('./middlewares/adminAuth');
 
@@ -311,40 +312,9 @@ app.patch('/api/me', requireUser, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
 });
 
-
-
 app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'تصویر پروفایل انتخاب نشده است.' });
-
-    // Browsers can send an image as application/octet-stream. Do not reject it
-    // just because the multipart MIME type is missing; determine the type from
-    // the filename first and from the file signature as a final fallback.
-    const originalName = String(req.file.originalname || '').trim();
-    let ext = (originalName.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const mime = String(req.file.mimetype || '').toLowerCase();
-    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif' };
-    const clientMime = String(req.headers['x-image-mime-type'] || '').toLowerCase();
-    const clientExt = String(req.headers['x-image-extension'] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!ext && clientExt) ext = clientExt;
-    let contentType = mime.startsWith('image/') ? mime : (clientMime.startsWith('image/') ? clientMime : (mimeByExt[ext] || ''));
-
-    // Magic-byte detection handles browsers/platforms that provide neither a
-    // useful MIME type nor a useful filename extension.
-    if (!contentType && req.file.buffer) {
-      const b = req.file.buffer;
-      if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp' && ['avif','avis'].includes(b.toString('ascii', 8, 12))) { contentType = 'image/avif'; ext = 'avif'; }
-      else if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp' && ['heic','heix','hevc','hevx','heif','mif1'].includes(b.toString('ascii', 8, 12))) { contentType = 'image/heic'; ext = 'heic'; }
-      else if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) { contentType = 'image/jpeg'; ext = 'jpg'; }
-      else if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) { contentType = 'image/png'; ext = 'png'; }
-      else if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') { contentType = 'image/webp'; ext = 'webp'; }
-      else if (b.length >= 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a')) { contentType = 'image/gif'; ext = 'gif'; }
-    }
-    if (!contentType || !contentType.startsWith('image/')) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
-
-    if (!['jpg','jpeg','png','webp','gif','heic','heif','avif'].includes(ext)) {
-      ext = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1] || 'jpg';
-    }
 
     const db = getSupabaseAdmin();
     const buckets = await db.storage.listBuckets();
@@ -365,9 +335,19 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
       if (error) console.warn('Could not update avatar bucket settings:', error.message);
     }
 
-    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, req.file.buffer, {
-      contentType,
+    // پردازش فایل با sharp جهت رفع چرخش EXIF عکس‌های عمودی موبایل و جلوگیری از زوم شدن
+    const processedBuffer = await sharp(req.file.buffer)
+      .rotate()
+      .resize(400, 400, {
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
+    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, processedBuffer, {
+      contentType: 'image/jpeg',
       cacheControl: '31536000',
       upsert: false,
     });
