@@ -1611,6 +1611,40 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  Future<void> _pickAndUploadAvatar() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90, // بدون برش‌خوردگی
+    );
+    if (image == null) return;
+    try {
+      await ApiService.uploadAvatar(image);
+      if (mounted) setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              psText(
+                context,
+                'عکس پروفایل با موفقیت تغییر کرد.',
+                'ستاسو د پروفایل انځور بدل شو.',
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1620,60 +1654,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (AuthService.isLoggedIn) ...[
             UserAccountsDrawerHeader(
               currentAccountPicture: GestureDetector(
-                onTap: () async {
-                  final picker = ImagePicker();
-                  final image = await picker.pickImage(
-                    source: ImageSource.gallery,
-                    imageQuality: 85,
-                    maxWidth: 1000,
-                  );
-                  if (image == null) return;
-                  try {
-                    await ApiService.uploadAvatar(image);
-                    if (mounted) setState(() {});
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            psText(
-                              context,
-                              'عکس پروفایل با موفقیت تغییر کرد.',
-                              'ستاسو د پروفایل انځور بدل شو.',
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(e.toString().replaceFirst('Exception: ', '')),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                onTap: _pickAndUploadAvatar,
+                child: ClipOval(
+                  child: Container(
+                    width: 72,
+                    height: 72,
                     color: Theme.of(context).colorScheme.surface,
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                      width: 1,
-                    ),
-                    image: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
-                        ? DecorationImage(
-                            image: NetworkImage('${AuthService.avatarUrl!}?v=${DateTime.now().millisecondsSinceEpoch}'),
-                            fit: BoxFit.contain,
+                    child: (AuthService.avatarUrl != null && AuthService.avatarUrl!.isNotEmpty)
+                        ? Image.network(
+                            '${AuthService.avatarUrl!}?v=${DateTime.now().millisecondsSinceEpoch}',
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
                           )
-                        : null,
+                        : const Icon(Icons.person, size: 40),
                   ),
-                  child: (AuthService.avatarUrl == null || AuthService.avatarUrl!.isEmpty)
-                      ? const Icon(Icons.person, size: 40)
-                      : null,
                 ),
               ),
               accountName: Text(AuthService.userName ?? 'کاربر بازارک'),
@@ -1682,13 +1676,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ListTile(
               leading: const Icon(Icons.add_a_photo_outlined),
               title: Text(psText(context, 'تغییر عکس پروفایل', 'د پروفایل انځور بدلول')),
-              subtitle: Text(psText(context, 'یک عکس از گالری انتخاب کنید.', 'له ګالري څخه یو انځور وټاکئ.')),
-              onTap: () async {
-                final picker = ImagePicker();
-                final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1000);
-                if (image == null) return;
-                try { await ApiService.uploadAvatar(image); if (mounted) setState(() {}); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
-              },
+              subtitle: Text(psText(context, 'یک عکس جدید از گالری انتخاب کنید.', 'له ګالري څخه یو نوی انځور وټاکئ.')),
+              onTap: _pickAndUploadAvatar,
             ),
             ListTile(
               leading: const Icon(Icons.notifications_outlined),
