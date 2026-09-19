@@ -1,0 +1,19 @@
+بازارک — اصلاحات وب‌سایت (فقط وب)
+
+فایل تغییرکرده:
+- lib/main.dart
+
+این فایل تغییرات نمایشی وب را با شرط kIsWeb فعال می‌کند: بنر بازارگاه در وب، فضای محتوای عریض‌تر، و کارت‌های آگهی واکنش‌گرا (۲ ستون در موبایل، ۳ در تبلت، و ۴ تا ۵ در دسکتاپ). مسیر چیدمان غیروب/اپلیکیشن از این شاخه وب استفاده نمی‌کند.
+
+اعمال تغییرات:
+1) در GitHub، در همان مخزن متصل به سرویس bazarek-web و شاخه main، فایل lib/main.dart را با فایل داخل ZIP جایگزین کن.
+2) Commit کن.
+3) در Render، سرویس bazarek-web را باز کن و چون Auto-Deploy در تنظیمات فعلی خاموش است، از Manual Deploy گزینه Deploy latest commit را اجرا کن.
+4) تأیید کن Dockerfile Path برابر ./Dockerfile.web و Build Context برابر . باشد. Root Directory خالی باشد.
+5) پس از موفقیت Build/Deploy، سایت را در Incognito یا با پاک‌کردن cache باز کن.
+
+مهم:
+- تغییرات از داخل این ZIP به GitHub یا Render ارسال/Deploy نشده‌اند؛ این کار باید در حساب شما انجام شود.
+- این بسته سورس لازم برای Build وب را دارد؛ Render باید فرمان flutter build web --release را از Dockerfile.web اجرا کند.
+- در این محیط Flutter build اجرا نشده؛ بررسی نهایی را از Deploy log در Render انجام بده.
+- سیستم پرداخت دستی، Backend، Supabase و فایل‌های نامرتبط تغییر نکرده‌اند.
