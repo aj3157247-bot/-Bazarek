@@ -1,0 +1,18 @@
+Bazarek — Amazon-inspired Web Storefront Patch
+
+Contains only:
+  lib/main.dart
+
+Apply:
+1. Use the current repository branch matching the uploaded -Bazarek-main (33).zip.
+2. Replace the repository's lib/main.dart with this file.
+3. Commit and push, then let Render deploy the web service.
+
+Scope:
+- The new storefront is gated by kIsWeb, so the existing non-web HomeScreen layout remains selected for Android.
+- Reuses the existing product API, search, province filter, category navigation, sorting, saved-ad button, product details, and boost/account flow.
+- Does not modify backend, payment logic, admin panel, authentication implementation, Android files, or GitHub Actions workflow.
+- web/index.html already contains <base href="$FLUTTER_BASE_HREF"> in the source archive, so it is intentionally not included.
+
+Important validation note:
+This patch was edited against the supplied source archive. Flutter/Dart SDK is not available in this environment, so `flutter analyze` and `flutter build web --release` could not be run here. Render deployment and live appearance are not verified. Keep a backup of your current lib/main.dart before replacing it.
