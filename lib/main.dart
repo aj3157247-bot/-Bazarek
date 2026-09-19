@@ -1693,7 +1693,8 @@ class _BazarekDesktopHome extends StatelessWidget {
   final bool isLoading;
   final String? loadError;
   final ValueChanged<String> onSearchChanged;
-  final VoidCallback onSearch, onRefresh, onMoreCategories, onLanguage;
+  final VoidCallback onSearch, onMoreCategories, onLanguage;
+  final Future<void> Function() onRefresh;
   final ValueChanged<String?> onProvinceChanged;
   final ValueChanged<Map<String, dynamic>> onCategory;
   final ValueChanged<String> onSort;
