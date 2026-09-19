@@ -122,13 +122,10 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: kIsWeb ? const Color(0xFF146EB4) : const Color(0xFF0066FF),
+          seedColor: const Color(0xFF0066FF),
           brightness: Brightness.light,
         ),
         fontFamily: 'Vazirmatn',
-        appBarTheme: kIsWeb
-            ? const AppBarTheme(backgroundColor: Color(0xFF131921), foregroundColor: Colors.white, elevation: 1)
-            : const AppBarTheme(),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -1383,90 +1380,57 @@ class _MainLayoutState extends State<MainLayout> {
     ProfileScreen(),
   ];
 
-  Future<void> _selectDestination(int idx) async {
-    if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
-      await requireAccount(context);
-      return;
-    }
-    if (mounted) setState(() => _currentIndex = idx);
-  }
-
-  List<NavigationRailDestination> get _webDestinations => [
-    NavigationRailDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: Text(tr(context, 'home'))),
-    NavigationRailDestination(icon: const Icon(Icons.favorite_border_rounded), selectedIcon: const Icon(Icons.favorite_rounded), label: Text(tr(context, 'saved'))),
-    NavigationRailDestination(icon: const Icon(Icons.add_circle_outline), selectedIcon: const Icon(Icons.add_circle), label: Text(tr(context, 'add'))),
-    NavigationRailDestination(icon: const Icon(Icons.chat_bubble_outline_rounded), selectedIcon: const Icon(Icons.chat_bubble_rounded), label: Text(tr(context, 'chat'))),
-    NavigationRailDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: Text(tr(context, 'profile'))),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final desktopWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 1000;
-    final pageStack = ValueListenableBuilder<int>(
-      valueListenable: AuthService.authVersion,
-      builder: (_, __, ___) => IndexedStack(index: _currentIndex, children: _pages),
-    );
-
     return Scaffold(
-      backgroundColor: kIsWeb ? const Color(0xFFF1F3F6) : null,
-      body: desktopWeb
-          ? Column(children: [
-              _BazarekWebHeader(onAccount: () => _selectDestination(4)),
-              Expanded(child: Row(children: [
-                NavigationRail(
-                  extended: true,
-                  minExtendedWidth: 190,
-                  selectedIndex: _currentIndex,
-                  onDestinationSelected: _selectDestination,
-                  destinations: _webDestinations,
-                  backgroundColor: Colors.white,
-                  indicatorColor: const Color(0xFFFFE0A3),
-                  leading: const Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('بازارک', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF146EB4)))),
-                ),
-                const VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: pageStack),
-              ])),
-            ])
-          : pageStack,
-      bottomNavigationBar: desktopWeb ? null : NavigationBar(
+      body: ValueListenableBuilder<int>(
+        valueListenable: AuthService.authVersion,
+        builder: (_, __, ___) => IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: _selectDestination,
+        onDestinationSelected: (idx) async {
+          if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
+            await requireAccount(context);
+            return;
+          }
+          setState(() {
+            _currentIndex = idx;
+          });
+        },
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: tr(context, 'home')),
-          NavigationDestination(icon: const Icon(Icons.favorite_border_rounded), selectedIcon: const Icon(Icons.favorite_rounded), label: tr(context, 'saved')),
-          NavigationDestination(icon: const Icon(Icons.add_circle_outline), selectedIcon: const Icon(Icons.add_circle), label: tr(context, 'add')),
-          NavigationDestination(icon: const Icon(Icons.chat_bubble_outline_rounded), selectedIcon: const Icon(Icons.chat_bubble_rounded), label: tr(context, 'chat')),
-          NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: tr(context, 'profile')),
+          NavigationDestination(
+            icon: const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(Icons.home),
+            label: tr(context, 'home'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.favorite_border_rounded),
+            selectedIcon: const Icon(Icons.favorite_rounded),
+            label: tr(context, 'saved'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.add_circle_outline),
+            selectedIcon: const Icon(Icons.add_circle),
+            label: tr(context, 'add'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            selectedIcon: const Icon(Icons.chat_bubble_rounded),
+            label: tr(context, 'chat'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.person_outline),
+            selectedIcon: const Icon(Icons.person),
+            label: tr(context, 'profile'),
+          ),
         ],
       ),
     );
   }
-}
-
-class _BazarekWebHeader extends StatelessWidget {
-  final VoidCallback onAccount;
-  const _BazarekWebHeader({required this.onAccount});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 76,
-    padding: const EdgeInsets.symmetric(horizontal: 28),
-    decoration: const BoxDecoration(color: Color(0xFF131921), boxShadow: [BoxShadow(color: Color(0x18000000), blurRadius: 5, offset: Offset(0, 2))]),
-    child: Row(children: [
-      Container(width: 42, height: 42, padding: const EdgeInsets.all(3), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain)),
-      const SizedBox(width: 12),
-      const Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('بازارک', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.1)),
-        Text('بازار آنلاین افغانستان', style: TextStyle(color: Color(0xFFD5D9D9), fontSize: 11)),
-      ]),
-      const Spacer(),
-      const Icon(Icons.local_shipping_outlined, color: Color(0xFFFFC857), size: 21),
-      const SizedBox(width: 8),
-      const Text('خرید و فروش آسان در سراسر افغانستان', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-      const SizedBox(width: 24),
-      OutlinedButton.icon(onPressed: onAccount, icon: const Icon(Icons.person_outline, size: 19), label: Text(AuthService.isLoggedIn ? 'حساب من' : 'ورود / ثبت‌نام'), style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Color(0xFF87909B)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)))),
-    ]),
-  );
 }
 
 class HomeScreen extends StatefulWidget {
@@ -1538,12 +1502,21 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= (kIsWeb ? 760 : 900);
+    final isWide = width >= 900;
     final isTablet = width >= 620;
     final visibleCategories = categories.take(isWide ? 10 : (isTablet ? 8 : 6)).toList();
 
+    // A dedicated web storefront. Native Android keeps its existing layout.
+    if (kIsWeb) {
+      return _buildWebStorefront(
+        width: width,
+        isWide: isWide,
+        visibleCategories: visibleCategories,
+      );
+    }
+
     return Scaffold(
-      backgroundColor: kIsWeb ? const Color(0xFFEAEDED) : const Color(0xFFF7F8FB),
+      backgroundColor: const Color(0xFFF7F8FB),
       body: RefreshIndicator(
         onRefresh: _loadProducts,
         child: CustomScrollView(
@@ -1564,10 +1537,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           onLanguage: _toggleLanguage,
                         ),
                         const SizedBox(height: 10),
-                        if (kIsWeb && isWide) ...[
-                          const _BazarekAmazonHero(),
-                          const SizedBox(height: 14),
-                        ],
                         _BazarekSearchBar(
                           controller: _searchController,
                           onChanged: (value) {
@@ -1676,29 +1645,249 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildWebStorefront({
+    required double width,
+    required bool isWide,
+    required List<Map<String, dynamic>> visibleCategories,
+  }) {
+    final horizontal = width >= 900 ? 28.0 : 14.0;
+    final title = selectedCategory.isEmpty && selectedProvince.isEmpty && searchQuery.trim().isEmpty
+        ? tr(context, 'fresh_ads')
+        : (Localizations.localeOf(context).languageCode == 'ps' ? 'د اعلانونو پایلې' : 'نتایج جستجو');
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFEAEDED),
+      body: RefreshIndicator(
+        onRefresh: _loadProducts,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          children: [
+            // Amazon-inspired marketplace masthead, branded for Bazarek.
+            Container(
+              color: const Color(0xFF131921),
+              padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: 13),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1480),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 43, height: 43,
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                            child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                            Text('بازارک', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900, height: 1.0)),
+                            SizedBox(height: 3),
+                            Text('بازار آنلاین افغانستان', style: TextStyle(color: Color(0xFFD5D9D9), fontSize: 11)),
+                          ]),
+                          const Spacer(),
+                          if (isWide) ...[
+                            const Icon(Icons.location_on_outlined, color: Colors.white70, size: 20),
+                            const SizedBox(width: 5),
+                            Text(selectedProvince.isEmpty ? tr(context, 'all_provinces') : localizedProvince(context, selectedProvince), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                            const SizedBox(width: 12),
+                          ],
+                          IconButton(
+                            tooltip: psText(context, 'تغییر زبان', 'ژبه بدلول'),
+                            onPressed: _toggleLanguage,
+                            icon: const Icon(Icons.translate_rounded, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(9)),
+                              child: _BazarekSearchBar(
+                                controller: _searchController,
+                                onChanged: (value) {
+                                  searchQuery = value;
+                                  Future.delayed(const Duration(milliseconds: 450), () {
+                                    if (!mounted || searchQuery != value) return;
+                                    _loadProducts();
+                                  });
+                                },
+                                onSubmit: _loadProducts,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          PopupMenuButton<String>(
+                            onSelected: (val) { setState(() => selectedProvince = val); _loadProducts(); },
+                            itemBuilder: (context) => [
+                              PopupMenuItem<String>(value: '', child: Text(tr(context, 'all_provinces'))),
+                              ...provinces.map((p) => PopupMenuItem<String>(value: p, child: Text(localizedProvince(context, p)))),
+                            ],
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 15),
+                              decoration: BoxDecoration(color: const Color(0xFF37475A), borderRadius: BorderRadius.circular(9), border: Border.all(color: Colors.white24)),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.location_on_outlined, color: Colors.white, size: 19),
+                                if (width >= 480) ...[
+                                  const SizedBox(width: 5),
+                                  ConstrainedBox(constraints: const BoxConstraints(maxWidth: 125), child: Text(selectedProvince.isEmpty ? tr(context, 'all_provinces') : localizedProvince(context, selectedProvince), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
+                                  const Icon(Icons.arrow_drop_down, color: Colors.white),
+                                ],
+                              ]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              color: const Color(0xFF232F3E),
+              padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: 10),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1480),
+                  child: Row(children: [
+                    const Icon(Icons.menu, color: Colors.white, size: 20),
+                    const SizedBox(width: 7),
+                    Text(psText(context, 'دسته‌بندی‌ها', 'کټګورۍ'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: SizedBox(
+                        height: 24,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: visibleCategories.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 18),
+                          itemBuilder: (_, i) {
+                            final c = visibleCategories[i];
+                            return InkWell(
+                              onTap: () => _openCategory(c),
+                              child: Center(child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())), child: Text(psText(context, 'همه', 'ټول'), style: const TextStyle(color: Color(0xFFFFD814), fontWeight: FontWeight.w900))),
+                  ]),
+                ),
+              ),
+            ),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1480),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 32),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: isWide ? 30 : 20, vertical: isWide ? 27 : 22),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(begin: Alignment.centerRight, end: Alignment.centerLeft, colors: [Color(0xFF263F69), Color(0xFF172B4D), Color(0xFF101B2D)]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [BoxShadow(color: Color(0x18000000), blurRadius: 14, offset: Offset(0, 5))],
+                      ),
+                      child: isWide
+                          ? Row(children: [
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(psText(context, 'بازار افغانستان، همه‌چیز یک‌جا', 'د افغانستان بازار، هر څه په یوه ځای'), style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w900, height: 1.25)),
+                                const SizedBox(height: 9),
+                                Text(psText(context, 'خرید و فروش آسان؛ از وسایل خانه تا موتر و موبایل.', 'اسانه پېر او پلور؛ د کور له وسایلو تر موټر او موبایل پورې.'), style: const TextStyle(color: Color(0xFFE1E8F0), fontSize: 14, height: 1.6)),
+                                const SizedBox(height: 17),
+                                Wrap(spacing: 10, runSpacing: 8, children: [
+                                  _WebHeroAction(label: psText(context, 'دیدن همه آگهی‌ها', 'ټول اعلانونه وګورئ'), onTap: () { setState(() { selectedCategory = ''; selectedProvince = ''; searchQuery = ''; _searchController.clear(); }); _loadProducts(); }),
+                                  _WebHeroAction(label: psText(context, 'مرور دسته‌بندی‌ها', 'کټګورۍ وګورئ'), outlined: true, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()))),
+                                ]),
+                              ])),
+                              const SizedBox(width: 20),
+                              Container(width: 170, height: 130, decoration: BoxDecoration(color: Colors.white.withOpacity(.09), borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.storefront_rounded, size: 88, color: Color(0xFFFFD814))),
+                            ])
+                          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(psText(context, 'بازار افغانستان، همه‌چیز یک‌جا', 'د افغانستان بازار، هر څه په یوه ځای'), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.25)),
+                              const SizedBox(height: 8),
+                              Text(psText(context, 'خرید و فروش آسان؛ از وسایل خانه تا موتر و موبایل.', 'اسانه پېر او پلور؛ د کور له وسایلو تر موټر او موبایل پورې.'), style: const TextStyle(color: Color(0xFFE1E8F0), fontSize: 13, height: 1.6)),
+                              const SizedBox(height: 15),
+                              Wrap(spacing: 8, runSpacing: 8, children: [
+                                _WebHeroAction(label: psText(context, 'همه آگهی‌ها', 'ټول اعلانونه'), onTap: () { setState(() { selectedCategory = ''; selectedProvince = ''; searchQuery = ''; _searchController.clear(); }); _loadProducts(); }),
+                                _WebHeroAction(label: psText(context, 'دسته‌بندی‌ها', 'کټګورۍ'), outlined: true, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()))),
+                              ]),
+                            ]),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFD5D9D9))),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Row(children: [Expanded(child: Text(psText(context, 'خرید بر اساس دسته‌بندی', 'د کټګورۍ له مخې پېر'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF172B4D)))), TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())), child: Text(tr(context, 'view_all')))]),
+                        const SizedBox(height: 5),
+                        _CategoryStrip(categories: visibleCategories, onCategory: _openCategory, onMore: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()))),
+                      ]),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFD5D9D9))),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Row(children: [Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF172B4D)))), if (products.isNotEmpty) Text('${products.length} ${Localizations.localeOf(context).languageCode == 'ps' ? 'اعلان' : 'آگهی'}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700))]),
+                        const SizedBox(height: 10),
+                        _HomeQuickActions(sortMode: sortMode, onSort: (mode) { setState(() => sortMode = mode); _loadProducts(); }, onBoost: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())); }),
+                        const SizedBox(height: 8),
+                        if (isLoading)
+                          const Padding(padding: EdgeInsets.all(45), child: Center(child: CircularProgressIndicator()))
+                        else if (loadError != null)
+                          OfflineErrorView(onRetry: _loadProducts, message: loadError)
+                        else if (products.isEmpty)
+                          Padding(padding: const EdgeInsets.all(35), child: Center(child: Text(psText(context, 'هنوز هیچ آگهی فعالی ثبت نشده است.', 'تر اوسه کوم فعال اعلان نشته.'), textAlign: TextAlign.center)))
+                        else
+                          LayoutBuilder(builder: (context, constraints) {
+                            final columns = constraints.maxWidth >= 1100 ? 3 : (constraints.maxWidth >= 680 ? 2 : 1);
+                            return GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: products.length,
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisExtent: 158, crossAxisSpacing: 12, mainAxisSpacing: 8),
+                              itemBuilder: (context, index) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0xFFD5D9D9))),
+                                child: _DivarStyleListing(item: products[index]),
+                              ),
+                            );
+                          }),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _BazarekAmazonHero extends StatelessWidget {
-  const _BazarekAmazonHero();
-
+class _WebHeroAction extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool outlined;
+  const _WebHeroAction({required this.label, required this.onTap, this.outlined = false});
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 142),
-    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 22),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(begin: Alignment.centerRight, end: Alignment.centerLeft, colors: [Color(0xFF173B5E), Color(0xFF146EB4), Color(0xFF2B8BC6)]),
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: const [BoxShadow(color: Color(0x18000000), blurRadius: 12, offset: Offset(0, 4))],
+  Widget build(BuildContext context) => OutlinedButton(
+    onPressed: onTap,
+    style: OutlinedButton.styleFrom(
+      backgroundColor: outlined ? Colors.transparent : const Color(0xFFFFD814),
+      foregroundColor: outlined ? Colors.white : const Color(0xFF172B4D),
+      side: BorderSide(color: outlined ? Colors.white54 : const Color(0xFFFFD814)),
+      padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
     ),
-    child: Row(children: [
-      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('هر چیزی که دنبالش هستی، اینجاست', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
-        SizedBox(height: 8),
-        Text('از میان آگهی‌های تازه، وسایط، خانه، الکترونیک و هزاران کالای دیگر انتخاب کن.', style: TextStyle(color: Color(0xFFE7F3FB), fontSize: 14, fontWeight: FontWeight.w500)),
-      ])),
-      const SizedBox(width: 22),
-      Container(width: 94, height: 94, decoration: BoxDecoration(color: const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0x40FFFFFF))), child: const Icon(Icons.shopping_bag_rounded, color: Color(0xFFFFC857), size: 54)),
-    ]),
+    child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
   );
 }
 
@@ -1761,7 +1950,6 @@ class _BazarekTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final desktopWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 1000;
     return Row(children: [
       PopupMenuButton<String>(
         onSelected: onProvinceChanged,
@@ -1769,14 +1957,12 @@ class _BazarekTopBar extends StatelessWidget {
         child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.black.withOpacity(.07))), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.location_on_outlined, size: 20), const SizedBox(width: 5), Text(selectedProvince.isEmpty ? tr(context, 'all_provinces') : localizedProvince(context, selectedProvince), style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(width: 2), const Icon(Icons.keyboard_arrow_down_rounded, size: 18)])),
       ),
       const Spacer(),
-      if (!desktopWeb) ...[
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('بازارک', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
-          Text(psText(context, 'خرید و فروش در سراسر افغانستان', 'په ټول افغانستان کې پېر او پلور'), style: const TextStyle(fontSize: 10, color: Colors.black54)),
-        ]),
-        const SizedBox(width: 8),
-        Container(width: 50, height: 50, padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Color(0x15000000), blurRadius: 10)]), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain)),
-      ],
+      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Text('بازارک', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
+        Text(psText(context, 'خرید و فروش در سراسر افغانستان', 'په ټول افغانستان کې پېر او پلور'), style: const TextStyle(fontSize: 10, color: Colors.black54)),
+      ]),
+      const SizedBox(width: 8),
+      Container(width: 50, height: 50, padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Color(0x15000000), blurRadius: 10)]), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain)),
       IconButton(tooltip: psText(context, 'زبان', 'ژبه'), onPressed: onLanguage, icon: const Icon(Icons.translate_rounded)),
     ]);
   }
