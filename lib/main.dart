@@ -4881,8 +4881,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
       if (result.isEmpty) return;
       final remaining = 20 - imageBytes.length;
       for (final file in result.take(remaining)) {
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) continue;
+        final bytes = file.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
         imageBytes.add(bytes);
         imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
       }
