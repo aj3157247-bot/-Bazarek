@@ -1527,16 +1527,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           onProvinceChanged: (val) { setState(() => selectedProvince = val ?? ''); _loadProducts(); },
                           onLanguage: _toggleLanguage,
                         ),
-                        if (kIsWeb && isWide) ...[
-                          const SizedBox(height: 18),
-                          _BazarekWebHero(
-                            onPostAd: () async {
-                              if (!await requireAccount(context)) return;
-                              if (context.mounted) {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
-                              }
-                            },
-                          ),
+                        if (kIsWeb) ...[
+                          const SizedBox(height: 14),
+                          _WebMarketplaceHero(compact: width < 600),
                         ],
                         const SizedBox(height: 10),
                         _BazarekSearchBar(
@@ -1601,24 +1594,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     constraints: BoxConstraints(maxWidth: kIsWeb ? 1440 : 980),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(isWide ? 22 : 12, 0, isWide ? 22 : 12, 30),
-                      child: kIsWeb && isWide
-                          ? LayoutBuilder(
-                              builder: (context, constraints) {
-                                final columns = constraints.maxWidth >= 1250 ? 4 : (constraints.maxWidth >= 900 ? 3 : 2);
-                                return GridView.builder(
+                      child: kIsWeb
+                          ? LayoutBuilder(builder: (context, constraints) {
+                              final available = constraints.maxWidth;
+                              final columns = available >= 1250 ? 5 : available >= 960 ? 4 : available >= 620 ? 3 : 2;
+                              final cardWidth = (available - (columns - 1) * 14) / columns;
+                              return Column(children: [
+                                GridView.builder(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
                                   itemCount: products.length,
                                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: columns,
-                                    crossAxisSpacing: 18,
-                                    mainAxisSpacing: 18,
-                                    mainAxisExtent: 355,
+                                    crossAxisSpacing: 14,
+                                    mainAxisSpacing: 14,
+                                    childAspectRatio: cardWidth / (cardWidth + (available < 620 ? 132 : 118)),
                                   ),
-                                  itemBuilder: (context, index) => _BazarekWebListingCard(item: products[index]),
-                                );
-                              },
-                            )
+                                  itemBuilder: (context, index) => _WebMarketplaceListingCard(item: products[index]),
+                                ),
+                                const SizedBox(height: 18),
+                                _InlineBoostCard(onTap: () async {
+                                  if (!await requireAccount(context)) return;
+                                  if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()));
+                                }),
+                              ]);
+                            })
                           : Column(
                               children: [
                                 for (var i = 0; i < products.length; i++) ...[
@@ -1642,134 +1642,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-}
-
-
-class _BazarekWebHero extends StatelessWidget {
-  final VoidCallback onPostAd;
-  const _BazarekWebHero({required this.onPostAd});
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 28),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [primary, Color.lerp(primary, const Color(0xFF172554), .45)!],
-          begin: Alignment.centerRight,
-          end: Alignment.centerLeft,
-        ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: const [BoxShadow(color: Color(0x180D2463), blurRadius: 24, offset: Offset(0, 9))],
-      ),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(psText(context, 'بازارک؛ بازار بزرگ خرید و فروش افغانستان', 'بازارک؛ د افغانستان د پېر او پلور لوی بازار'),
-            style: const TextStyle(color: Colors.white, fontSize: 25, height: 1.25, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 9),
-          Text(psText(context, 'میلیون‌ها انتخاب؟ از جست‌وجو شروع کن؛ کالایت را پیدا کن یا آگهی‌ات را ثبت کن.', 'خپل د خوښې توکي ولټوئ یا خپل اعلان ثبت کړئ.'),
-            style: const TextStyle(color: Color(0xFFE5EAFB), fontSize: 14, height: 1.5, fontWeight: FontWeight.w500)),
-        ])),
-        const SizedBox(width: 24),
-        FilledButton.icon(
-          onPressed: onPostAd,
-          icon: const Icon(Icons.add_rounded),
-          label: Text(psText(context, 'ثبت آگهی رایگان', 'وړیا اعلان ثبتول')),
-          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: primary,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-            textStyle: const TextStyle(fontWeight: FontWeight.w900)),
-        ),
-      ]),
-    );
-  }
-}
-
-class _BazarekWebListingCard extends StatelessWidget {
-  final dynamic item;
-  const _BazarekWebListingCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    List<dynamic> images = [];
-    try {
-      final raw = item['image_url'];
-      if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
-      if (raw is List) images = raw;
-    } catch (_) {}
-    final imageUrl = images.isNotEmpty ? images.first.toString() : '';
-    final province = localizedProvince(context, item['province']?.toString() ?? '');
-    final location = (item['location_text'] ?? '').toString().trim();
-    final boost = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
-    final primary = Theme.of(context).colorScheme.primary;
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
-        child: Container(
-          decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE8ECF3)), borderRadius: BorderRadius.circular(20)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            SizedBox(height: 205, child: Stack(fit: StackFit.expand, children: [
-              ColoredBox(color: const Color(0xFFF1F4F9), child: imageUrl.isNotEmpty
-                ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 42, color: Color(0xFF9AA4B2)))
-                : const Icon(Icons.image_outlined, size: 42, color: Color(0xFF9AA4B2))),
-              if (images.length > 1) Positioned(top: 10, left: 10, child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(color: Colors.black.withOpacity(.65), borderRadius: BorderRadius.circular(9)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, size: 14, color: Colors.white), const SizedBox(width: 4), Text('${images.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11))]),
-              )),
-              if (boost.isNotEmpty) Positioned(top: 10, right: 10, child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(color: const Color(0xFFFF8A00), borderRadius: BorderRadius.circular(9)),
-                child: Text(boost, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
-              )),
-              Positioned(top: 2, right: 2, child: _SaveButton(item: item)),
-            ])),
-            Expanded(child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15, height: 1.3, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 8),
-                Text(_displayListingPrice(context, item), maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: primary)),
-                const Spacer(),
-                Row(children: [
-                  const Icon(Icons.location_on_outlined, size: 15, color: Color(0xFF8993A3)),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text([province, location].where((x) => x.isNotEmpty).join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF687386), fontWeight: FontWeight.w600))),
-                ]),
-                const SizedBox(height: 6),
-                Row(children: [
-                  const Icon(Icons.schedule_rounded, size: 13, color: Color(0xFF9AA4B2)),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text(_listingCardTime(item['created_at']), style: const TextStyle(fontSize: 10, color: Color(0xFF8993A3)))),
-                  if (item['seller_name']?.toString().trim().isNotEmpty == true)
-                    Flexible(child: Text(item['seller_name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10, color: Color(0xFF687386), fontWeight: FontWeight.w700))),
-                ]),
-              ]),
-            )),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  String _listingCardTime(dynamic raw) {
-    final value = DateTime.tryParse(raw?.toString() ?? '');
-    if (value == null) return '';
-    final d = DateTime.now().difference(value.toLocal());
-    if (d.inMinutes < 60) return '${d.inMinutes.clamp(1, 59)} دقیقه پیش';
-    if (d.inHours < 24) return '${d.inHours} ساعت پیش';
-    if (d.inDays < 7) return '${d.inDays} روز پیش';
-    return '${value.toLocal().year}/${value.toLocal().month.toString().padLeft(2, '0')}/${value.toLocal().day.toString().padLeft(2, '0')}';
   }
 }
 
@@ -2047,6 +1919,100 @@ if (item['turbo_active'] == true)
             Row(children: [const Icon(Icons.schedule_rounded, size: 13, color: Colors.black45), const SizedBox(width: 4), Expanded(child: Text(_listingTime(item['created_at']), style: const TextStyle(fontSize: 10, color: Colors.black45))), if (item['seller_name']?.toString().trim().isNotEmpty == true) Text(item['seller_name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black45, fontWeight: FontWeight.w700))]),
           ])),
         ]),
+      ),
+    );
+  }
+
+  String _listingTime(dynamic raw) {
+    final value = DateTime.tryParse(raw?.toString() ?? '');
+    if (value == null) return '';
+    final d = DateTime.now().difference(value.toLocal());
+    if (d.inMinutes < 60) return '${d.inMinutes.clamp(1, 59)} دقیقه پیش';
+    if (d.inHours < 24) return '${d.inHours} ساعت پیش';
+    if (d.inDays < 7) return '${d.inDays} روز پیش';
+    return '${value.toLocal().year}/${value.toLocal().month.toString().padLeft(2, '0')}/${value.toLocal().day.toString().padLeft(2, '0')}';
+  }
+}
+
+
+class _WebMarketplaceHero extends StatelessWidget {
+  final bool compact;
+  const _WebMarketplaceHero({required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 28, vertical: compact ? 18 : 25),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [Color(0xFF173C91), Color(0xFF0B72E7)]),
+        borderRadius: BorderRadius.circular(compact ? 18 : 24),
+        boxShadow: const [BoxShadow(color: Color(0x1D173C91), blurRadius: 18, offset: Offset(0, 7))],
+      ),
+      child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.white.withOpacity(.16), borderRadius: BorderRadius.circular(30)), child: Text(ps ? 'بازار آنلاین افغانستان' : 'بازار آنلاین افغانستان', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
+          const SizedBox(height: 9),
+          Text(ps ? 'هر څه چې غواړې، په بازارک کې یې ومومه' : 'هر چیزی که می‌خواهی، در بازارک پیدا کن', maxLines: compact ? 2 : 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontSize: compact ? 18 : 25, height: 1.25, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(ps ? 'اعلانونه وپلټئ، پرتله یې کړئ او له پلورونکي سره اړیکه ونیسئ.' : 'آگهی‌ها را جست‌وجو کن، مقایسه کن و مستقیم با فروشنده در تماس شو.', maxLines: compact ? 2 : 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: compact ? 11 : 13, height: 1.4)),
+        ])),
+        if (!compact) ...[
+          const SizedBox(width: 20),
+          Container(width: 76, height: 76, decoration: BoxDecoration(color: Colors.white.withOpacity(.13), shape: BoxShape.circle), child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 42)),
+        ],
+      ]),
+    );
+  }
+}
+
+class _WebMarketplaceListingCard extends StatelessWidget {
+  final dynamic item;
+  const _WebMarketplaceListingCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    List<dynamic> images = [];
+    try {
+      final raw = item['image_url'];
+      if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
+      if (raw is List) images = raw;
+    } catch (_) {}
+    final imageUrl = images.isNotEmpty ? images.first.toString() : '';
+    final price = _displayListingPrice(context, item);
+    final province = localizedProvince(context, item['province']?.toString() ?? '');
+    final location = (item['location_text'] ?? '').toString().trim();
+    final boost = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
+    final title = item['title']?.toString() ?? '';
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(17),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+        child: Container(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(17), border: Border.all(color: const Color(0xFFE8ECF3))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: Stack(fit: StackFit.expand, children: [
+              imageUrl.isNotEmpty
+                  ? Image.network(_optimizedImageUrl(imageUrl, width: 600), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF0F3F8), child: Icon(Icons.image_not_supported_outlined, size: 36, color: Colors.black38)))
+                  : const ColoredBox(color: Color(0xFFF0F3F8), child: Icon(Icons.image_outlined, size: 36, color: Colors.black38)),
+              Positioned(top: 5, left: 5, child: Container(decoration: BoxDecoration(color: Colors.white.withOpacity(.94), shape: BoxShape.circle), child: _SaveButton(item: item))),
+              if (images.length > 1) Positioned(bottom: 7, left: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 12), const SizedBox(width: 3), Text('${images.length}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
+              if (boost.isNotEmpty) Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFF8A00), borderRadius: BorderRadius.circular(7)), child: Text(boost, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)))),
+              if (item['turbo_active'] == true) Positioned(bottom: 7, right: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF173C91), borderRadius: BorderRadius.circular(7)), child: const Text('⚡ توربو', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)))),
+            ])),
+            Padding(padding: const EdgeInsets.fromLTRB(10, 9, 10, 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.25, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
+              const SizedBox(height: 5),
+              Text([province, location].where((x) => x.isNotEmpty).join(' • ').isEmpty ? 'افغانستان' : [province, location].where((x) => x.isNotEmpty).join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+              const SizedBox(height: 3),
+              Text(_listingTime(item['created_at']), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black45)),
+            ])),
+          ]),
+        ),
       ),
     );
   }
