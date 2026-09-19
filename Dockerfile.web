@@ -1,7 +1,21 @@
-# Website-only deployment: serve the independent HTML/CSS/JS storefront.
-# Flutter Android / GitHub Actions APK build is not changed.
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates unzip xz-utils libglu1-mesa && rm -rf /var/lib/apt/lists/*
+ARG FLUTTER_VERSION=3.47.2
+RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git /opt/flutter
+ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
+RUN useradd -m -s /bin/bash flutteruser
+WORKDIR /app
+COPY . .
+RUN chown -R flutteruser:flutteruser /app /opt/flutter
+USER flutteruser
+RUN flutter config --enable-web \
+    && if [ ! -f web/index.html ]; then flutter create . --platforms=web; fi \
+    && flutter pub get \
+    && flutter build web --release --base-href /
 FROM nginx:alpine
-COPY web/ /usr/share/nginx/html/
+COPY --from=build /app/build/web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx.conf
+# Ensure the APK is available from the exact download path used by the app.
+COPY --from=build /app/web/download/bazarek.apk /usr/share/nginx/html/download/bazarek.apk
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
