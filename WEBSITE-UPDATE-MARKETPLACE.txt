@@ -1,0 +1,21 @@
+Bazarek Website Marketplace UI Update
+
+Changed file:
+- lib/main.dart
+
+What this update adds to the WEB layout (kIsWeb guarded):
+- Wider desktop content area (up to 1440px).
+- A desktop-only marketplace hero banner with a post-ad action.
+- Responsive desktop listing cards/grid (4/3/2 columns according to available width), larger product images, price/location/time/seller details, saved-listing action, photo count and promotion badge.
+- Existing mobile/list layout is retained. The APK's runtime layout is not switched to the web grid/banner because these additions are guarded by kIsWeb.
+
+No backend, Supabase, authentication, or payment files were changed. No database migration is required.
+
+Apply:
+1. Extract this ZIP.
+2. Replace the repository's lib/main.dart with the included file.
+3. Commit/push to the branch deployed by Render.
+4. Render must rebuild/redeploy the web service using Dockerfile.web (it runs `flutter build web --release`).
+5. Verify the site after deployment, including desktop and mobile widths.
+
+Note: This repository uses Flutter for its website and APK from a shared Dart source file. The UI changes are runtime-gated to web, but this source file is still part of the shared project. A Flutter web build was not run in this environment; check the Render build log after pushing.
