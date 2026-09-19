@@ -3831,9 +3831,9 @@ Future<PickedProfileImage?> pickProfileImage() async {
       allowMultiple: false,
     );
     if (result == null || result.files.isEmpty) return null;
-    final file = result.files.single;
+    final file = result.files.first;
     final bytes = file.bytes;
-    if (bytes.isEmpty) {
+    if (bytes == null || bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
     return PickedProfileImage(bytes: bytes, name: file.name);
@@ -4684,9 +4684,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
         withData: true,
         allowMultiple: true,
       );
-      if (result.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
       final remaining = 20 - imageBytes.length;
-      for (final file in result.take(remaining)) {
+      for (final file in result.files.take(remaining)) {
         final bytes = file.bytes;
         if (bytes == null || bytes.isEmpty) continue;
         imageBytes.add(bytes);
