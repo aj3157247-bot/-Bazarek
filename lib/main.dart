@@ -122,10 +122,13 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0066FF),
+          seedColor: kIsWeb ? const Color(0xFF146EB4) : const Color(0xFF0066FF),
           brightness: Brightness.light,
         ),
         fontFamily: 'Vazirmatn',
+        appBarTheme: kIsWeb
+            ? const AppBarTheme(backgroundColor: Color(0xFF131921), foregroundColor: Colors.white, elevation: 1)
+            : const AppBarTheme(),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -1380,57 +1383,90 @@ class _MainLayoutState extends State<MainLayout> {
     ProfileScreen(),
   ];
 
+  Future<void> _selectDestination(int idx) async {
+    if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
+      await requireAccount(context);
+      return;
+    }
+    if (mounted) setState(() => _currentIndex = idx);
+  }
+
+  List<NavigationRailDestination> get _webDestinations => [
+    NavigationRailDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: Text(tr(context, 'home'))),
+    NavigationRailDestination(icon: const Icon(Icons.favorite_border_rounded), selectedIcon: const Icon(Icons.favorite_rounded), label: Text(tr(context, 'saved'))),
+    NavigationRailDestination(icon: const Icon(Icons.add_circle_outline), selectedIcon: const Icon(Icons.add_circle), label: Text(tr(context, 'add'))),
+    NavigationRailDestination(icon: const Icon(Icons.chat_bubble_outline_rounded), selectedIcon: const Icon(Icons.chat_bubble_rounded), label: Text(tr(context, 'chat'))),
+    NavigationRailDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: Text(tr(context, 'profile'))),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final desktopWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 1000;
+    final pageStack = ValueListenableBuilder<int>(
+      valueListenable: AuthService.authVersion,
+      builder: (_, __, ___) => IndexedStack(index: _currentIndex, children: _pages),
+    );
+
     return Scaffold(
-      body: ValueListenableBuilder<int>(
-        valueListenable: AuthService.authVersion,
-        builder: (_, __, ___) => IndexedStack(
-          index: _currentIndex,
-          children: _pages,
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
+      backgroundColor: kIsWeb ? const Color(0xFFF1F3F6) : null,
+      body: desktopWeb
+          ? Column(children: [
+              _BazarekWebHeader(onAccount: () => _selectDestination(4)),
+              Expanded(child: Row(children: [
+                NavigationRail(
+                  extended: true,
+                  minExtendedWidth: 190,
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: _selectDestination,
+                  destinations: _webDestinations,
+                  backgroundColor: Colors.white,
+                  indicatorColor: const Color(0xFFFFE0A3),
+                  leading: const Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('بازارک', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF146EB4)))),
+                ),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(child: pageStack),
+              ])),
+            ])
+          : pageStack,
+      bottomNavigationBar: desktopWeb ? null : NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) async {
-          if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
-            await requireAccount(context);
-            return;
-          }
-          setState(() {
-            _currentIndex = idx;
-          });
-        },
+        onDestinationSelected: _selectDestination,
         destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home),
-            label: tr(context, 'home'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.favorite_border_rounded),
-            selectedIcon: const Icon(Icons.favorite_rounded),
-            label: tr(context, 'saved'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.add_circle_outline),
-            selectedIcon: const Icon(Icons.add_circle),
-            label: tr(context, 'add'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.chat_bubble_outline_rounded),
-            selectedIcon: const Icon(Icons.chat_bubble_rounded),
-            label: tr(context, 'chat'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            selectedIcon: const Icon(Icons.person),
-            label: tr(context, 'profile'),
-          ),
+          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: tr(context, 'home')),
+          NavigationDestination(icon: const Icon(Icons.favorite_border_rounded), selectedIcon: const Icon(Icons.favorite_rounded), label: tr(context, 'saved')),
+          NavigationDestination(icon: const Icon(Icons.add_circle_outline), selectedIcon: const Icon(Icons.add_circle), label: tr(context, 'add')),
+          NavigationDestination(icon: const Icon(Icons.chat_bubble_outline_rounded), selectedIcon: const Icon(Icons.chat_bubble_rounded), label: tr(context, 'chat')),
+          NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: tr(context, 'profile')),
         ],
       ),
     );
   }
+}
+
+class _BazarekWebHeader extends StatelessWidget {
+  final VoidCallback onAccount;
+  const _BazarekWebHeader({required this.onAccount});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 76,
+    padding: const EdgeInsets.symmetric(horizontal: 28),
+    decoration: const BoxDecoration(color: Color(0xFF131921), boxShadow: [BoxShadow(color: Color(0x18000000), blurRadius: 5, offset: Offset(0, 2))]),
+    child: Row(children: [
+      Container(width: 42, height: 42, padding: const EdgeInsets.all(3), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain)),
+      const SizedBox(width: 12),
+      const Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('بازارک', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.1)),
+        Text('بازار آنلاین افغانستان', style: TextStyle(color: Color(0xFFD5D9D9), fontSize: 11)),
+      ]),
+      const Spacer(),
+      const Icon(Icons.local_shipping_outlined, color: Color(0xFFFFC857), size: 21),
+      const SizedBox(width: 8),
+      const Text('خرید و فروش آسان در سراسر افغانستان', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(width: 24),
+      OutlinedButton.icon(onPressed: onAccount, icon: const Icon(Icons.person_outline, size: 19), label: Text(AuthService.isLoggedIn ? 'حساب من' : 'ورود / ثبت‌نام'), style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Color(0xFF87909B)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)))),
+    ]),
+  );
 }
 
 class HomeScreen extends StatefulWidget {
@@ -1502,12 +1538,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= 900;
+    final isWide = width >= (kIsWeb ? 760 : 900);
     final isTablet = width >= 620;
     final visibleCategories = categories.take(isWide ? 10 : (isTablet ? 8 : 6)).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FB),
+      backgroundColor: kIsWeb ? const Color(0xFFEAEDED) : const Color(0xFFF7F8FB),
       body: RefreshIndicator(
         onRefresh: _loadProducts,
         child: CustomScrollView(
@@ -1528,6 +1564,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           onLanguage: _toggleLanguage,
                         ),
                         const SizedBox(height: 10),
+                        if (kIsWeb && isWide) ...[
+                          const _BazarekAmazonHero(),
+                          const SizedBox(height: 14),
+                        ],
                         _BazarekSearchBar(
                           controller: _searchController,
                           onChanged: (value) {
@@ -1638,6 +1678,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _BazarekAmazonHero extends StatelessWidget {
+  const _BazarekAmazonHero();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 142),
+    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(begin: Alignment.centerRight, end: Alignment.centerLeft, colors: [Color(0xFF173B5E), Color(0xFF146EB4), Color(0xFF2B8BC6)]),
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: const [BoxShadow(color: Color(0x18000000), blurRadius: 12, offset: Offset(0, 4))],
+    ),
+    child: Row(children: [
+      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('هر چیزی که دنبالش هستی، اینجاست', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
+        SizedBox(height: 8),
+        Text('از میان آگهی‌های تازه، وسایط، خانه، الکترونیک و هزاران کالای دیگر انتخاب کن.', style: TextStyle(color: Color(0xFFE7F3FB), fontSize: 14, fontWeight: FontWeight.w500)),
+      ])),
+      const SizedBox(width: 22),
+      Container(width: 94, height: 94, decoration: BoxDecoration(color: const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0x40FFFFFF))), child: const Icon(Icons.shopping_bag_rounded, color: Color(0xFFFFC857), size: 54)),
+    ]),
+  );
+}
+
 class _BazarekSearchBar extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
@@ -1697,6 +1761,7 @@ class _BazarekTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final desktopWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 1000;
     return Row(children: [
       PopupMenuButton<String>(
         onSelected: onProvinceChanged,
@@ -1704,12 +1769,14 @@ class _BazarekTopBar extends StatelessWidget {
         child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.black.withOpacity(.07))), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.location_on_outlined, size: 20), const SizedBox(width: 5), Text(selectedProvince.isEmpty ? tr(context, 'all_provinces') : localizedProvince(context, selectedProvince), style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(width: 2), const Icon(Icons.keyboard_arrow_down_rounded, size: 18)])),
       ),
       const Spacer(),
-      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text('بازارک', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
-        Text(psText(context, 'خرید و فروش در سراسر افغانستان', 'په ټول افغانستان کې پېر او پلور'), style: const TextStyle(fontSize: 10, color: Colors.black54)),
-      ]),
-      const SizedBox(width: 8),
-      Container(width: 50, height: 50, padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Color(0x15000000), blurRadius: 10)]), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain)),
+      if (!desktopWeb) ...[
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('بازارک', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
+          Text(psText(context, 'خرید و فروش در سراسر افغانستان', 'په ټول افغانستان کې پېر او پلور'), style: const TextStyle(fontSize: 10, color: Colors.black54)),
+        ]),
+        const SizedBox(width: 8),
+        Container(width: 50, height: 50, padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Color(0x15000000), blurRadius: 10)]), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain)),
+      ],
       IconButton(tooltip: psText(context, 'زبان', 'ژبه'), onPressed: onLanguage, icon: const Icon(Icons.translate_rounded)),
     ]);
   }
