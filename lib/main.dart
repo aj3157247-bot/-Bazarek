@@ -1380,54 +1380,54 @@ class _MainLayoutState extends State<MainLayout> {
     ProfileScreen(),
   ];
 
+  Future<void> _selectTab(int idx) async {
+    if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
+      await requireAccount(context);
+      return;
+    }
+    if (mounted) setState(() => _currentIndex = idx);
+  }
+
+  List<NavigationDestination> get _destinations => [
+    NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home_rounded), label: tr(context, 'home')),
+    NavigationDestination(icon: const Icon(Icons.favorite_border_rounded), selectedIcon: const Icon(Icons.favorite_rounded), label: tr(context, 'saved')),
+    NavigationDestination(icon: const Icon(Icons.add_circle_outline_rounded), selectedIcon: const Icon(Icons.add_circle_rounded), label: tr(context, 'add')),
+    NavigationDestination(icon: const Icon(Icons.chat_bubble_outline_rounded), selectedIcon: const Icon(Icons.chat_bubble_rounded), label: tr(context, 'chat')),
+    NavigationDestination(icon: const Icon(Icons.person_outline_rounded), selectedIcon: const Icon(Icons.person_rounded), label: tr(context, 'profile')),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1000;
+    final pageStack = ValueListenableBuilder<int>(
+      valueListenable: AuthService.authVersion,
+      builder: (_, __, ___) => IndexedStack(index: _currentIndex, children: _pages),
+    );
     return Scaffold(
-      body: ValueListenableBuilder<int>(
-        valueListenable: AuthService.authVersion,
-        builder: (_, __, ___) => IndexedStack(
-          index: _currentIndex,
-          children: _pages,
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
+      body: isDesktop
+          ? Row(children: [
+              NavigationRail(
+                selectedIndex: _currentIndex,
+                onDestinationSelected: _selectTab,
+                labelType: NavigationRailLabelType.all,
+                minWidth: 88,
+                backgroundColor: Colors.white,
+                leading: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Image.asset('assets/icon/bazarek_icon.png', width: 42, height: 42),
+                ),
+                destinations: _destinations.map((d) => NavigationRailDestination(
+                  icon: d.icon, selectedIcon: d.selectedIcon, label: Text(d.label),
+                )).toList(),
+              ),
+              const VerticalDivider(width: 1, thickness: 1),
+              Expanded(child: pageStack),
+            ])
+          : pageStack,
+      bottomNavigationBar: isDesktop ? null : NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) async {
-          if ((idx == 2 || idx == 3) && !AuthService.isLoggedIn) {
-            await requireAccount(context);
-            return;
-          }
-          setState(() {
-            _currentIndex = idx;
-          });
-        },
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home),
-            label: tr(context, 'home'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.favorite_border_rounded),
-            selectedIcon: const Icon(Icons.favorite_rounded),
-            label: tr(context, 'saved'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.add_circle_outline),
-            selectedIcon: const Icon(Icons.add_circle),
-            label: tr(context, 'add'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.chat_bubble_outline_rounded),
-            selectedIcon: const Icon(Icons.chat_bubble_rounded),
-            label: tr(context, 'chat'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            selectedIcon: const Icon(Icons.person),
-            label: tr(context, 'profile'),
-          ),
-        ],
+        onDestinationSelected: _selectTab,
+        destinations: _destinations,
       ),
     );
   }
@@ -1516,7 +1516,7 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 980),
+                  constraints: const BoxConstraints(maxWidth: 1440),
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(isWide ? 22 : 12, 10, isWide ? 22 : 12, 0),
                     child: Column(
@@ -1527,7 +1527,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           onProvinceChanged: (val) { setState(() => selectedProvince = val ?? ''); _loadProducts(); },
                           onLanguage: _toggleLanguage,
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 14),
+                        _BazarekHeroBanner(
+                          onBrowse: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
+                          onSell: () async {
+                            if (!await requireAccount(context)) return;
+                            if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
+                          },
+                        ),
+                        const SizedBox(height: 14),
                         _BazarekSearchBar(
                           controller: _searchController,
                           onChanged: (value) {
@@ -1587,24 +1595,39 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 980),
+                    constraints: const BoxConstraints(maxWidth: 1440),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(isWide ? 22 : 12, 0, isWide ? 22 : 12, 30),
-                      child: Column(
-                        children: [
-                          for (var i = 0; i < products.length; i++) ...[
-                            _DivarStyleListing(item: products[i]),
-                            if (i == 4) ...[
-                              const SizedBox(height: 8),
-                              _InlineBoostCard(onTap: () async {
-                                if (!await requireAccount(context)) return;
-                                if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()));
-                              }),
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        final columns = constraints.maxWidth >= 1180 ? 5 : constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 620 ? 3 : 1;
+                        if (columns == 1) {
+                          return Column(children: [
+                            for (var i = 0; i < products.length; i++) ...[
+                              _DivarStyleListing(item: products[i]),
+                              if (i == 4) ...[
+                                const SizedBox(height: 10),
+                                _InlineBoostCard(onTap: () async {
+                                  if (!await requireAccount(context)) return;
+                                  if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()));
+                                }),
+                              ],
+                              if (i != products.length - 1) const Divider(height: 1),
                             ],
-                            if (i != products.length - 1) const Divider(height: 1, indent: 0, endIndent: 0),
-                          ],
-                        ],
-                      ),
+                          ]);
+                        }
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: products.length,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: constraints.maxWidth >= 1180 ? .76 : .72,
+                          ),
+                          itemBuilder: (_, index) => _MarketplaceProductCard(item: products[index]),
+                        );
+                      }),
                     ),
                   ),
                 ),
@@ -1721,15 +1744,63 @@ class _HomeQuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ps = Localizations.localeOf(context).languageCode == 'ps';
-    return Row(children: [
-      _FilterChip(label: ps ? 'نوي' : 'جدیدترین', selected: sortMode == 'newest', onTap: () => onSort('newest')),
-      const SizedBox(width: 6),
-      _FilterChip(label: ps ? 'ارزانه' : 'ارزان‌ترین', selected: sortMode == 'price_low', onTap: () => onSort('price_low')),
-      const SizedBox(width: 6),
-      _FilterChip(label: ps ? 'ګران' : 'گران‌ترین', selected: sortMode == 'price_high', onTap: () => onSort('price_high')),
-      const Spacer(),
-      OutlinedButton.icon(onPressed: onBoost, icon: const Icon(Icons.rocket_launch_rounded, size: 16), label: Text(ps ? 'ځانګړی کول' : 'ویژه‌سازی'), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9))),
-    ]);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _FilterChip(label: ps ? 'نوي' : 'جدیدترین', selected: sortMode == 'newest', onTap: () => onSort('newest')),
+        _FilterChip(label: ps ? 'ارزانه' : 'ارزان‌ترین', selected: sortMode == 'price_low', onTap: () => onSort('price_low')),
+        _FilterChip(label: ps ? 'ګران' : 'گران‌ترین', selected: sortMode == 'price_high', onTap: () => onSort('price_high')),
+        OutlinedButton.icon(
+          onPressed: onBoost,
+          icon: const Icon(Icons.rocket_launch_rounded, size: 16),
+          label: Text(ps ? 'ځانګړی کول' : 'ویژه‌سازی'),
+          style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+        ),
+      ],
+    );
+  }
+}
+
+class _BazarekHeroBanner extends StatelessWidget {
+  final VoidCallback onBrowse;
+  final VoidCallback onSell;
+  const _BazarekHeroBanner({required this.onBrowse, required this.onSell});
+
+  @override
+  Widget build(BuildContext context) {
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [Color(0xFF0A2B68), Color(0xFF075BD8), Color(0xFF1688F8)]),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [BoxShadow(color: Color(0x220B55C5), blurRadius: 22, offset: Offset(0, 9))],
+      ),
+      child: Stack(children: [
+        Positioned(left: -12, bottom: -30, child: Icon(Icons.storefront_rounded, size: 150, color: Colors.white.withOpacity(.07))),
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.white.withOpacity(.14), borderRadius: BorderRadius.circular(30)), child: Text(ps ? 'بازارک • د افغانستان بازار' : 'بازارک • بازار افغانستان', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
+            const SizedBox(height: 12),
+            Text(ps ? 'هر څه چې غواړې،\nدلته یې پیدا کړه!' : 'هر چیزی که نیاز داری،\nدر بازارک پیدا کن!', style: const TextStyle(color: Colors.white, fontSize: 25, height: 1.25, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            Text(ps ? 'په اسانه وپلټئ، پرتله یې کړئ او مستقیم له پلورونکي سره اړیکه ونیسئ.' : 'آسان جست‌وجو کن، مقایسه کن و مستقیم با فروشنده در ارتباط باش.', style: TextStyle(color: Colors.white.withOpacity(.88), height: 1.5, fontSize: 12)),
+            const SizedBox(height: 16),
+            Wrap(spacing: 10, runSpacing: 8, children: [
+              FilledButton.icon(onPressed: onBrowse, icon: const Icon(Icons.grid_view_rounded, size: 17), label: Text(ps ? 'کتګورۍ وګوره' : 'دیدن دسته‌بندی‌ها'), style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF064FB8))),
+              OutlinedButton.icon(onPressed: onSell, icon: const Icon(Icons.add_rounded, size: 18), label: Text(ps ? 'اعلان ثبت کړه' : 'ثبت آگهی رایگان'), style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: Colors.white.withOpacity(.65)))),
+            ]),
+          ])),
+          if (MediaQuery.sizeOf(context).width >= 620) ...[
+            const SizedBox(width: 18),
+            Container(width: 112, height: 112, decoration: BoxDecoration(color: Colors.white.withOpacity(.12), borderRadius: BorderRadius.circular(28), border: Border.all(color: Colors.white.withOpacity(.15))), child: Padding(padding: const EdgeInsets.all(17), child: Image.asset('assets/icon/bazarek_icon.png', fit: BoxFit.contain))),
+          ],
+        ]),
+      ]),
+    );
   }
 }
 
@@ -1806,6 +1877,54 @@ String _displayListingPrice(BuildContext context, dynamic item) {
   final currency = (item['currency']?.toString().toUpperCase() == 'USD') ? 'USD' : 'AFN';
   final amount = n <= 0 ? tr(context, 'free') : (currency == 'USD' ? '\$${NumberFormatHelper.format(n)}' : '${NumberFormatHelper.format(n)} ${tr(context, 'afghani')}');
   return negotiable ? '$amount • ${tr(context, 'price_negotiable')}' : amount;
+}
+
+class _MarketplaceProductCard extends StatelessWidget {
+  final dynamic item;
+  const _MarketplaceProductCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    List<dynamic> images = [];
+    try {
+      final raw = item['image_url'];
+      if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
+      if (raw is List) images = raw;
+    } catch (_) {}
+    final imageUrl = images.isNotEmpty ? images.first.toString() : '';
+    final province = localizedProvince(context, item['province']?.toString() ?? '');
+    final location = (item['location_text'] ?? '').toString().trim();
+    final boost = localizedBoostLabel(context, item['boost_label']?.toString() ?? '');
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+        child: Container(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE8EDF5)), boxShadow: const [BoxShadow(color: Color(0x080B2450), blurRadius: 12, offset: Offset(0, 4))]),
+          clipBehavior: Clip.antiAlias,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(flex: 6, child: Stack(fit: StackFit.expand, children: [
+              imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFEAF0F8), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFEAF0F8), child: Icon(Icons.image_outlined, size: 34)),
+              Positioned(top: 7, left: 7, child: Container(decoration: BoxDecoration(color: Colors.white.withOpacity(.94), shape: BoxShape.circle), child: _SaveButton(item: item))),
+              if (boost.isNotEmpty) Positioned(top: 9, right: 9, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: const Color(0xFFFF8A00), borderRadius: BorderRadius.circular(9)), child: Text(boost, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)))),
+              if (images.length > 1) Positioned(bottom: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text('${images.length} 📷', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)))),
+            ])),
+            Expanded(flex: 5, child: Padding(padding: const EdgeInsets.fromLTRB(11, 9, 11, 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              LocalizedText(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.25)),
+              const SizedBox(height: 6),
+              Text(_displayListingPrice(context, item), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
+              const Spacer(),
+              Row(children: [const Icon(Icons.location_on_outlined, size: 13, color: Colors.black45), const SizedBox(width: 3), Expanded(child: Text([province, location].where((x) => x.isNotEmpty).join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black54))),]),
+              const SizedBox(height: 4),
+              Text(item['seller_name']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black45, fontWeight: FontWeight.w600)),
+            ]))),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 class _DivarStyleListing extends StatelessWidget {
