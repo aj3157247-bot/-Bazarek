@@ -3836,7 +3836,7 @@ Future<PickedProfileImage?> pickProfileImage() async {
     if (bytes == null || bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
-    return PickedProfileImage(bytes: bytes, name: file.name);
+    return PickedProfileImage(bytes: bytes, name: file.name.isNotEmpty ? file.name : 'avatar.jpg');
   }
 
   // Android/iOS: keep the existing image_picker flow unchanged.
