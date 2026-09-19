@@ -4028,8 +4028,8 @@ Future<PickedProfileImage?> pickProfileImage() async {
       type: FileType.image,
     );
     if (file == null) return null;
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
     return PickedProfileImage(bytes: bytes, name: file.name);
