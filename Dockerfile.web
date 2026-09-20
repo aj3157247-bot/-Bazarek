@@ -1,11 +1,28 @@
 FROM ghcr.io/cirruslabs/flutter:3.35.4 AS build
 
+RUN useradd -m -s /bin/bash flutteruser
+
 WORKDIR /app
+
+# Copy only dependency files first so this layer is cached
+# and "flutter pub get" doesn't re-run on every code change.
 COPY pubspec.yaml pubspec.lock ./
+RUN chown -R flutteruser:flutteruser /app
+USER flutteruser
 RUN flutter pub get
 
+USER root
+# Now copy the rest of the project.
 COPY . .
-RUN flutter pub get \
+RUN chown -R flutteruser:flutteruser /app
+USER flutteruser
+
+RUN flutter config --enable-web \
+    && if [ ! -f web/index.html ]; then flutter create . --platforms=web; fi \
+    && flutter pub get \
+    && echo "========== BAZAREK DART ANALYSIS ==========" \
+    && flutter analyze lib/main.dart \
+    && echo "========== BAZAREK WEB BUILD ==========" \
     && flutter build web --release --base-href /
 
 FROM nginx:alpine
