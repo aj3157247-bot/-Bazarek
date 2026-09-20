@@ -606,11 +606,23 @@ app.get('/api/listings', async (req, res) => {
     if (error) throw error;
     const now = Date.now();
     const vendorIds = [...new Set((data || []).map(x => x.vendor_id).filter(Boolean))];
-    const [{ data: profiles }, { data: globalSubs }] = await Promise.all([
+    const [{ data: profiles }, { data: globalSubs }, { data: storeSubs }] = await Promise.all([
       vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone').in('id', vendorIds) : Promise.resolve({ data: [] }),
       vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['boost_weekly','boost_monthly','boost_yearly']) : Promise.resolve({ data: [] }),
+      vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['store_monthly','store_yearly']) : Promise.resolve({ data: [] }),
     ]);
     const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
+    const storeStatus = {};
+    for (const sub of (storeSubs || [])) {
+      const end = new Date(sub.ends_at || 0).getTime();
+      if (end > now) {
+        const current = storeStatus[sub.user_id];
+        const currentEnd = current ? new Date(current.ends_at || 0).getTime() : 0;
+        if (!current || end > currentEnd) {
+          storeStatus[sub.user_id] = sub;
+        }
+      }
+    }
     const globalLevel = {};
     for (const sub of (globalSubs || [])) {
       const end = new Date(sub.ends_at || 0).getTime();
@@ -625,7 +637,22 @@ app.get('/api/listings', async (req, res) => {
       const level = Math.max(ownBoost, globalLevel[x.vendor_id] || 0);
       const boostUntil = level === globalLevel[x.vendor_id] ? (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0]?.ends_at || x.boost_until : x.boost_until;
       const turboSub = (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0];
-      return { ...x, is_featured: featured, is_pinned: pinned, effective_boost_level: level, boost_until: boostUntil, turbo_active: Boolean(turboSub), turbo_plan: turboSub?.plan || null, turbo_starts_at: turboSub?.starts_at || null, turbo_until: turboSub?.ends_at || null };
+      const storeSub = storeStatus[x.vendor_id];
+      return {
+        ...x,
+        is_featured: featured,
+        is_pinned: pinned,
+        effective_boost_level: level,
+        boost_until: boostUntil,
+        turbo_active: Boolean(turboSub),
+        turbo_plan: turboSub?.plan || null,
+        turbo_starts_at: turboSub?.starts_at || null,
+        turbo_until: turboSub?.ends_at || null,
+        store_active: Boolean(storeSub),
+        store_plan: storeSub?.plan || null,
+        store_starts_at: storeSub?.starts_at || null,
+        store_until: storeSub?.ends_at || null,
+      };
     }).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || Number(b.is_featured) - Number(a.is_featured) || Number(b.effective_boost_level || 0) - Number(a.effective_boost_level || 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     res.json(rows.map(x => {
       const level = Number(x.effective_boost_level || 0);
