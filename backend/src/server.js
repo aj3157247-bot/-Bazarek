@@ -864,7 +864,9 @@ app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
     basic:{price:150,days:30},pro:{price:250,days:30},business:{price:450,days:30},
     boost_weekly:{price:150,days:7,boost_level:3},
     boost_monthly:{price:500,days:30,boost_level:4},
-    boost_yearly:{price:4500,days:365,boost_level:5}
+    boost_yearly:{price:4500,days:365,boost_level:5},
+    store_monthly:{price:600,days:30,store:true},
+    store_yearly:{price:6000,days:365,store:true}
   };
   const plan=String(req.body?.plan||'');
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
@@ -888,10 +890,10 @@ app.patch('/api/admin/subscriptions/:id', requireAdmin, async (req,res)=>{try{
   const {data:sub,error:se}=await db.from('seller_subscriptions').select('*').eq('id',req.params.id).maybeSingle();
   if(se)throw se;if(!sub)return res.status(404).json({error:'اشتراک پیدا نشد.'});
   const patch={status};
-  if(status==='active'){const days=sub.plan==='boost_yearly'?365:sub.plan==='boost_monthly'?30:sub.plan==='boost_weekly'?7:30;const start=new Date();const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
+  if(status==='active'){const days=sub.plan==='boost_yearly'||sub.plan==='store_yearly'?365:sub.plan==='boost_monthly'||sub.plan==='store_monthly'?30:sub.plan==='boost_weekly'?7:30;const start=new Date();const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
   const {data,error}=await db.from('seller_subscriptions').update(patch).eq('id',req.params.id).select().single();
   if(error)throw error;
-  if(status==='active')await db.from('profiles').update({plan:['pro','business'].includes(sub.plan) ? sub.plan : 'free'}).eq('id',sub.user_id);
+  if(status==='active' && ['pro','business'].includes(sub.plan)) await db.from('profiles').update({plan:sub.plan}).eq('id',sub.user_id);
   await db.from('user_notifications').insert([{user_id:sub.user_id,type:'payment',title:status==='active'?'پرداخت اشتراک تأیید شد':'نتیجه درخواست اشتراک',message:status==='active'?`پرداخت اشتراک «${sub.plan}» تأیید شد و فعال گردید.`:`درخواست اشتراک «${sub.plan}» توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);
   res.json(data);
 }catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر وضعیت اشتراک.'});}});
