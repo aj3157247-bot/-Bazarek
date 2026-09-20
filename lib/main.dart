@@ -1448,26 +1448,12 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> products = [];
   bool isLoading = true;
   final TextEditingController _searchController = TextEditingController();
-  final PageController _professionalStoreController = PageController(viewportFraction: .90);
-  Timer? _professionalStoreTimer;
-  List<Map<String, dynamic>> _professionalStoresForHome = [];
-  int _professionalStorePage = 0;
   String? loadError;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
-    _professionalStoreTimer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!mounted || !_professionalStoreController.hasClients || _professionalStoresForHome.length < 2) return;
-      final current = _professionalStoreController.page?.round() ?? 0;
-      final next = (current + 1) % _professionalStoresForHome.length;
-      _professionalStoreController.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 650),
-        curve: Curves.easeOutCubic,
-      );
-    });
   }
 
   Future<void> _loadProducts() async {
@@ -1500,8 +1486,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _professionalStoreTimer?.cancel();
-    _professionalStoreController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -1738,9 +1722,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final shopName = item['shop_name']?.toString().trim().isNotEmpty == true
           ? item['shop_name'].toString().trim()
           : (item['seller_name']?.toString().trim() ?? '');
-      // Only paid, management-approved professional stores appear in the storefront.
-      // Normal listings remain normal listings and never become a store automatically.
-      if (vendorId.isEmpty || shopName.isEmpty || item['store_active'] != true) continue;
+      if (vendorId.isEmpty || shopName.isEmpty) continue;
       final current = storeMap[vendorId];
       if (current == null) {
         storeMap[vendorId] = {
@@ -1762,7 +1744,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     final professionalStores = storeMap.values.toList()..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
-    _professionalStoresForHome = professionalStores;
 
     final title = selectedCategory.isEmpty &&
             selectedProvince.isEmpty &&
@@ -2010,8 +1991,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFE3E6E6),
-      body: SafeArea(
-        child: RefreshIndicator(
+      body: RefreshIndicator(
         onRefresh: _loadProducts,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -2601,16 +2581,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     ],
 
-                    // Professional storefront: one immersive, swipeable showcase.
-                    // Only approved/paid stores reach this section (store_active == true).
+                    // Professional storefront marketplace section.
                     Container(
                       margin: EdgeInsets.symmetric(horizontal: horizontal),
-                      padding: EdgeInsets.fromLTRB(isMobile ? 10 : 18, isMobile ? 14 : 18, isMobile ? 10 : 18, 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(isMobile ? 0 : 8),
-                        border: Border.all(color: const Color(0xFFE3E6E8)),
-                      ),
+                      padding: EdgeInsets.all(isMobile ? 12 : 18),
+                      color: Colors.white,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -2621,7 +2596,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 height: 42,
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFF3CD),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(Icons.storefront_rounded, color: Color(0xFF8A5A00), size: 25),
                               ),
@@ -2631,331 +2606,182 @@ class _HomeScreenState extends State<HomeScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      isPs ? 'د بازارک ویترین' : 'ویترین بازارک',
+                                      isPs ? 'مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای',
                                       style: TextStyle(fontSize: isMobile ? 20 : 26, fontWeight: FontWeight.w900, color: const Color(0xFF131921)),
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
-                                      isPs ? 'مسلکي پلورنځي وپلټئ' : 'فروشگاه‌های حرفه‌ای بازارک',
-                                      style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.35),
+                                      isPs ? 'د پلورنځي محصولات په کټګوریو کې وګورئ او د محصول کوډ سره دقیق انتخاب وکړئ.' : 'محصولات هر فروشگاه را دسته‌بندی‌شده ببینید و با کد کالا دقیق انتخاب کنید.',
+                                      style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.45),
                                     ),
                                   ],
                                 ),
                               ),
-                              if (professionalStores.length > 1)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.swipe_rounded, size: 18, color: Color(0xFF007185)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      isPs ? 'کش کړئ' : 'بکشید',
-                                      style: const TextStyle(fontSize: 10, color: Color(0xFF007185), fontWeight: FontWeight.w900),
-                                    ),
-                                  ],
-                                ),
+                              TextButton(
+                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreDirectoryScreen(stores: professionalStores))),
+                                child: Text(isPs ? 'ټول پلورنځي' : 'همه فروشگاه‌ها', style: const TextStyle(color: Color(0xFF007185), fontWeight: FontWeight.w900)),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           if (professionalStores.isEmpty)
                             Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF7F8F8),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFFE3E6E8)),
-                              ),
-                              child: Column(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(color: const Color(0xFFF7F8F8), border: Border.all(color: const Color(0xFFE3E6E8))),
+                              child: Row(
                                 children: [
-                                  const Icon(Icons.storefront_outlined, size: 48, color: Color(0xFF607080)),
-                                  const SizedBox(height: 9),
-                                  Text(
-                                    isPs ? 'تر اوسه مسلکي پلورنځی نشته.' : 'هنوز فروشگاه حرفه‌ای فعالی وجود ندارد.',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    isPs ? 'د خپل پلورنځي د فعالولو لپاره پلان واخلئ.' : 'برای فعال‌کردن فروشگاه، یکی از پلن‌های حرفه‌ای را خریداری کنید.',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(fontSize: 11, color: Colors.black54),
-                                  ),
+                                  const Icon(Icons.storefront_rounded, size: 44, color: Color(0xFF37475A)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(isPs ? 'لومړی مسلکي پلورنځی جوړ کړئ او خپل محصولات دلته ښکاره کړئ.' : 'اولین فروشگاه حرفه‌ای را بسازید و محصولاتتان را اینجا نمایش دهید.', style: const TextStyle(fontWeight: FontWeight.w700))),
                                 ],
                               ),
                             )
                           else
-                            SizedBox(
-                              height: isMobile ? 365 : 390,
-                              child: PageView.builder(
-                                controller: _professionalStoreController,
-                                itemCount: professionalStores.length,
-                                onPageChanged: (page) {
-                                  if (mounted) setState(() => _professionalStorePage = page);
-                                },
-                                physics: const BouncingScrollPhysics(),
-                                padEnds: false,
-                                itemBuilder: (context, index) {
-                                  final store = professionalStores[index];
-                                  final vendorId = store['vendor_id'].toString();
-                                  final shopName = store['shop_name'].toString();
-                                  final storeProducts = products
-                                      .where((raw) => raw is Map && raw['vendor_id']?.toString() == vendorId && raw['store_active'] == true)
-                                      .map((raw) => Map<String, dynamic>.from(raw as Map))
-                                      .toList();
-                                  final minPrice = (store['min_price'] as num?)?.toDouble() ?? 0;
-                                  final storeImage = _professionalFirstImage(store);
-                                  final previewProducts = storeProducts.take(4).toList();
-
-                                  return AnimatedBuilder(
-                                    animation: _professionalStoreController,
-                                    builder: (context, child) {
-                                      return Padding(
-                                        padding: EdgeInsets.only(right: professionalStores.length > 1 ? 10 : 0),
-                                        child: child,
-                                      );
-                                    },
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [Color(0xFF131921), Color(0xFF243447)],
+                            LayoutBuilder(
+                              builder: (context, c) {
+                                final columns = isMobile ? 1 : (c.maxWidth >= 1200 ? 3 : 2);
+                                final widthPer = (c.maxWidth - (columns - 1) * 12) / columns;
+                                return Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: professionalStores.take(isMobile ? 5 : 9).map((store) {
+                                    final vendorId = store['vendor_id'].toString();
+                                    final shopName = store['shop_name'].toString();
+                                    final storeProducts = products.where((raw) => raw is Map && raw['vendor_id']?.toString() == vendorId).map((raw) => Map<String, dynamic>.from(raw as Map)).toList();
+                                    final categoryMap = <String, Map<String, dynamic>>{};
+                                    for (final product in storeProducts) {
+                                      final categoryId = _professionalCategoryId(product);
+                                      final current = categoryMap[categoryId];
+                                      if (current == null) {
+                                        categoryMap[categoryId] = {
+                                          'id': categoryId,
+                                          'count': 1,
+                                          'image': _professionalFirstImage(product),
+                                        };
+                                      } else {
+                                        current['count'] = (current['count'] as int) + 1;
+                                      }
+                                    }
+                                    final categoryTiles = categoryMap.values.toList();
+                                    if (categoryTiles.isEmpty) {
+                                      categoryTiles.add({'id': 'other', 'count': store['count'] ?? 0, 'image': _professionalFirstImage(store)});
+                                    }
+                                    final minPrice = (store['min_price'] as num?)?.toDouble() ?? 0;
+                                    return SizedBox(
+                                      width: widthPer,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border.all(color: const Color(0xFFD5D9D9)),
+                                          borderRadius: BorderRadius.circular(6),
+                                          boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 7, offset: Offset(0, 2))],
                                         ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: const [
-                                          BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4)),
-                                        ],
-                                      ),
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          InkWell(
-                                            onTap: () => Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => ProfessionalStoreCatalogScreen(
-                                                  sellerId: vendorId,
-                                                  sellerName: shopName,
-                                                ),
-                                              ),
-                                            ),
-                                            borderRadius: BorderRadius.circular(9),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: isMobile ? 62 : 70,
-                                                  height: isMobile ? 62 : 70,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius: BorderRadius.circular(10),
-                                                  ),
-                                                  clipBehavior: Clip.antiAlias,
-                                                  child: storeImage.isNotEmpty
-                                                      ? Image.network(
-                                                          _optimizedImageUrl(storeImage),
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded, color: Color(0xFF37475A), size: 34),
-                                                        )
-                                                      : const Icon(Icons.storefront_rounded, color: Color(0xFF37475A), size: 34),
-                                                ),
-                                                const SizedBox(width: 11),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Row(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(11),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              InkWell(
+                                                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName))),
+                                                borderRadius: BorderRadius.circular(6),
+                                                child: Row(
+                                                  children: [
+                                                    Container(
+                                                      width: 52,
+                                                      height: 52,
+                                                      decoration: BoxDecoration(color: const Color(0xFFF3F3F3), borderRadius: BorderRadius.circular(6)),
+                                                      child: _professionalFirstImage(store).isNotEmpty
+                                                          ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(_optimizedImageUrl(_professionalFirstImage(store)), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded, color: Color(0xFF37475A))))
+                                                          : const Icon(Icons.storefront_rounded, color: Color(0xFF37475A)),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
                                                         children: [
-                                                          Expanded(
-                                                            child: Text(
-                                                              shopName,
-                                                              maxLines: 1,
-                                                              overflow: TextOverflow.ellipsis,
-                                                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-                                                            ),
-                                                          ),
-                                                          const Icon(Icons.verified_rounded, size: 19, color: Color(0xFFFFD814)),
+                                                          Row(children: [
+                                                            Expanded(child: Text(shopName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
+                                                            const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF007185)),
+                                                          ]),
+                                                          const SizedBox(height: 4),
+                                                          Text('${store['count']} ${isPs ? 'محصول' : 'محصول'}${minPrice > 0 ? ' • از ${NumberFormatHelper.format(minPrice)} افغانی' : ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w700)),
                                                         ],
                                                       ),
-                                                      const SizedBox(height: 5),
-                                                      Text(
-                                                        '${store['count']} ${isPs ? 'محصول' : 'محصول'}${minPrice > 0 ? ' • از ${NumberFormatHelper.format(minPrice)} افغانی' : ''}',
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
-                                                        style: const TextStyle(color: Color(0xFFD5D9D9), fontSize: 10, fontWeight: FontWeight.w700),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(height: 11),
+                                              Text(isPs ? 'د پلورنځي کټګورۍ' : 'دسته‌های این فروشگاه', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF37475A))),
+                                              const SizedBox(height: 7),
+                                              SizedBox(
+                                                height: 103,
+                                                child: ListView.separated(
+                                                  scrollDirection: Axis.horizontal,
+                                                  itemCount: categoryTiles.take(4).length,
+                                                  separatorBuilder: (_, __) => const SizedBox(width: 7),
+                                                  itemBuilder: (_, i) {
+                                                    final cat = categoryTiles[i];
+                                                    final categoryId = cat['id'].toString();
+                                                    final image = cat['image']?.toString() ?? '';
+                                                    return InkWell(
+                                                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName, initialCategory: categoryId))),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      child: Container(
+                                                        width: isMobile ? 86 : 82,
+                                                        decoration: BoxDecoration(color: const Color(0xFFF7F8F8), border: Border.all(color: const Color(0xFFE3E6E8)), borderRadius: BorderRadius.circular(6)),
+                                                        padding: const EdgeInsets.all(5),
+                                                        child: Column(
+                                                          children: [
+                                                            Expanded(
+                                                              child: image.isNotEmpty
+                                                                  ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(_optimizedImageUrl(image), fit: BoxFit.cover, width: double.infinity, errorBuilder: (_, __, ___) => Icon(_professionalCategoryIcon(categoryId), color: const Color(0xFF4F659B), size: 29)))
+                                                                  : Icon(_professionalCategoryIcon(categoryId), color: const Color(0xFF4F659B), size: 29),
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(_professionalCategoryTitle(context, categoryId), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900)),
+                                                            Text('${cat['count']} ${isPs ? 'توکي' : 'محصول'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 8, color: Colors.black54)),
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Expanded(
-                                            child: previewProducts.isEmpty
-                                                ? Center(
-                                                    child: Text(
-                                                      isPs ? 'محصولات پلورنځي' : 'محصولات فروشگاه',
-                                                      style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w800),
-                                                    ),
-                                                  )
-                                                : GridView.builder(
-                                                    physics: const NeverScrollableScrollPhysics(),
-                                                    itemCount: previewProducts.length,
-                                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                                      crossAxisCount: isMobile ? 2 : 4,
-                                                      crossAxisSpacing: 7,
-                                                      mainAxisSpacing: 7,
-                                                      childAspectRatio: isMobile ? .84 : .90,
-                                                    ),
-                                                    itemBuilder: (_, productIndex) {
-                                                      final product = previewProducts[productIndex];
-                                                      final image = _professionalFirstImage(product);
-                                                      final price = _displayListingPrice(context, product);
-                                                      return InkWell(
-                                                        onTap: () => Navigator.push(
-                                                          context,
-                                                          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
-                                                        ),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        child: Container(
-                                                          decoration: BoxDecoration(
-                                                            color: Colors.white,
-                                                            borderRadius: BorderRadius.circular(8),
-                                                          ),
-                                                          clipBehavior: Clip.antiAlias,
-                                                          child: Column(
-                                                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                            children: [
-                                                              Expanded(
-                                                                child: image.isNotEmpty
-                                                                    ? Image.network(
-                                                                        _optimizedImageUrl(image),
-                                                                        fit: BoxFit.cover,
-                                                                        errorBuilder: (_, __, ___) => const ColoredBox(
-                                                                          color: Color(0xFFF3F3F3),
-                                                                          child: Icon(Icons.image_outlined, color: Colors.black38),
-                                                                        ),
-                                                                      )
-                                                                    : const ColoredBox(
-                                                                        color: Color(0xFFF3F3F3),
-                                                                        child: Icon(Icons.image_outlined, color: Colors.black38),
-                                                                      ),
-                                                              ),
-                                                              Padding(
-                                                                padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
-                                                                child: Column(
-                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                  children: [
-                                                                    Text(
-                                                                      product['title']?.toString() ?? '',
-                                                                      maxLines: 1,
-                                                                      overflow: TextOverflow.ellipsis,
-                                                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                                                                    ),
-                                                                    const SizedBox(height: 3),
-                                                                    Text(
-                                                                      price,
-                                                                      maxLines: 1,
-                                                                      overflow: TextOverflow.ellipsis,
-                                                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFB12704)),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
-                                          ),
-                                          const SizedBox(height: 9),
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: FilledButton(
-                                              style: FilledButton.styleFrom(
-                                                backgroundColor: const Color(0xFFFFD814),
-                                                foregroundColor: const Color(0xFF111111),
-                                                minimumSize: const Size.fromHeight(40),
-                                              ),
-                                              onPressed: () => Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => ProfessionalStoreCatalogScreen(
-                                                    sellerId: vendorId,
-                                                    sellerName: shopName,
-                                                  ),
+                                                    );
+                                                  },
                                                 ),
                                               ),
-                                              child: Text(
-                                                isPs ? 'ټول محصولات وګورئ' : 'مشاهده همه محصولات فروشگاه',
-                                                style: const TextStyle(fontWeight: FontWeight.w900),
+                                              const SizedBox(height: 9),
+                                              SizedBox(
+                                                width: double.infinity,
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName))),
+                                                  icon: const Icon(Icons.storefront_outlined, size: 17),
+                                                  label: Text(isPs ? 'ټول محصولات او کوډونه' : 'همه محصولات و کدهای کالا'),
+                                                ),
                                               ),
-                                            ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                    );
+                                  }).toList(),
+                                );
+                              },
                             ),
-                          if (professionalStores.length > 1) ...[
-                            const SizedBox(height: 9),
-                            Center(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: List.generate(
-                                  professionalStores.length,
-                                  (i) => Container(
-                                    width: 7,
-                                    height: 7,
-                                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: i == _professionalStorePage ? const Color(0xFF007185) : const Color(0xFFD5D9D9),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Center(
-                              child: Text(
-                                isPs ? 'د نورو پلورنځیو لپاره کش کړئ' : 'برای دیدن فروشگاه‌های دیگر، به چپ و راست بکشید',
-                                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 11),
+                          const SizedBox(height: 14),
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)]),
-                              borderRadius: BorderRadius.circular(9),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFD814), size: 30),
-                                const SizedBox(width: 9),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isPs ? 'پلورنځی په مسلکي ډول فعال کړئ' : 'فروشگاه حرفه‌ای خودت را فعال کن',
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        isPs ? 'د پلورنځي لپاره پلان واخلئ.' : 'با خرید پلن ماهانه یا سالانه، ویترین خودت را فعال کن.',
-                                        style: const TextStyle(color: Color(0xFFD5D9D9), fontSize: 10),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                const Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFD814), size: 34),
+                                const SizedBox(width: 10),
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(isPs ? 'پلورنځی په مسلکي ډول فعال کړئ' : 'فروشگاه حرفه‌ای خودت را فعال کن', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+                                  const SizedBox(height: 4),
+                                  Text(isPs ? 'ستاسو محصولات، بیې، لوګو او ځانګړی ځای.' : 'محصولات، قیمت‌ها، برند و جایگاه ویژه در بازارک.', style: const TextStyle(color: Color(0xFFD5D9D9), fontSize: 11)),
+                                ])),
                                 FilledButton(
                                   style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFFD814), foregroundColor: const Color(0xFF111111)),
                                   onPressed: () async {
@@ -2963,7 +2789,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     if (!context.mounted) return;
                                     Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
                                   },
-                                  child: Text(isPs ? 'پلانونه' : 'پلن‌ها'),
+                                  child: Text(isPs ? 'پلانونه' : 'پلان‌ها'),
                                 ),
                               ],
                             ),
@@ -3163,7 +2989,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
-        ),
         ),
       ),
     );
@@ -6009,6 +5834,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(leading: const Icon(Icons.admin_panel_settings_outlined), title: const Text('ورود مدیریت بازارک'), subtitle: const Text('پنل مدیریت، بررسی آگهی‌ها و گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()))),
                   ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
                   ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
+                  ListTile(
+                    leading: const Icon(Icons.phone_iphone_outlined),
+                    title: const Text('اپلیکیشن آیفون (iPhone / iOS)'),
+                    subtitle: const Text('نصب سریع بازارک روی آیفون از طریق Safari و افزودن به صفحه اصلی'),
+                    onTap: () async {
+                      final url = Uri.base;
+                      try {
+                        final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+                        if (!opened && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن بازارک در Safari ممکن نشد.')));
+                        }
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن بازارک در Safari ممکن نشد.')));
+                        }
+                      }
+                    },
+                  ),
                   const Divider(),
                   SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
                   ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
