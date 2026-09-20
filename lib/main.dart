@@ -3964,7 +3964,7 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
           Text(ps ? 'خپل پلورنځی د بازارک په کچه مسلکي کړئ.' : 'فروشگاهت را در بازارک حرفه‌ای کن.', style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text(ps ? 'د محصولاتو عکسونه، بیې، لوګو، د پلورنځي پاڼه او ځانګړی ځای.' : 'صفحه فروشگاه، نمایش حرفه‌ای محصولات، قیمت‌ها، برند و جایگاه ویژه در بازارک.', style: const TextStyle(color: Color(0xFFD5D9D9), height: 1.5)),
-        ]),
+        ])),
         const SizedBox(height: 14),
         _plan('store_monthly', 600, ps ? '🏪 میاشتنی' : '🏪 ماهانه', ps ? '۳۰ ورځې؛ پلورنځی او ټول محصولات.' : '۳۰ روز؛ فروشگاه حرفه‌ای و نمایش محصولات.', Icons.calendar_month_rounded),
         const SizedBox(height: 10),
