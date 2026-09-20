@@ -616,9 +616,13 @@ app.get('/api/listings', async (req, res) => {
     for (const sub of (storeSubs || [])) {
       const start = new Date(sub.starts_at || 0).getTime();
       const end = new Date(sub.ends_at || 0).getTime();
-      // A professional store is active only after the paid subscription has
-      // been approved and its validity window has actually started.
-      if (sub.status === 'active' && start <= now && end > now) {
+      const approvedPaidStore =
+        sub.status === 'active' &&
+        (sub.plan === 'store_monthly' || sub.plan === 'store_yearly') &&
+        start > 0 &&
+        end > now &&
+        start <= now;
+      if (approvedPaidStore) {
         const current = storeStatus[sub.user_id];
         const currentEnd = current ? new Date(current.ends_at || 0).getTime() : 0;
         if (!current || end > currentEnd) {
