@@ -1542,96 +1542,115 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openDownloadApp() async {
-    const apkUrl = 'https://bazarek-web.onrender.com/download/bazarek.apk';
-    const siteUrl = 'https://bazarek.pages.dev/';
-
+    final isPs = Localizations.localeOf(context).languageCode == 'ps';
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD5D9D9),
-                borderRadius: BorderRadius.circular(99),
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 4),
+              const Text(
+                'دانلود اپلیکیشن بازارک',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
               ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'دانلود اپلیکیشن بازارک',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              tileColor: const Color(0xFFFFF3CD),
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFFFD814),
-                child: Icon(Icons.android_rounded, color: Color(0xFF111111)),
-              ),
-              title: const Text('دانلود نسخه اندروید', style: TextStyle(fontWeight: FontWeight.w900)),
-              subtitle: const Text('دانلود مستقیم فایل APK بازارک'),
-              trailing: const Icon(Icons.download_rounded),
-              onTap: () async {
-                Navigator.pop(sheetContext);
-                try {
-                  final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
-                  if (!opened && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')));
-                  }
-                } catch (_) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')));
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              tileColor: const Color(0xFFEAF4FF),
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF4F659B),
-                child: Icon(Icons.apple_rounded, color: Colors.white),
-              ),
-              title: const Text('نسخه آیفون', style: TextStyle(fontWeight: FontWeight.w900)),
-              subtitle: const Text('بازارک را در Safari به صفحه اصلی آیفون اضافه کنید'),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-              onTap: () async {
-                Navigator.pop(sheetContext);
-                await showDialog<void>(
-                  context: context,
-                  builder: (dialogContext) => AlertDialog(
-                    title: const Text('نسخه آیفون'),
-                    content: const Text(
-                      'در آیفون، بازارک را با Safari باز کنید، سپس Share و گزینه «Add to Home Screen» را بزنید تا مثل اپلیکیشن روی صفحه اصلی نصب شود.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: const Text('بستن'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () async {
-                          Navigator.pop(dialogContext);
-                          await launchUrl(Uri.parse(siteUrl), mode: LaunchMode.externalApplication);
-                        },
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('باز کردن بازارک'),
-                      ),
-                    ],
+              const SizedBox(height: 14),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                tileColor: const Color(0xFFFFF7D6),
+                leading: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFD814),
+                    shape: BoxShape.circle,
                   ),
-                );
-              },
-            ),
-          ],
+                  child: const Icon(Icons.android_rounded, color: Color(0xFF111111), size: 29),
+                ),
+                title: Text(
+                  isPs ? 'د Android نسخه ډاونلوډ' : 'دانلود نسخه اندروید',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+                subtitle: Text(
+                  isPs ? 'د بازارک APK مستقیم له همدې سایټ څخه.' : 'دانلود مستقیم فایل APK بازارک از همین سایت',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+                trailing: const Icon(Icons.download_rounded, size: 28),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  // Same-origin static file: /download/bazarek.apk
+                  final apkUrl = Uri.base.resolve('download/bazarek.apk');
+                  try {
+                    final opened = await launchUrl(
+                      apkUrl,
+                      mode: LaunchMode.externalApplication,
+                    );
+                    if (!opened && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('دانلود APK باز نشد.')),
+                      );
+                    }
+                  } catch (_) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('دانلود APK باز نشد.')),
+                      );
+                    }
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                tileColor: const Color(0xFFF0F3FF),
+                leading: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF5369A8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.apple, color: Colors.white, size: 29),
+                ),
+                title: Text(
+                  isPs ? 'د iPhone نسخه' : 'نسخه آیفون',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+                subtitle: Text(
+                  isPs ? 'بازارک په Safari کې پر اصلي پاڼه اضافه کړئ.' : 'بازارک را در Safari به صفحه اصلی آیفون اضافه کنید',
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+                trailing: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('نسخه آیفون'),
+                      content: const Text(
+                        'در آیفون، بازارک را با Safari باز کنید، سپس Share را بزنید و «Add to Home Screen / افزودن به صفحه اصلی» را انتخاب کنید.\n\nاین روش بازارک را مثل یک اپلیکیشن روی صفحه آیفون قرار می‌دهد.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('متوجه شدم'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1804,7 +1823,33 @@ class _HomeScreenState extends State<HomeScreen> {
       final shopName = item['shop_name']?.toString().trim().isNotEmpty == true
           ? item['shop_name'].toString().trim()
           : (item['seller_name']?.toString().trim() ?? '');
-      if (vendorId.isEmpty || shopName.isEmpty) continue;
+
+      // Only a paid AND management-approved professional-store subscription
+      // can appear here. Ordinary sellers/listings are never promoted to a
+      // professional store just because they have shop_name/vendor_id.
+      final storePlan = item['store_plan']?.toString().trim() ?? '';
+      final storeActive = item['store_active'] == true ||
+          item['store_active']?.toString().toLowerCase() == 'true';
+      final storeUntil = DateTime.tryParse(
+        item['store_until']?.toString() ?? '',
+      );
+      final storeStarts = DateTime.tryParse(
+        item['store_starts_at']?.toString() ?? '',
+      );
+      final nowUtc = DateTime.now().toUtc();
+      final paidStorePlan =
+          storePlan == 'store_monthly' || storePlan == 'store_yearly';
+      final validStorePeriod =
+          storeUntil != null &&
+          storeUntil.isAfter(nowUtc) &&
+          (storeStarts == null || !storeStarts.isAfter(nowUtc));
+      if (vendorId.isEmpty ||
+          shopName.isEmpty ||
+          !storeActive ||
+          !paidStorePlan ||
+          !validStorePeriod) {
+        continue;
+      }
       final current = storeMap[vendorId];
       if (current == null) {
         storeMap[vendorId] = {
@@ -2263,19 +2308,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
                                 ),
                               )
-                            else
-                              IconButton(
-                                tooltip: AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
-                                onPressed: () async {
-                                  if (AuthService.isLoggedIn) {
-                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-                                  } else {
-                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
-                                  }
-                                  if (mounted) setState(() {});
-                                },
-                                icon: const Icon(Icons.person_outline, color: Colors.white),
-                              ),
                             if (!isMobile) ...[
                               TextButton(
                                 onPressed: () => Navigator.push(
@@ -2334,7 +2366,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             ],
-                            // One account icon only. The old duplicate person icon is removed.
+                            // Mobile: account is the leftmost action; download sits beside it.
+                            IconButton(
+                              tooltip: tr(context, 'download'),
+                              onPressed: _openDownloadApp,
+                              icon: const Icon(
+                                Icons.download_for_offline_outlined,
+                                color: Color(0xFFFFD814),
+                              ),
+                            ),
                             IconButton(
                               tooltip: isPs ? 'ژبه بدلول' : 'انتخاب زبان',
                               onPressed: _showLanguagePicker,
@@ -2343,21 +2383,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: Colors.white,
                               ),
                             ),
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFFFD814), Color(0xFFFFB300)],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: IconButton(
-                                tooltip: 'دانلود اپلیکیشن',
-                                onPressed: _openDownloadApp,
-                                icon: const Icon(
-                                  Icons.download_for_offline_outlined,
-                                  color: Color(0xFF111111),
-                                ),
-                              ),
+                            IconButton(
+                              tooltip: AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
+                              onPressed: () async {
+                                if (AuthService.isLoggedIn) {
+                                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                                } else {
+                                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+                                }
+                                if (mounted) setState(() {});
+                              },
+                              icon: const Icon(Icons.person_outline, color: Colors.white),
                             ),
                             if (!isMobile)
                               const Padding(
@@ -2721,19 +2757,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   const Icon(Icons.storefront_rounded, size: 44, color: Color(0xFF37475A)),
                                   const SizedBox(width: 12),
-                                  Expanded(child: Text(isPs ? 'لومړی مسلکي پلورنځی جوړ کړئ او خپل محصولات دلته ښکاره کړئ.' : 'اولین فروشگاه حرفه‌ای را بسازید و محصولاتتان را اینجا نمایش دهید.', style: const TextStyle(fontWeight: FontWeight.w700))),
+                                  Expanded(child: Text(isPs ? 'اوس مهال کوم فعال مسلکي پلورنځی نشته.' : 'فعلاً فروشگاه حرفه‌ای فعال برای نمایش وجود ندارد.', style: const TextStyle(fontWeight: FontWeight.w700))),
                                 ],
                               ),
                             )
                           else
-                            LayoutBuilder(
-                              builder: (context, c) {
-                                final columns = isMobile ? 1 : (c.maxWidth >= 1200 ? 3 : 2);
-                                final widthPer = (c.maxWidth - (columns - 1) * 12) / columns;
-                                return Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  children: professionalStores.take(isMobile ? 5 : 9).map((store) {
+                            SizedBox(
+                              height: isMobile ? 350 : 365,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                itemCount: professionalStores.take(isMobile ? 8 : 12).length,
+                                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                itemBuilder: (context, index) {
+                                  final store = professionalStores[index];
                                     final vendorId = store['vendor_id'].toString();
                                     final shopName = store['shop_name'].toString();
                                     final storeProducts = products.where((raw) => raw is Map && raw['vendor_id']?.toString() == vendorId).map((raw) => Map<String, dynamic>.from(raw as Map)).toList();
@@ -2757,7 +2795,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     }
                                     final minPrice = (store['min_price'] as num?)?.toDouble() ?? 0;
                                     return SizedBox(
-                                      width: widthPer,
+                                      width: isMobile ? 292 : 360,
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: Colors.white,
@@ -2851,9 +2889,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                     );
-                                  }).toList(),
-                                );
-                              },
+                                },
+                              ),
                             ),
                           const SizedBox(height: 14),
                           Container(
@@ -4504,23 +4541,13 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
         Container(padding: const EdgeInsets.all(16), color: Colors.white, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(ps ? 'ویژگیونه' : 'امکانات فروشگاه حرفه‌ای', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
-          for (final x in [
+          ...[
             ps ? 'صفحه اختصاصی فروشگاه با نام و برند شما' : 'صفحه اختصاصی فروشگاه با نام و برند شما',
             ps ? 'نمایش همه محصولات با عکس و قیمت' : 'نمایش تمام محصولات با عکس و قیمت',
             ps ? 'نمایش فروشگاه در بخش فروشگاه‌های حرفه‌ای' : 'نمایش فروشگاه در بخش فروشگاه‌های حرفه‌ای',
             ps ? 'دسترسی به جایگاه فروشگاه در Boost' : 'قرارگیری در بخش فروشگاه‌های ویژه و Boost',
             ps ? 'پروفایل فروشنده، دنبال‌کردن و امتیازدهی' : 'پروفایل فروشنده، دنبال‌کردن و امتیازدهی',
-          ])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Color(0xFF007185), size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(x, style: const TextStyle(fontWeight: FontWeight.w700))),
-                ],
-              ),
-            ),
+          ].map((x) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [const Icon(Icons.check_circle, color: Color(0xFF007185), size: 20), const SizedBox(width: 8), Expanded(child: Text(x, style: const TextStyle(fontWeight: FontWeight.w700)))]))),
         ])),
       ]),
     );
