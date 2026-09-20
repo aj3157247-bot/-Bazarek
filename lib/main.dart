@@ -2471,7 +2471,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 1500),
                 child: Column(
                   children: [
-                    if (!isMobile) ...[
+                    if (!isMobile)
                     // Hero/banner section.
                     Container(
                       margin: EdgeInsets.symmetric(horizontal: horizontal),
@@ -2579,6 +2579,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 14),
 
+
                     // Professional storefront marketplace section.
                     Container(
                       margin: EdgeInsets.symmetric(horizontal: horizontal),
@@ -2609,7 +2610,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
-                                      isPs ? 'د پلورنځي محصولات په کټګوریو کې وګورئ او په اسانه خپل انتخاب وکړئ.' : 'محصولات هر فروشگاه را دسته‌بندی‌شده ببینید و به‌راحتی انتخاب کنید.',
+                                      isPs ? 'د پلورنځي محصولات په کټګوریو کې وګورئ او د محصول کوډ سره دقیق انتخاب وکړئ.' : 'محصولات هر فروشگاه را دسته‌بندی‌شده ببینید و با کد کالا دقیق انتخاب کنید.',
                                       style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.45),
                                     ),
                                   ],
@@ -2752,7 +2753,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 child: OutlinedButton.icon(
                                                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName))),
                                                   icon: const Icon(Icons.storefront_outlined, size: 17),
-                                                  label: Text(isPs ? 'ټول محصولات' : 'همه محصولات'),
+                                                  label: Text(isPs ? 'ټول محصولات او کوډونه' : 'همه محصولات و کدهای کالا'),
                                                 ),
                                               ),
                                             ],
