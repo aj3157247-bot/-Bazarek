@@ -1726,134 +1726,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}';
     }
 
-    Future<void> openMobileMenu() async {
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        builder: (sheetContext) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.only(bottom: 18),
-            children: [
-              ListTile(
-                leading: const Icon(Icons.home_outlined),
-                title: const Text('خانه'),
-                onTap: () => Navigator.pop(sheetContext),
-              ),
-              ListTile(
-                leading: const Icon(Icons.login_outlined),
-                title: Text(AuthService.isLoggedIn ? 'حساب من' : 'ورود / ثبت‌نام'),
-                subtitle: Text(AuthService.isLoggedIn ? 'مشاهده حساب و آگهی‌های من' : 'ورود به حساب یا ساخت حساب جدید'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AuthService.isLoggedIn
-                          ? const ProfileScreen()
-                          : const AuthScreen(),
-                    ),
-                  );
-                  if (mounted) setState(() {});
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.add_circle_outline),
-                title: const Text('ثبت آگهی'),
-                subtitle: const Text('کالای خود را برای فروش ثبت کنید'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  if (!await requireAccount(context)) return;
-                  if (!mounted) return;
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.list_alt_outlined),
-                title: const Text('آگهی‌های من'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  if (!await requireAccount(context)) return;
-                  if (!mounted) return;
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.favorite_border),
-                title: const Text('علاقه‌مندی‌ها'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAdsScreen()));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.chat_bubble_outline),
-                title: const Text('گفتگوها'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  if (!await requireAccount(context)) return;
-                  if (!mounted) return;
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.admin_panel_settings_outlined),
-                title: const Text('پنل مدیریت بازارک'),
-                subtitle: const Text('ورود به پنل مدیریت و بررسی آگهی‌ها'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.language),
-                title: const Text('تغییر زبان'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _toggleLanguage();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.location_on_outlined),
-                title: const Text('انتخاب ولایت'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  final value = await showModalBottomSheet<String>(
-                    context: context,
-                    showDragHandle: true,
-                    builder: (_) => SafeArea(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.public_outlined),
-                            title: Text(tr(context, 'all_provinces')),
-                            onTap: () => Navigator.pop(context, ''),
-                          ),
-                          ...provinces.map((p) => ListTile(
-                                leading: const Icon(Icons.location_on_outlined),
-                                title: Text(localizedProvince(context, p)),
-                                onTap: () => Navigator.pop(context, p),
-                              )),
-                        ],
-                      ),
-                    ),
-                  );
-                  if (value is String && mounted) {
-                    setState(() => selectedProvince = value);
-                    _loadProducts();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     Widget productCard(dynamic item) {
       List<dynamic> images = [];
       try {
@@ -2290,58 +2162,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        if (isMobile) ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _MobileHeaderAction(
-                                  icon: Icons.menu,
-                                  label: 'همه',
-                                  onTap: openMobileMenu,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: _MobileHeaderAction(
-                                  icon: Icons.person_outline,
-                                  label: AuthService.isLoggedIn ? 'حساب من' : 'ورود / ثبت‌نام',
-                                  onTap: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => AuthService.isLoggedIn
-                                            ? const ProfileScreen()
-                                            : const AuthScreen(),
-                                      ),
-                                    );
-                                    if (mounted) setState(() {});
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: _MobileHeaderAction(
-                                  icon: Icons.add_circle_outline,
-                                  label: 'ثبت آگهی',
-                                  onTap: () async {
-                                    if (!await requireAccount(context)) return;
-                                    if (!mounted) return;
-                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: _MobileHeaderAction(
-                                  icon: Icons.admin_panel_settings_outlined,
-                                  label: 'مدیریت',
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen())),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                        ],
                         Row(
                           children: [
                             if (!isMobile)
@@ -4886,21 +4706,15 @@ Future<PickedProfileImage?> pickProfileImage() async {
   // image_picker's temporary browser Blob URL. This fixes the Web-only
   // "Could not load Blob from its URL" error.
   if (kIsWeb) {
-    final result = await FilePicker.platform.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.image,
-      withData: true,
-      allowMultiple: false,
     );
-    if (result == null || result.files.isEmpty) return null;
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
-    return PickedProfileImage(
-      bytes: bytes,
-      name: file.name.isNotEmpty ? file.name : 'avatar.jpg',
-    );
+    return PickedProfileImage(bytes: bytes, name: file.name);
   }
 
   // Android/iOS: keep the existing image_picker flow unchanged.
@@ -4916,51 +4730,6 @@ Future<PickedProfileImage?> pickProfileImage() async {
     name: image.name.isNotEmpty ? image.name : 'avatar.jpg',
     mimeType: image.mimeType,
   );
-}
-
-class _MobileHeaderAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _MobileHeaderAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFF232F3E),
-      borderRadius: BorderRadius.circular(5),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(5),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 19),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class ProfileScreen extends StatefulWidget {
@@ -5788,16 +5557,14 @@ class _AddProductSheetState extends State<AddProductSheet> {
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
     if (kIsWeb) {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
-        withData: true,
-        allowMultiple: true,
       );
-      if (result == null || result.files.isEmpty) return;
+      if (result.isEmpty) return;
       final remaining = 20 - imageBytes.length;
-      for (final file in result.files.take(remaining)) {
-        final bytes = file.bytes;
-        if (bytes == null || bytes.isEmpty) continue;
+      for (final file in result.take(remaining)) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) continue;
         imageBytes.add(bytes);
         imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
       }
