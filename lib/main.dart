@@ -4218,7 +4218,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)]), borderRadius: BorderRadius.circular(8)),
                         child: Row(children: [
-                          const Icon(Icons.verified_storefront_rounded, color: Color(0xFFFFD814), size: 42),
+                          const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 42),
                           const SizedBox(width: 11),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(widget.sellerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
