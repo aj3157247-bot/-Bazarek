@@ -614,8 +614,11 @@ app.get('/api/listings', async (req, res) => {
     const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
     const storeStatus = {};
     for (const sub of (storeSubs || [])) {
+      const start = new Date(sub.starts_at || 0).getTime();
       const end = new Date(sub.ends_at || 0).getTime();
-      if (end > now) {
+      // A professional store is active only after the paid subscription has
+      // been approved and its validity window has actually started.
+      if (sub.status === 'active' && start <= now && end > now) {
         const current = storeStatus[sub.user_id];
         const currentEnd = current ? new Date(current.ends_at || 0).getTime() : 0;
         if (!current || end > currentEnd) {
