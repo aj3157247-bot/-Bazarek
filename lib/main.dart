@@ -1448,13 +1448,26 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> products = [];
   bool isLoading = true;
   final TextEditingController _searchController = TextEditingController();
+  final PageController _professionalStoreController = PageController(viewportFraction: .90);
+  Timer? _professionalStoreTimer;
   List<Map<String, dynamic>> _professionalStoresForHome = [];
+  int _professionalStorePage = 0;
   String? loadError;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _professionalStoreTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || !_professionalStoreController.hasClients || _professionalStoresForHome.length < 2) return;
+      final current = _professionalStoreController.page?.round() ?? 0;
+      final next = (current + 1) % _professionalStoresForHome.length;
+      _professionalStoreController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 650),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   Future<void> _loadProducts() async {
@@ -1487,6 +1500,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _professionalStoreTimer?.cancel();
+    _professionalStoreController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -1716,6 +1731,17 @@ class _HomeScreenState extends State<HomeScreen> {
     // the marketplace API. This keeps the homepage fast and lets a store open
     // its full seller catalog without introducing a second homepage data flow.
     final storeMap = <String, Map<String, dynamic>>{};
+    final now = DateTime.now();
+    bool isPaidActiveStore(Map<String, dynamic> item) {
+      if (item['store_active'] != true) return false;
+      final plan = item['store_plan']?.toString();
+      if (plan != 'store_monthly' && plan != 'store_yearly') return false;
+      final until = DateTime.tryParse(item['store_until']?.toString() ?? '');
+      if (until == null || !until.isAfter(now)) return false;
+      final starts = DateTime.tryParse(item['store_starts_at']?.toString() ?? '');
+      if (starts != null && starts.isAfter(now)) return false;
+      return true;
+    }
     for (final raw in products) {
       if (raw is! Map) continue;
       final item = Map<String, dynamic>.from(raw);
@@ -1723,19 +1749,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final shopName = item['shop_name']?.toString().trim().isNotEmpty == true
           ? item['shop_name'].toString().trim()
           : (item['seller_name']?.toString().trim() ?? '');
-      // A professional store is NEVER inferred from shop_name/seller_name.
-      // It must have an explicitly approved, paid store subscription.
-      final storePlan = item['store_plan']?.toString().trim();
-      final storeUntil = DateTime.tryParse(item['store_until']?.toString() ?? '');
-      final storeStarts = DateTime.tryParse(item['store_starts_at']?.toString() ?? '');
-      final now = DateTime.now();
-      final paidStorePlan = storePlan == 'store_monthly' || storePlan == 'store_yearly';
-      final storeApprovedAndActive = item['store_active'] == true &&
-          paidStorePlan &&
-          storeUntil != null &&
-          storeUntil.isAfter(now) &&
-          (storeStarts == null || !storeStarts.isAfter(now));
-      if (vendorId.isEmpty || shopName.isEmpty || !storeApprovedAndActive) continue;
+      // Only paid, management-approved professional stores appear in the storefront.
+      // Normal listings remain normal listings and never become a store automatically.
+      if (vendorId.isEmpty || shopName.isEmpty || !isPaidActiveStore(item)) continue;
       final current = storeMap[vendorId];
       if (current == null) {
         storeMap[vendorId] = {
@@ -2005,8 +2021,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFE3E6E6),
-      body: SafeArea(
-        child: RefreshIndicator(
+      body: RefreshIndicator(
         onRefresh: _loadProducts,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -2596,274 +2611,109 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     ],
 
-                    // Professional storefronts are shown ONLY when at least one
-                    // paid + management-approved store subscription is active.
+                    // Professional storefront — paid/approved stores only.
+                    // Hidden completely when there is no active paid store.
                     if (professionalStores.isNotEmpty) ...[
                       Container(
                         margin: EdgeInsets.symmetric(horizontal: horizontal),
                         padding: EdgeInsets.fromLTRB(isMobile ? 10 : 18, isMobile ? 14 : 18, isMobile ? 10 : 18, 14),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(isMobile ? 0 : 8),
+                          borderRadius: BorderRadius.circular(isMobile ? 0 : 12),
                           border: Border.all(color: const Color(0xFFE3E6E8)),
+                          boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 3))],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF3CD),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(Icons.storefront_rounded, color: Color(0xFF8A5A00), size: 25),
+                            Row(children: [
+                              Container(
+                                width: 44, height: 44,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [Color(0xFFFFD814), Color(0xFFFFB300)]),
+                                  borderRadius: BorderRadius.circular(13),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isPs ? 'مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای',
-                                        style: TextStyle(fontSize: isMobile ? 20 : 26, fontWeight: FontWeight.w900, color: const Color(0xFF131921)),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        isPs ? 'یوازې فعال او تایید شوي پلورنځي' : 'فقط فروشگاه‌های خریداری‌شده و تأییدشده',
-                                        style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.35),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (professionalStores.length > 1)
-                                  const Icon(Icons.swipe_rounded, size: 20, color: Color(0xFF007185)),
-                              ],
-                            ),
+                                child: const Icon(Icons.storefront_rounded, color: Color(0xFF131921), size: 26),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(isPs ? 'د بازارک مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای بازارک', style: TextStyle(fontSize: isMobile ? 19 : 25, fontWeight: FontWeight.w900, color: const Color(0xFF131921))),
+                                const SizedBox(height: 3),
+                                Text(isPs ? 'محصولات په کټګوریو کې وګورئ او مستقیم خرید وکړئ.' : 'محصولات را دسته‌بندی‌شده ببینید و مستقیم از فروشگاه خرید کنید.', style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.35)),
+                              ])),
+                              if (professionalStores.length > 1) const Row(children: [Icon(Icons.swipe_rounded, size: 19, color: Color(0xFF007185)), SizedBox(width: 3), Text('بکشید', style: TextStyle(fontSize: 10, color: Color(0xFF007185), fontWeight: FontWeight.w900))]),
+                            ]),
                             const SizedBox(height: 12),
                             SizedBox(
-                              height: isMobile ? 345 : 370,
+                              height: isMobile ? 286 : 315,
                               child: ListView.separated(
                                 scrollDirection: Axis.horizontal,
                                 physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.zero,
                                 itemCount: professionalStores.length,
                                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                                 itemBuilder: (context, index) {
                                   final store = professionalStores[index];
                                   final vendorId = store['vendor_id'].toString();
                                   final shopName = store['shop_name'].toString();
-                                  final storeProducts = products
-                                      .where((raw) => raw is Map &&
-                                          raw['vendor_id']?.toString() == vendorId &&
-                                          raw['store_active'] == true &&
-                                          (raw['store_plan']?.toString() == 'store_monthly' ||
-                                              raw['store_plan']?.toString() == 'store_yearly'))
-                                      .map((raw) => Map<String, dynamic>.from(raw as Map))
-                                      .toList();
-                                  final minPrice = (store['min_price'] as num?)?.toDouble() ?? 0;
-                                  final storeImage = _professionalFirstImage(store);
-                                  final previewProducts = storeProducts.take(4).toList();
-                                  final cardWidth = isMobile ? 292.0 : 360.0;
-
-                                  return SizedBox(
-                                    width: cardWidth,
+                                  final storeProducts = products.where((raw) => raw is Map && raw['vendor_id']?.toString() == vendorId && raw['store_active'] == true && (raw['store_plan'] == 'store_monthly' || raw['store_plan'] == 'store_yearly')).map((raw) => Map<String, dynamic>.from(raw as Map)).toList();
+                                  final storeImage = _professionalFirstImage(storeProducts.isNotEmpty ? storeProducts.first : store);
+                                  final previewProducts = storeProducts.take(3).toList();
+                                  final cardWidth = isMobile ? 285.0 : 330.0;
+                                  return InkWell(
+                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName))),
+                                    borderRadius: BorderRadius.circular(14),
                                     child: Container(
+                                      width: cardWidth,
+                                      padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [Color(0xFF131921), Color(0xFF243447)],
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: const [
-                                          BoxShadow(color: Color(0x22000000), blurRadius: 10, offset: Offset(0, 4)),
-                                        ],
+                                        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF131921), Color(0xFF243447)]),
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: const [BoxShadow(color: Color(0x24000000), blurRadius: 9, offset: Offset(0, 4))],
                                       ),
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          InkWell(
-                                            onTap: () => Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => ProfessionalStoreCatalogScreen(
-                                                  sellerId: vendorId,
-                                                  sellerName: shopName,
-                                                ),
-                                              ),
-                                            ),
-                                            borderRadius: BorderRadius.circular(9),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: 58,
-                                                  height: 58,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius: BorderRadius.circular(10),
-                                                  ),
-                                                  clipBehavior: Clip.antiAlias,
-                                                  child: storeImage.isNotEmpty
-                                                      ? Image.network(
-                                                          _optimizedImageUrl(storeImage),
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded, color: Color(0xFF37475A), size: 32),
-                                                        )
-                                                      : const Icon(Icons.storefront_rounded, color: Color(0xFF37475A), size: 32),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: Text(
-                                                              shopName,
-                                                              maxLines: 1,
-                                                              overflow: TextOverflow.ellipsis,
-                                                              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
-                                                            ),
-                                                          ),
-                                                          const Icon(Icons.verified_rounded, size: 18, color: Color(0xFFFFD814)),
-                                                        ],
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        '${store['count']} ${isPs ? 'محصول' : 'محصول'}${minPrice > 0 ? ' • از ${NumberFormatHelper.format(minPrice)} افغانی' : ''}',
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
-                                                        style: const TextStyle(color: Color(0xFFD5D9D9), fontSize: 10, fontWeight: FontWeight.w700),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Expanded(
-                                            child: previewProducts.isEmpty
-                                                ? const Center(
-                                                    child: Text(
-                                                      'محصولات فروشگاه',
-                                                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800),
-                                                    ),
-                                                  )
-                                                : GridView.builder(
-                                                    physics: const NeverScrollableScrollPhysics(),
-                                                    itemCount: previewProducts.length,
-                                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                                      crossAxisCount: 2,
-                                                      crossAxisSpacing: 7,
-                                                      mainAxisSpacing: 7,
-                                                      childAspectRatio: .95,
-                                                    ),
-                                                    itemBuilder: (_, productIndex) {
-                                                      final product = previewProducts[productIndex];
-                                                      final image = _professionalFirstImage(product);
-                                                      final price = _displayListingPrice(context, product);
-                                                      return InkWell(
-                                                        onTap: () => Navigator.push(
-                                                          context,
-                                                          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
-                                                        ),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        child: Container(
-                                                          decoration: BoxDecoration(
-                                                            color: Colors.white,
-                                                            borderRadius: BorderRadius.circular(8),
-                                                          ),
-                                                          clipBehavior: Clip.antiAlias,
-                                                          child: Column(
-                                                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                            children: [
-                                                              Expanded(
-                                                                child: image.isNotEmpty
-                                                                    ? Image.network(
-                                                                        _optimizedImageUrl(image),
-                                                                        fit: BoxFit.cover,
-                                                                        errorBuilder: (_, __, ___) => const ColoredBox(
-                                                                          color: Color(0xFFF3F3F3),
-                                                                          child: Icon(Icons.image_outlined, color: Colors.black38),
-                                                                        ),
-                                                                      )
-                                                                    : const ColoredBox(
-                                                                        color: Color(0xFFF3F3F3),
-                                                                        child: Icon(Icons.image_outlined, color: Colors.black38),
-                                                                      ),
-                                                              ),
-                                                              Padding(
-                                                                padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
-                                                                child: Column(
-                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                  children: [
-                                                                    Text(
-                                                                      product['title']?.toString() ?? '',
-                                                                      maxLines: 1,
-                                                                      overflow: TextOverflow.ellipsis,
-                                                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                                                                    ),
-                                                                    const SizedBox(height: 3),
-                                                                    Text(
-                                                                      price,
-                                                                      maxLines: 1,
-                                                                      overflow: TextOverflow.ellipsis,
-                                                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFB12704)),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: FilledButton(
-                                              style: FilledButton.styleFrom(
-                                                backgroundColor: const Color(0xFFFFD814),
-                                                foregroundColor: const Color(0xFF111111),
-                                                minimumSize: const Size.fromHeight(38),
-                                              ),
-                                              onPressed: () => Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => ProfessionalStoreCatalogScreen(
-                                                    sellerId: vendorId,
-                                                    sellerName: shopName,
-                                                  ),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                isPs ? 'ټول محصولات وګورئ' : 'مشاهده همه محصولات فروشگاه',
-                                                style: const TextStyle(fontWeight: FontWeight.w900),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Row(children: [
+                                          Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: storeImage.isNotEmpty ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(_optimizedImageUrl(storeImage), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded))) : const Icon(Icons.storefront_rounded, color: Color(0xFF37475A))),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                            Text(shopName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
+                                            const SizedBox(height: 2),
+                                            Text('${storeProducts.length} ${isPs ? 'محصول' : 'محصول'} • ${isPs ? 'پلورنځی فعال' : 'فروشگاه فعال'}', style: const TextStyle(color: Color(0xFFD5D9D9), fontSize: 9, fontWeight: FontWeight.w700)),
+                                          ])),
+                                          const Icon(Icons.verified_rounded, color: Color(0xFFFFD814), size: 21),
+                                        ]),
+                                        const SizedBox(height: 7),
+                                        Text(isPs ? 'د پلورنځي ټول محصولات، بیې او کټګورۍ وګورئ.' : 'همه محصولات، قیمت‌ها و دسته‌بندی‌های این فروشگاه را ببینید.', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFE7E9EA), fontSize: 10, height: 1.35)),
+                                        const SizedBox(height: 8),
+                                        Expanded(child: Row(children: [
+                                          for (var i = 0; i < previewProducts.length; i++) ...[
+                                            Expanded(child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)), clipBehavior: Clip.antiAlias, child: Stack(children: [
+                                              Positioned.fill(child: _professionalFirstImage(previewProducts[i]).isNotEmpty ? Image.network(_optimizedImageUrl(_professionalFirstImage(previewProducts[i])), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined))),
+                                              Positioned(left: 4, right: 4, bottom: 4, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3), decoration: BoxDecoration(color: Colors.black.withOpacity(.72), borderRadius: BorderRadius.circular(5)), child: Text(_displayListingPrice(context, previewProducts[i]), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900))))
+                                            ]))),
+                                            if (i != previewProducts.length - 1) const SizedBox(width: 6),
+                                          ],
+                                          if (previewProducts.isEmpty) const Expanded(child: Center(child: Icon(Icons.inventory_2_outlined, color: Colors.white54, size: 42))),
+                                        ])),
+                                        const SizedBox(height: 8),
+                                        SizedBox(width: double.infinity, child: FilledButton.icon(
+                                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFFD814), foregroundColor: const Color(0xFF111111), minimumSize: const Size.fromHeight(38)),
+                                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName))),
+                                          icon: const Icon(Icons.shopping_bag_outlined, size: 17),
+                                          label: Text(isPs ? 'پلورنځي ته لاړ شئ' : 'ورود به فروشگاه و خرید', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                        )),
+                                      ]),
                                     ),
                                   );
                                 },
                               ),
                             ),
-                            const SizedBox(height: 7),
-                            Center(
-                              child: Text(
-                                isPs ? 'د نورو پلورنځیو لپاره چپ او راست کش کړئ' : 'برای دیدن فروشگاه‌های دیگر، چپ و راست بکشید',
-                                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
-                              ),
-                            ),
+                            const SizedBox(height: 9),
+                            Row(children: [
+                              const Icon(Icons.lock_outline_rounded, size: 15, color: Color(0xFF007185)),
+                              const SizedBox(width: 5),
+                              Expanded(child: Text(isPs ? 'یوازې تایید شوي او تادیه شوي مسلکي پلورنځي دلته ښکاري.' : 'فقط فروشگاه‌های دارای پلن پولی و تأییدشده مدیریت در این بخش نمایش داده می‌شوند.', style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700))),
+                              Text('${professionalStores.length} فروشگاه', style: const TextStyle(fontSize: 9, color: Color(0xFF007185), fontWeight: FontWeight.w900)),
+                            ]),
                           ],
                         ),
                       ),
@@ -3060,7 +2910,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
-        ),
         ),
       ),
     );
@@ -4090,6 +3939,17 @@ String _professionalFirstImage(dynamic item) {
   return '';
 }
 
+Map<String, dynamic> _professionalSpecs(dynamic item) {
+  try {
+    final raw = item['product_specs'];
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    if (raw is String && raw.trim().isNotEmpty) {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    }
+  } catch (_) {}
+  return {};
+}
 
 class ProfessionalStoreCatalogScreen extends StatefulWidget {
   final String sellerId;
@@ -4236,9 +4096,16 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           AspectRatio(
             aspectRatio: 1.08,
-            child: image.isNotEmpty
-                ? ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(6)), child: Image.network(_optimizedImageUrl(image), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 38, color: Colors.black38))))
-                : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 38, color: Colors.black38)),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+              child: Stack(children: [
+                Positioned.fill(child: image.isNotEmpty
+                    ? Image.network(_optimizedImageUrl(image), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 38, color: Colors.black38)))
+                    : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 38, color: Colors.black38))),
+                Positioned(left: 8, bottom: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: Colors.black.withOpacity(.72), borderRadius: BorderRadius.circular(6)), child: Text(price, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)))),
+                Positioned(right: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFFD814), borderRadius: BorderRadius.circular(5)), child: Text(code, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900)))),
+              ]),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(9, 9, 9, 10),
@@ -4248,6 +4115,16 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
               Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFB12704))),
               const SizedBox(height: 5),
               Text(_professionalCategoryTitle(context, category), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 5),
+              Builder(builder: (_) {
+                final specs = _professionalSpecs(item);
+                final pairs = <String, String>{
+                  'سایز': '${specs['sizes'] ?? specs['size'] ?? ''}'.trim(),
+                  'رنگ': '${specs['colors'] ?? specs['color'] ?? ''}'.trim(),
+                  'برند': '${specs['brand'] ?? ''}'.trim(),
+                }..removeWhere((k, v) => v.isEmpty);
+                return pairs.isEmpty ? const SizedBox.shrink() : Wrap(spacing: 4, runSpacing: 4, children: pairs.entries.take(3).map((e) => Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3), decoration: BoxDecoration(color: const Color(0xFFF3F3F3), borderRadius: BorderRadius.circular(4)), child: Text('${e.key}: ${e.value}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800)))).toList());
+              }),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
@@ -6388,6 +6265,12 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final contactPhone = TextEditingController();
   final locationText = TextEditingController();
   final socialLink = TextEditingController();
+  final brand = TextEditingController();
+  final model = TextEditingController();
+  final colors = TextEditingController();
+  final sizes = TextEditingController();
+  final material = TextEditingController();
+  final condition = TextEditingController(text: 'نو');
 
   String category = '';
   String subcategory = '';
@@ -6542,6 +6425,11 @@ class _AddProductSheetState extends State<AddProductSheet> {
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
+        'product_specs': jsonEncode({
+          'brand': brand.text.trim(), 'model': model.text.trim(), 'colors': colors.text.trim(),
+          'sizes': sizes.text.trim(), 'material': material.text.trim(), 'condition': condition.text.trim(),
+          'watermark_enabled': true,
+        }),
       });
       var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
         'Content-Type':'application/json',
@@ -6636,6 +6524,22 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 selectedColor: const Color(0xFF1565C0),
                 labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800),
               )),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFF7F8F8), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE3E6E8))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(psText(context, 'مشخصات حرفه‌ای محصول', 'د محصول مسلکي معلومات'), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              const SizedBox(height: 5),
+              Text(psText(context, 'برای کفش، لباس و محصولات مشابه سایز و رنگ را با کاما جدا کنید؛ مثلاً 40,41,42 یا سیاه, سفید.', 'د بوټانو، جامو او ورته توکو لپاره سایزونه او رنګونه په کامه سره ولیکئ.'), style: const TextStyle(fontSize: 10, color: Colors.black54, height: 1.35)),
+              const SizedBox(height: 9),
+              Row(children: [Expanded(child: TextField(controller: brand, decoration: InputDecoration(labelText: psText(context, 'برند', 'برانډ'), prefixIcon: const Icon(Icons.branding_watermark_outlined)))), const SizedBox(width: 8), Expanded(child: TextField(controller: model, decoration: InputDecoration(labelText: psText(context, 'مدل', 'ماډل'), prefixIcon: const Icon(Icons.tag_outlined))))]),
+              const SizedBox(height: 8),
+              Row(children: [Expanded(child: TextField(controller: sizes, decoration: InputDecoration(labelText: psText(context, 'سایزها', 'سایزونه'), hintText: '40, 41, 42'))), const SizedBox(width: 8), Expanded(child: TextField(controller: colors, decoration: InputDecoration(labelText: psText(context, 'رنگ‌ها', 'رنګونه'), hintText: 'سیاه, سفید')))]),
+              const SizedBox(height: 8),
+              Row(children: [Expanded(child: TextField(controller: material, decoration: InputDecoration(labelText: psText(context, 'جنس', 'جنس')))), const SizedBox(width: 8), Expanded(child: TextField(controller: condition, decoration: InputDecoration(labelText: psText(context, 'وضعیت', 'حالت'))))]),
             ]),
           ),
           const SizedBox(height: 12),
