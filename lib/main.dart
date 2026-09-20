@@ -1542,8 +1542,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openDownloadApp() async {
+    // Always download the APK from the current Bazarek Pages deployment.
+    // This prevents the old Render URL from being opened by the app.
     final apkUrl = kIsWeb
-        ? '${Uri.base.origin}/download/bazarek.apk'
+        ? Uri.base.resolve('download/bazarek.apk').toString()
         : 'https://bazarek.pages.dev/download/bazarek.apk';
     try {
       final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
@@ -2178,37 +2180,34 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             const Spacer(),
                             // Amazon-style account entry: always visible at the top.
-                            if (!isMobile)
-                              TextButton.icon(
-                                onPressed: () async {
+                            Builder(
+                              builder: (_) {
+                                Future<void> openAccount() async {
                                   if (AuthService.isLoggedIn) {
                                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
                                   } else {
                                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
                                   }
                                   if (mounted) setState(() {});
-                                },
-                                icon: const Icon(Icons.person_outline, color: Colors.white, size: 20),
-                                label: Text(
-                                  AuthService.isLoggedIn
-                                      ? (isPs ? 'حساب من' : 'حساب من')
-                                      : (isPs ? 'نوم لیکنه / ننوتل' : 'ثبت‌نام / ورود'),
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
-                                ),
-                              )
-                            else
-                              IconButton(
-                                tooltip: AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
-                                onPressed: () async {
-                                  if (AuthService.isLoggedIn) {
-                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-                                  } else {
-                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
-                                  }
-                                  if (mounted) setState(() {});
-                                },
-                                icon: const Icon(Icons.person_outline, color: Colors.white),
-                              ),
+                                }
+                                return isMobile
+                                    ? IconButton(
+                                        tooltip: AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
+                                        onPressed: openAccount,
+                                        icon: const Icon(Icons.person_outline, color: Colors.white),
+                                      )
+                                    : TextButton.icon(
+                                        onPressed: openAccount,
+                                        icon: const Icon(Icons.person_outline, color: Colors.white, size: 20),
+                                        label: Text(
+                                          AuthService.isLoggedIn
+                                              ? (isPs ? 'حساب من' : 'حساب من')
+                                              : (isPs ? 'نوم لیکنه / ننوتل' : 'ثبت‌نام / ورود'),
+                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+                                        ),
+                                      );
+                              },
+                            ),
                             if (!isMobile) ...[
                               TextButton(
                                 onPressed: () => Navigator.push(
