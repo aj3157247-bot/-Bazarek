@@ -1499,6 +1499,173 @@ class _HomeScreenState extends State<HomeScreen> {
     BazarBuzurgApp.setLocale(context, Locale(current == 'fa' ? 'ps' : 'fa'));
   }
 
+  Future<void> _openAndroidDownload() async {
+    // APK shipped with the website: web/download/bazarek.apk
+    final apkUrl = Uri.base.resolve('download/bazarek.apk');
+    try {
+      final opened = await launchUrl(apkUrl, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDownloadOptions() async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      showDragHandle: true,
+      builder: (sheetContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 22),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFC107), Color(0xFFFF8F00)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 27),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('دانلود اپلیکیشن بازارک', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                          SizedBox(height: 3),
+                          Text('نسخه مناسب دستگاه خود را انتخاب کنید', style: TextStyle(color: Colors.black54, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _downloadOptionTile(
+                  context: sheetContext,
+                  icon: Icons.android,
+                  iconColor: const Color(0xFF43A047),
+                  title: 'دانلود نسخه اندروید',
+                  subtitle: 'دانلود مستقیم فایل APK بازارک',
+                  trailing: Icons.download_rounded,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openAndroidDownload();
+                  },
+                ),
+                const SizedBox(height: 10),
+                _downloadOptionTile(
+                  context: sheetContext,
+                  icon: Icons.phone_iphone_rounded,
+                  iconColor: const Color(0xFF263238),
+                  title: 'دانلود نسخه آیفون',
+                  subtitle: 'افزودن بازارک به صفحه اصلی آیفون',
+                  trailing: Icons.arrow_forward_ios_rounded,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    showDialog<void>(
+                      context: context,
+                      builder: (dialogContext) => Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.phone_iphone_rounded, color: Color(0xFF263238)),
+                              SizedBox(width: 8),
+                              Text('نسخه آیفون'),
+                            ],
+                          ),
+                          content: const Text(
+                            'در آیفون، بازارک را با Safari باز کنید و از گزینه Share، «Add to Home Screen / افزودن به صفحه اصلی» را بزنید تا مثل یک اپلیکیشن روی آیفون قرار بگیرد.',
+                            style: TextStyle(height: 1.6),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: const Text('متوجه شدم'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _downloadOptionTile({
+    required BuildContext context,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required IconData trailing,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFF7F9FC),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: iconColor,
+                child: Icon(icon, color: Colors.white, size: 27),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Icon(trailing, color: iconColor, size: 21),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -2116,8 +2283,80 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             const Spacer(),
-                            // Amazon-style account entry: always visible at the top.
-                            if (!isMobile)
+                            // Mobile controls are deliberately grouped LTR so the
+                            // account icon is visually at the far left, followed by
+                            // the highlighted app-download button and language.
+                            if (isMobile)
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () async {
+                                          if (AuthService.isLoggedIn) {
+                                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                                          } else {
+                                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+                                          }
+                                          if (mounted) setState(() {});
+                                        },
+                                        child: Container(
+                                          width: 42,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF232F3E),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.white24),
+                                          ),
+                                          child: const Icon(Icons.person_outline, color: Colors.white, size: 24),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: _showDownloadOptions,
+                                        child: Container(
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFFFFC107), Color(0xFFFF9800)],
+                                            ),
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: const [
+                                              BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
+                                            ],
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.download_rounded, color: Color(0xFF131921), size: 21),
+                                              SizedBox(width: 5),
+                                              Text('دانلود اپلیکیشن', style: TextStyle(color: Color(0xFF131921), fontSize: 11, fontWeight: FontWeight.w900)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      tooltip: isPs ? 'ژبه بدلول' : 'تغییر زبان',
+                                      onPressed: _toggleLanguage,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                                      icon: const Icon(Icons.translate_rounded, color: Colors.white, size: 24),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else ...[
                               TextButton.icon(
                                 onPressed: () async {
                                   if (AuthService.isLoggedIn) {
@@ -2129,104 +2368,53 @@ class _HomeScreenState extends State<HomeScreen> {
                                 },
                                 icon: const Icon(Icons.person_outline, color: Colors.white, size: 20),
                                 label: Text(
-                                  AuthService.isLoggedIn
-                                      ? (isPs ? 'حساب من' : 'حساب من')
-                                      : (isPs ? 'نوم لیکنه / ننوتل' : 'ثبت‌نام / ورود'),
+                                  AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
                                 ),
-                              )
-                            else
-                              IconButton(
-                                tooltip: AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
-                                onPressed: () async {
-                                  if (AuthService.isLoggedIn) {
-                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-                                  } else {
-                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
-                                  }
-                                  if (mounted) setState(() {});
-                                },
-                                icon: const Icon(Icons.person_outline, color: Colors.white),
                               ),
-                            if (!isMobile) ...[
                               TextButton(
                                 onPressed: () => Navigator.push(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const SavedAdsScreen(),
-                                  ),
+                                  MaterialPageRoute(builder: (_) => const SavedAdsScreen()),
                                 ),
                                 child: Text(
                                   isPs ? 'خوندي شوي' : 'علاقه‌مندی‌ها',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
                                 ),
                               ),
                               TextButton(
                                 onPressed: () async {
                                   if (!await requireAccount(context)) return;
                                   if (!context.mounted) return;
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const AddProductScreen(),
-                                    ),
-                                  );
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
                                 },
                                 child: Text(
                                   isPs ? 'اعلان درج کول' : 'ثبت آگهی',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
                                 ),
                               ),
                               TextButton(
                                 onPressed: () async {
                                   if (!await requireAccount(context)) return;
                                   if (!context.mounted) return;
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const ChatListScreen(),
-                                    ),
-                                  );
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
                                 },
                                 child: Text(
                                   isPs ? 'خبرې' : 'گفتگو',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
                                 ),
+                              ),
+                              IconButton(
+                                tooltip: tr(context, 'download'),
+                                onPressed: _showDownloadOptions,
+                                icon: const Icon(Icons.download_for_offline_outlined, color: Colors.white),
+                              ),
+                              IconButton(
+                                tooltip: isPs ? 'ژبه بدلول' : 'تغییر زبان',
+                                onPressed: _toggleLanguage,
+                                icon: const Icon(Icons.translate_rounded, color: Colors.white),
                               ),
                             ],
-                            IconButton(
-                              tooltip: isPs ? 'ژبه بدلول' : 'تغییر زبان',
-                              onPressed: _toggleLanguage,
-                              icon: const Icon(
-                                Icons.translate_rounded,
-                                color: Colors.white,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: isPs ? 'حساب' : 'حساب من',
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ProfileScreen(),
-                                ),
-                              ),
-                              icon: const Icon(
-                                Icons.person_outline,
-                                color: Colors.white,
-                              ),
-                            ),
                             if (!isMobile)
                               const Padding(
                                 padding: EdgeInsets.only(left: 3),
