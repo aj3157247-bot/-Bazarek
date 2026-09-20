@@ -5049,15 +5049,21 @@ Future<PickedProfileImage?> pickProfileImage() async {
   // image_picker's temporary browser Blob URL. This fixes the Web-only
   // "Could not load Blob from its URL" error.
   if (kIsWeb) {
-    final file = await FilePicker.pickFile(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
+      withData: true,
+      allowMultiple: false,
     );
-    if (file == null) return null;
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
+    if (result == null || result.files.isEmpty) return null;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
       throw Exception('خواندن تصویر انتخاب‌شده در مرورگر ممکن نشد. لطفاً دوباره انتخاب کنید.');
     }
-    return PickedProfileImage(bytes: bytes, name: file.name);
+    return PickedProfileImage(
+      bytes: bytes,
+      name: file.name.isNotEmpty ? file.name : 'avatar.jpg',
+    );
   }
 
   // Android/iOS: keep the existing image_picker flow unchanged.
@@ -5900,14 +5906,16 @@ class _AddProductSheetState extends State<AddProductSheet> {
     // Web: use file_picker so the browser gives us the actual bytes.
     // This avoids image_picker Blob URLs, which can fail after selection.
     if (kIsWeb) {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
+        withData: true,
+        allowMultiple: true,
       );
-      if (result.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
       final remaining = 20 - imageBytes.length;
-      for (final file in result.take(remaining)) {
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) continue;
+      for (final file in result.files.take(remaining)) {
+        final bytes = file.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
         imageBytes.add(bytes);
         imageNames.add(file.name.isNotEmpty ? file.name : 'image.jpg');
       }
