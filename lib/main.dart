@@ -1260,14 +1260,14 @@ class ApiService {
   }
 
   static Future<Map<String,dynamic>> createGlobalBoost(String plan, String reference) async {
-    var res = await http.post(Uri.parse('${ApiConfig.baseUrl}/subscriptions'), headers: headers, body: jsonEncode({
+    // Store purchase uses the Cloudflare Pages Function directly.
+    // No other API routes are changed here.
+    final endpoint = kIsWeb
+        ? '${Uri.base.origin}/api/subscriptions'
+        : '${ApiConfig.baseUrl}/subscriptions';
+    final res = await http.post(Uri.parse(endpoint), headers: headers, body: jsonEncode({
       'plan': plan, 'payment_reference': reference.trim(),
     })).timeout(const Duration(seconds: 20));
-    if (res.statusCode == 401 && await refreshSession()) {
-      res = await http.post(Uri.parse('${ApiConfig.baseUrl}/subscriptions'), headers: headers, body: jsonEncode({
-        'plan': plan, 'payment_reference': reference.trim(),
-      })).timeout(const Duration(seconds: 20));
-    }
     final data = jsonDecode(res.body);
     if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت درخواست اشتراک ناموفق بود.') : 'ثبت درخواست اشتراک ناموفق بود.');
     return Map<String,dynamic>.from(data);
