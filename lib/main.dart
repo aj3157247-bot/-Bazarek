@@ -1035,12 +1035,7 @@ class ApiService {
     dynamic data;
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
     if (res.statusCode == 200 && data is Map<String, dynamic>) return data;
-    if (data is Map && data['error'] != null) {
-      final code = data['code']?.toString();
-      final message = data['error'].toString();
-      throw Exception(code == null || code.isEmpty ? message : '$message [$code]');
-    }
-    throw Exception('آگهی پیدا نشد.');
+    throw Exception(data is Map ? (data['error'] ?? 'آگهی پیدا نشد.') : 'آگهی پیدا نشد.');
   }
 
   static Future<Map<String, dynamic>> submitReport({required String listingId, required String reason}) async {
@@ -1593,10 +1588,10 @@ class _WebDeepLinkEntryState extends State<WebDeepLinkEntry> {
       }
 
       if (parts.isNotEmpty && parts.first == 'listing' && parts.length >= 2) {
-        final raw = parts[1].trim();
-        final idMatch = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
-            .firstMatch(raw);
-        final id = idMatch?.group(0) ?? raw;
+        final raw = parts[1];
+        final id = RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(raw)
+            ? raw
+            : (RegExp(r'([0-9a-fA-F-]{36})$').firstMatch(raw)?.group(1) ?? raw);
         final product = await ApiService.getListingById(id);
         if (!mounted) return;
         String imageUrl = '';
@@ -4105,9 +4100,6 @@ class ProductDetailScreen extends StatelessWidget {
     final title = product['title']?.toString().trim().isNotEmpty == true
         ? product['title'].toString().trim()
         : 'آگهی در بازارک';
-    // Always share the canonical listing URL, not Uri.base.toString().
-    // Uri.base can contain a temporary route/query and some share targets
-    // then display the URL twice when it is also supplied as shareData.url.
     final url = 'https://bazarek.pages.dev${_listingPath(product)}';
     final price = _displayListingPrice(context, product);
     final province = localizedProvince(context, product['province']?.toString() ?? '');
@@ -4119,8 +4111,6 @@ class ProductDetailScreen extends StatelessWidget {
       'مشاهده آگهی در بازارک:',
     ].join('\n');
 
-    // The URL is supplied separately to Web Share so compatible apps render
-    // one clickable URL instead of duplicating it in the message text.
     final shared = await shareWeb(title: title, text: text, url: url);
     if (!shared) {
       await Clipboard.setData(ClipboardData(text: url));
