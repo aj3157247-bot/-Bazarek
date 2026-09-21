@@ -28,7 +28,10 @@ function firstImage(value) {
 
 function replaceTitle(html, value) {
   const tag = `<title>${escHtml(value)}</title>`;
-  const re = /<title\b[^>]*>[\s\S]*?<\/title>/i;
+  const re = /<title\b[^>]*>[\s\S]*?<\/title>/gi;
+  // اگر (به هر دلیلی، از جمله باگ‌های احتمالی در HTML منبع) بیش از یک
+  // <title> وجود داشته باشد، همه را با همین یک مقدار درست جایگزین می‌کنیم
+  // تا crawlerها هیچ‌وقت تگ عنوان قدیمی/عمومی را به‌جای عنوان آگهی نبینند.
   return re.test(html)
     ? html.replace(re, tag)
     : html.replace(/<\/head>/i, `${tag}\n</head>`);
@@ -39,7 +42,7 @@ function replaceMeta(html, attr, key, value) {
   const tag = `<meta ${attr}="${safeKey}" content="${escHtml(value)}">`;
   const re = new RegExp(
     `<meta\\b[^>]*\\b${attr}\\s*=\\s*["']${safeKey}["'][^>]*>`,
-    "i"
+    "gi"
   );
 
   return re.test(html)
@@ -49,7 +52,7 @@ function replaceMeta(html, attr, key, value) {
 
 function replaceCanonical(html, href) {
   const tag = `<link rel="canonical" href="${escHtml(href)}">`;
-  const re = /<link\b[^>]*\brel\s*=\s*["']canonical["'][^>]*>/i;
+  const re = /<link\b[^>]*\brel\s*=\s*["']canonical["'][^>]*>/gi;
   return re.test(html)
     ? html.replace(re, tag)
     : html.replace(/<\/head>/i, `${tag}\n</head>`);
