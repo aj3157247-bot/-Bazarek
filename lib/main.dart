@@ -1260,19 +1260,38 @@ class ApiService {
   }
 
   static Future<Map<String,dynamic>> createGlobalBoost(String plan, String reference) async {
-    // Store purchase uses the Cloudflare Pages Function directly.
-    // No other API routes are changed here.
     final endpoint = kIsWeb
         ? '${Uri.base.origin}/api/subscriptions'
         : '${ApiConfig.baseUrl}/subscriptions';
-    final res = await http.post(Uri.parse(endpoint), headers: headers, body: jsonEncode({
-      'plan': plan, 'payment_reference': reference.trim(),
-    })).timeout(const Duration(seconds: 20));
-    final data = jsonDecode(res.body);
-    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت درخواست اشتراک ناموفق بود.') : 'ثبت درخواست اشتراک ناموفق بود.');
-    return Map<String,dynamic>.from(data);
-  }
 
+    Future<http.Response> send() => http.post(
+      Uri.parse(endpoint),
+      headers: headers,
+      body: jsonEncode({'plan': plan, 'payment_reference': reference.trim()}),
+    ).timeout(const Duration(seconds: 20));
+
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await send();
+    }
+
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+
+    if (res.statusCode != 201) {
+      final message = data?['error']?.toString().trim();
+      if (message != null && message.isNotEmpty) throw Exception(message);
+      if (res.body.trim().isEmpty) {
+        throw Exception('پاسخ خالی از سرور دریافت شد. لطفاً دوباره تلاش کنید.');
+      }
+      throw Exception('ثبت درخواست اشتراک ناموفق بود.');
+    }
+    if (data == null) throw Exception('پاسخ نامعتبر از سرور دریافت شد.');
+    return data;
+  }
 
   static Future<List<dynamic>> getSupportRequests() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support/requests'), headers: headers).timeout(const Duration(seconds: 15));
