@@ -48,7 +48,6 @@ String _listingTitle(dynamic product) {
 }
 
 Future<void> _openListing(BuildContext context, dynamic product) async {
-  _rememberSeoContext(context);
   final previousPath = kIsWeb ? currentWebPath() : '/';
   final path = _listingPath(product);
   if (kIsWeb) {
@@ -87,7 +86,6 @@ Future<void> _openListing(BuildContext context, dynamic product) async {
 }
 
 void _openCategoryRoute(BuildContext context, Map<String, dynamic> category, {String? subcategoryId, String? subcategoryTitle}) {
-  _rememberSeoContext(context);
   final previousPath = kIsWeb ? currentWebPath() : '/';
   final categoryId = category['id']?.toString() ?? '';
   final title = subcategoryTitle ?? localizedCategoryTitle(context, categoryId, category['title']?.toString() ?? 'دسته‌بندی');
