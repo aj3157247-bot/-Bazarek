@@ -1,1 +1,3 @@
+# Flutter Web deep-link fallback; keep the requested browser path.
+/listing/* /index.html 200
 /category/* /index.html 200
