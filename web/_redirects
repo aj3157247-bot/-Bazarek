@@ -1,3 +1,2 @@
-# Flutter Web deep-link fallback; keep the requested browser path.
-/listing/* /index.html 200
-/category/* /index.html 200
+# Intentionally empty.
+# Listing and category deep-links are handled by Cloudflare Pages Functions.
