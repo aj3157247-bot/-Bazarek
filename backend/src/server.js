@@ -668,7 +668,7 @@ app.get('/api/listings/:id', async (req,res)=>{
   try {
     const db=getSupabaseAdmin();
     const {data,error}=await db.from('products')
-      .select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications')
+      .select('*')
       .eq('id', req.params.id)
       .eq('is_active', true)
       .maybeSingle();
@@ -677,13 +677,15 @@ app.get('/api/listings/:id', async (req,res)=>{
 
     let seller = {};
     if (data.vendor_id) {
-      const {data:profile} = await db.from('profiles')
+      const {data:profile,error:profileError} = await db.from('profiles')
         .select('id,full_name,shop_name,phone,bio')
         .eq('id', data.vendor_id)
         .maybeSingle();
+      if (profileError) console.error('listing seller lookup:', profileError);
       seller = profile || {};
     }
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       ...data,
       seller_name: seller.shop_name || seller.full_name || 'فروشنده بازارک',
@@ -691,8 +693,8 @@ app.get('/api/listings/:id', async (req,res)=>{
       store_description: seller.bio || '',
     });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({error:'خطا در دریافت آگهی.'});
+    console.error('GET /api/listings/:id failed:', e);
+    res.status(500).json({error:'خطا در دریافت آگهی.', details: process.env.NODE_ENV === 'production' ? undefined : String(e?.message || e)});
   }
 });
 
