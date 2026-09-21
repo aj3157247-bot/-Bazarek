@@ -1,7 +1,6 @@
-// Cloudflare Pages Function for direct listing deep-links.
-// Always serve the Flutter shell with HTTP 200 while keeping the requested
-// /listing/<id> URL in the browser. Listing data is loaded by Flutter from
-// /api/listings/<id>.
+// Bazarek - SEO-aware Cloudflare Pages Function for /listing/<id>.
+// Keeps the requested URL, serves the Flutter shell with HTTP 200, and injects
+// per-listing SEO metadata into the initial HTML for search/social crawlers.
 
 function esc(value) {
   return String(value ?? '')
@@ -12,16 +11,50 @@ function esc(value) {
     .replace(/'/g, '&#39;');
 }
 
+function cleanText(value, fallback = '') {
+  return String(value ?? fallback)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function firstImage(raw) {
+  if (Array.isArray(raw)) {
+    const value = raw.find((item) => typeof item === 'string' && item.trim());
+    return value ? value.trim() : '';
+  }
+
+  if (typeof raw !== 'string') return '';
+  const value = raw.trim();
+  if (!value) return '';
+
   try {
-    if (Array.isArray(raw) && raw.length) return String(raw[0]);
-    if (typeof raw === 'string' && raw.trim()) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) return String(parsed[0]);
-      if (/^https?:\/\//i.test(raw)) return raw;
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const image = parsed.find((item) => typeof item === 'string' && item.trim());
+      if (image) return image.trim();
     }
   } catch (_) {}
-  return '';
+
+  return /^https?:\/\//i.test(value) ? value : '';
+}
+
+function normalizeCurrency(value) {
+  const currency = cleanText(value, 'AFN').toUpperCase();
+  return currency === 'USD' ? 'USD' : 'AFN';
+}
+
+function numericPrice(value) {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === 'string') {
+    const normalized = value.replace(/,/g, '').trim();
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return null;
+}
+
+function upsertHeadTag(html, pattern, tag) {
+  return pattern.test(html) ? html.replace(pattern, tag) : null;
 }
 
 async function getProduct(env, id) {
@@ -29,7 +62,7 @@ async function getProduct(env, id) {
   const supabaseKey = String(
     env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY || ''
   );
-  if (!supabaseUrl || !supabaseKey) return null;
+  if (!supabaseUrl || !supabaseKey || !id) return null;
 
   const url = new URL(`${supabaseUrl}/rest/v1/products`);
   url.searchParams.set(
@@ -53,15 +86,116 @@ async function getProduct(env, id) {
   return Array.isArray(rows) ? (rows[0] || null) : null;
 }
 
+function buildDescription(product) {
+  const title = cleanText(product.title, 'آگهی در بازارک');
+  const details = cleanText(product.description);
+  const category = cleanText(product.category);
+  const subcategory = cleanText(product.subcategory);
+  const location = cleanText(product.location_text || product.province);
+
+  const parts = [title];
+  if (details) parts.push(details);
+  if (category) parts.push(`دسته‌بندی: ${category}${subcategory ? `، ${subcategory}` : ''}`);
+  if (location) parts.push(`موقعیت: ${location}`);
+  parts.push('خرید و فروش در بازار آنلاین افغانستان، بازارک.');
+
+  return parts.join('؛ ').replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
+function buildPriceText(product) {
+  const price = numericPrice(product.price);
+  if (price == null) return '';
+  const currency = normalizeCurrency(product.currency);
+  const formatted = new Intl.NumberFormat('fa-AF', {
+    maximumFractionDigits: 2,
+  }).format(price);
+  return `قیمت: ${formatted} ${currency === 'AFN' ? 'افغانی' : 'دالر'}`;
+}
+
+function buildJsonLd(product, canonical, description, image) {
+  const title = cleanText(product.title, 'آگهی بازارک');
+  const price = numericPrice(product.price);
+  const currency = normalizeCurrency(product.currency);
+
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: title,
+    description,
+    url: canonical,
+  };
+
+  if (image) data.image = [image];
+
+  const priceText = buildPriceText(product);
+  if (priceText) data.offers = {
+    '@type': 'Offer',
+    url: canonical,
+    priceCurrency: currency,
+    price,
+    availability: 'https://schema.org/InStock',
+  };
+
+  if (product.category) data.category = cleanText(product.category);
+
+  return JSON.stringify(data).replace(/<\/script/gi, '<\\/script');
+}
+
+function injectSeo(html, product, canonical) {
+  const title = `${cleanText(product.title, 'آگهی')} | بازارک`;
+  const description = buildDescription(product);
+  const image = firstImage(product.image_url);
+  const priceText = buildPriceText(product);
+  const jsonLd = buildJsonLd(product, canonical, description, image);
+
+  const replacements = [
+    [/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${esc(title)}</title>`],
+    [/<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${esc(description)}">`],
+    [/<meta\s+name=["']robots["'][^>]*>/i, '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">'],
+    [/<link\s+rel=["']canonical["'][^>]*>/i, `<link rel="canonical" href="${esc(canonical)}">`],
+    [/<meta\s+property=["']og:type["'][^>]*>/i, '<meta property="og:type" content="product">'],
+    [/<meta\s+property=["']og:title["'][^>]*>/i, `<meta property="og:title" content="${esc(title)}">`],
+    [/<meta\s+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${esc(description)}">`],
+    [/<meta\s+property=["']og:url["'][^>]*>/i, `<meta property="og:url" content="${esc(canonical)}">`],
+    [/<meta\s+property=["']og:locale["'][^>]*>/i, '<meta property="og:locale" content="fa_AF">'],
+    [/<meta\s+property=["']og:image["'][^>]*>/i, image ? `<meta property="og:image" content="${esc(image)}">` : ''],
+    [/<meta\s+name=["']twitter:card["'][^>]*>/i, '<meta name="twitter:card" content="summary_large_image">'],
+    [/<meta\s+name=["']twitter:title["'][^>]*>/i, `<meta name="twitter:title" content="${esc(title)}">`],
+    [/<meta\s+name=["']twitter:description["'][^>]*>/i, `<meta name="twitter:description" content="${esc(description)}">`],
+    [/<meta\s+name=["']twitter:image["'][^>]*>/i, image ? `<meta name="twitter:image" content="${esc(image)}">` : ''],
+  ];
+
+  for (const [pattern, tag] of replacements) {
+    const updated = upsertHeadTag(html, pattern, tag);
+    if (updated !== null) html = updated;
+  }
+
+  // Add price information to the description only when a valid price exists.
+  // This is useful for social/search previews without inventing a price.
+  if (priceText && !description.includes(priceText)) {
+    // Keep the existing description stable; Product JSON-LD carries the exact price.
+  }
+
+  const jsonLdPattern = /<script\s+type=["']application\/ld\+json["'][^>]*data-bazarek-listing-seo=["']1["'][^>]*>[\s\S]*?<\/script>/i;
+  const jsonLdTag = `<script type="application/ld+json" data-bazarek-listing-seo="1">${jsonLd}</script>`;
+  const existingJsonLd = upsertHeadTag(html, jsonLdPattern, jsonLdTag);
+  if (existingJsonLd !== null) {
+    html = existingJsonLd;
+  } else {
+    html = html.replace(/<\/head>/i, `${jsonLdTag}\n</head>`);
+  }
+
+  return html;
+}
+
 export async function onRequestGet({ request, params, env }) {
   const id = String(params.id || '').trim();
   const origin = new URL(request.url).origin;
+  const canonical = `${origin}/listing/${encodeURIComponent(id)}`;
 
-  // IMPORTANT: fetch the pretty root path, not /index.html.
-  // Cloudflare's asset service can redirect /index.html to /, which would
-  // otherwise turn /listing/<id> into the home page before Flutter starts.
   let htmlResponse;
   try {
+    // Use the pretty root path so Pages does not redirect /index.html to /.
     const assetUrl = new URL('/', request.url);
     htmlResponse = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
   } catch (_) {
@@ -72,56 +206,11 @@ export async function onRequestGet({ request, params, env }) {
 
   let html = await htmlResponse.text();
 
-  // Server-side listing metadata is optional. If the database is unavailable,
-  // the Flutter app still loads normally and gets the listing from its API.
   try {
     const product = id ? await getProduct(env, id) : null;
-    if (product) {
-      const title = `${product.title || 'آگهی'} | بازارک`;
-      const descriptionRaw = `${product.title || 'آگهی'}؛ ${product.description || 'خرید و فروش در افغانستان'}`
-        .replace(/\s+/g, ' ')
-        .trim();
-      const description = descriptionRaw.slice(0, 250);
-      const canonical = `${origin}/listing/${encodeURIComponent(id)}`;
-      const image = firstImage(product.image_url);
-
-      const jsonLd = JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: product.title || 'آگهی بازارک',
-        description,
-        ...(image ? { image: [image] } : {}),
-        offers: {
-          '@type': 'Offer',
-          url: canonical,
-          priceCurrency:
-            String(product.currency || 'AFN').toUpperCase() === 'USD' ? 'USD' : 'AFN',
-          ...(product.price != null ? { price: product.price } : {}),
-          availability: 'https://schema.org/InStock',
-        },
-      }).replace(/<\/script/gi, '<\\/script');
-
-      const tags =
-        `\n<title>${esc(title)}</title>\n` +
-        `<meta name="description" content="${esc(description)}">\n` +
-        `<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">\n` +
-        `<link rel="canonical" href="${esc(canonical)}">\n` +
-        `<meta property="og:type" content="product">\n` +
-        `<meta property="og:title" content="${esc(title)}">\n` +
-        `<meta property="og:description" content="${esc(description)}">\n` +
-        `<meta property="og:url" content="${esc(canonical)}">\n` +
-        `<meta property="og:locale" content="fa_AF">\n` +
-        (image ? `<meta property="og:image" content="${esc(image)}">\n` : '') +
-        `<meta name="twitter:card" content="summary_large_image">\n` +
-        `<meta name="twitter:title" content="${esc(title)}">\n` +
-        `<meta name="twitter:description" content="${esc(description)}">\n` +
-        (image ? `<meta name="twitter:image" content="${esc(image)}">\n` : '') +
-        `<script type="application/ld+json">${jsonLd}</script>`;
-
-      html = html.replace('</head>', `${tags}\n</head>`);
-    }
+    if (product) html = injectSeo(html, product, canonical);
   } catch (_) {
-    // SEO metadata must never prevent the actual Flutter app from loading.
+    // SEO must never prevent the Flutter app from loading.
   }
 
   return new Response(html, {
