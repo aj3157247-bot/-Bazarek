@@ -1025,12 +1025,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getListingById(String id) async {
     final cleanId = id.trim();
     if (cleanId.isEmpty) throw Exception('شناسه آگهی نامعتبر است.');
-    // Direct shared/deep links on the Cloudflare website must not depend on Render.
-    // Other existing API calls remain untouched in this safe fix.
-    final endpoint = kIsWeb
-        ? '${Uri.base.origin}/api/listings/$cleanId'
-        : '${ApiConfig.baseUrl}/listings/$cleanId';
-    final uri = Uri.parse(endpoint);
+    final uri = Uri.parse('${ApiConfig.baseUrl}/listings/$cleanId');
     final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
     dynamic data;
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
@@ -1260,14 +1255,13 @@ class ApiService {
   }
 
   static Future<Map<String,dynamic>> createGlobalBoost(String plan, String reference) async {
-    final endpoint = kIsWeb
-        ? '${Uri.base.origin}/api/subscriptions'
-        : '${ApiConfig.baseUrl}/subscriptions';
-
     Future<http.Response> send() => http.post(
-      Uri.parse(endpoint),
+      Uri.parse('${ApiConfig.baseUrl}/subscriptions'),
       headers: headers,
-      body: jsonEncode({'plan': plan, 'payment_reference': reference.trim()}),
+      body: jsonEncode({
+        'plan': plan,
+        'payment_reference': reference.trim(),
+      }),
     ).timeout(const Duration(seconds: 20));
 
     var res = await send();
@@ -1289,9 +1283,12 @@ class ApiService {
       }
       throw Exception('ثبت درخواست اشتراک ناموفق بود.');
     }
-    if (data == null) throw Exception('پاسخ نامعتبر از سرور دریافت شد.');
+    if (data == null) {
+      throw Exception('پاسخ نامعتبر از سرور دریافت شد.');
+    }
     return data;
   }
+
 
   static Future<List<dynamic>> getSupportRequests() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/support/requests'), headers: headers).timeout(const Duration(seconds: 15));
@@ -4119,7 +4116,9 @@ class ProductDetailScreen extends StatelessWidget {
     final title = product['title']?.toString().trim().isNotEmpty == true
         ? product['title'].toString().trim()
         : 'آگهی در بازارک';
-    final url = 'https://bazarek.pages.dev${_listingPath(product)}';
+    final url = kIsWeb
+        ? Uri.base.toString()
+        : 'https://bazarek.pages.dev${_listingPath(product)}';
     final price = _displayListingPrice(context, product);
     final province = localizedProvince(context, product['province']?.toString() ?? '');
     final text = [
@@ -4128,6 +4127,7 @@ class ProductDetailScreen extends StatelessWidget {
       if (province.isNotEmpty) '📍 $province',
       '',
       'مشاهده آگهی در بازارک:',
+      url,
     ].join('\n');
 
     final shared = await shareWeb(title: title, text: text, url: url);
