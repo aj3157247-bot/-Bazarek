@@ -1,6 +1,10 @@
 // Bazarek - SEO-aware Cloudflare Pages Function for /listing/<id>.
-// Keeps the requested URL, serves the Flutter shell with HTTP 200, and injects
-// per-listing SEO metadata into the initial HTML for search/social crawlers.
+// Serves the Flutter shell at the requested listing URL and injects
+// listing-specific SEO metadata when the listing can be read.
+
+function cleanText(value, fallback = '') {
+  return String(value ?? fallback).replace(/\s+/g, ' ').trim();
+}
 
 function esc(value) {
   return String(value ?? '')
@@ -11,108 +15,114 @@ function esc(value) {
     .replace(/'/g, '&#39;');
 }
 
-function cleanText(value, fallback = '') {
-  return String(value ?? fallback)
-    .replace(/\s+/g, ' ')
-    .trim();
+function jsSafeJson(value) {
+  return JSON.stringify(value).replace(/<\/script/gi, '<\\/script');
 }
 
-function firstImage(raw) {
-  if (Array.isArray(raw)) {
-    const value = raw.find((item) => typeof item === 'string' && item.trim());
-    return value ? value.trim() : '';
-  }
-
-  if (typeof raw !== 'string') return '';
-  const value = raw.trim();
-  if (!value) return '';
-
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      const image = parsed.find((item) => typeof item === 'string' && item.trim());
-      if (image) return image.trim();
+function firstImage(...values) {
+  for (const raw of values) {
+    if (Array.isArray(raw)) {
+      const found = raw.find((v) => typeof v === 'string' && v.trim());
+      if (found) return found.trim();
+      continue;
     }
-  } catch (_) {}
 
-  return /^https?:\/\//i.test(value) ? value : '';
-}
+    if (typeof raw !== 'string') continue;
+    const value = raw.trim();
+    if (!value) continue;
 
-function normalizeCurrency(value) {
-  const currency = cleanText(value, 'AFN').toUpperCase();
-  return currency === 'USD' ? 'USD' : 'AFN';
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        const found = parsed.find((v) => typeof v === 'string' && v.trim());
+        if (found) return found.trim();
+      }
+    } catch (_) {}
+
+    if (/^https?:\/\//i.test(value)) return value;
+  }
+  return '';
 }
 
 function numericPrice(value) {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+
   if (typeof value === 'string') {
-    const normalized = value.replace(/,/g, '').trim();
-    const parsed = Number(normalized);
-    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    const normalized = value
+      .replace(/[٬،,\s]/g, '')
+      .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+      .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+
+    const n = Number(normalized);
+    if (Number.isFinite(n) && n >= 0) return n;
   }
+
   return null;
 }
 
-function upsertHeadTag(html, pattern, tag) {
-  return pattern.test(html) ? html.replace(pattern, tag) : null;
+function normalizeCurrency(value) {
+  const c = cleanText(value, 'AFN').toUpperCase();
+  if (c === 'USD' || c === 'US$' || c === '$' || c === 'دالر' || c === 'دلار') return 'USD';
+  return 'AFN';
 }
 
-async function getProduct(env, id) {
-  const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/$/, '');
-  const supabaseKey = String(
-    env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY || ''
-  );
-  if (!supabaseUrl || !supabaseKey || !id) return null;
-
-  const url = new URL(`${supabaseUrl}/rest/v1/products`);
-  url.searchParams.set(
-    'select',
-    'id,title,description,price,currency,image_url,category,subcategory,location_text,province,is_active'
-  );
-  url.searchParams.set('id', `eq.${id}`);
-  url.searchParams.set('is_active', 'eq.true');
-  url.searchParams.set('limit', '1');
-
-  const response = await fetch(url, {
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      Accept: 'application/json',
-    },
-  });
-
-  if (!response.ok) return null;
-  const rows = await response.json().catch(() => []);
-  return Array.isArray(rows) ? (rows[0] || null) : null;
-}
-
-function buildDescription(product) {
-  const title = cleanText(product.title, 'آگهی در بازارک');
-  const details = cleanText(product.description);
-  const category = cleanText(product.category);
-  const subcategory = cleanText(product.subcategory);
-  const location = cleanText(product.location_text || product.province);
-
-  const parts = [title];
-  if (details) parts.push(details);
-  if (category) parts.push(`دسته‌بندی: ${category}${subcategory ? `، ${subcategory}` : ''}`);
-  if (location) parts.push(`موقعیت: ${location}`);
-  parts.push('خرید و فروش در بازار آنلاین افغانستان، بازارک.');
-
-  return parts.join('؛ ').replace(/\s+/g, ' ').trim().slice(0, 300);
-}
-
-function buildPriceText(product) {
+function priceText(product) {
   const price = numericPrice(product.price);
   if (price == null) return '';
+
   const currency = normalizeCurrency(product.currency);
   const formatted = new Intl.NumberFormat('fa-AF', {
     maximumFractionDigits: 2,
   }).format(price);
-  return `قیمت: ${formatted} ${currency === 'AFN' ? 'افغانی' : 'دالر'}`;
+
+  return `قیمت: ${formatted} ${currency === 'USD' ? 'دالر' : 'افغانی'}`;
 }
 
-function buildJsonLd(product, canonical, description, image) {
+function imageFromProduct(product) {
+  return firstImage(
+    product.image_url,
+    product.image_urls,
+    product.images,
+    product.photos,
+    product.photo_urls,
+    product.thumbnail,
+    product.cover_image,
+    product.cover_image_url
+  );
+}
+
+function locationFromProduct(product) {
+  return cleanText(
+    product.location_text ||
+    product.location ||
+    product.city ||
+    product.province ||
+    product.address ||
+    ''
+  );
+}
+
+function buildDescription(product) {
+  const title = cleanText(product.title, 'آگهی بازارک');
+  const details = cleanText(product.description);
+  const category = cleanText(product.category);
+  const subcategory = cleanText(product.subcategory);
+  const location = locationFromProduct(product);
+  const price = priceText(product);
+
+  const parts = [title];
+  if (details) parts.push(details.slice(0, 220));
+  if (price) parts.push(price);
+  if (category) {
+    parts.push(`دسته‌بندی: ${category}${subcategory ? `، ${subcategory}` : ''}`);
+  }
+  if (location) parts.push(`موقعیت: ${location}`);
+  parts.push('خرید و فروش در بازار آنلاین افغانستان، بازارک.');
+
+  return parts.join('؛ ').replace(/\s+/g, ' ').slice(0, 320);
+}
+
+function buildProductJsonLd(product, canonical, description, image) {
   const title = cleanText(product.title, 'آگهی بازارک');
   const price = numericPrice(product.price);
   const currency = normalizeCurrency(product.currency);
@@ -126,61 +136,97 @@ function buildJsonLd(product, canonical, description, image) {
   };
 
   if (image) data.image = [image];
-
-  const priceText = buildPriceText(product);
-  if (priceText) data.offers = {
-    '@type': 'Offer',
-    url: canonical,
-    priceCurrency: currency,
-    price,
-    availability: 'https://schema.org/InStock',
-  };
-
   if (product.category) data.category = cleanText(product.category);
 
-  return JSON.stringify(data).replace(/<\/script/gi, '<\\/script');
+  if (price != null) {
+    data.offers = {
+      '@type': 'Offer',
+      url: canonical,
+      priceCurrency: currency,
+      price,
+      availability: 'https://schema.org/InStock',
+    };
+  }
+
+  return jsSafeJson(data);
+}
+
+function setOrAddMeta(html, selectorRegex, tag) {
+  if (selectorRegex.test(html)) return html.replace(selectorRegex, tag);
+  return html.replace(/<\/head>/i, `${tag}\n</head>`);
+}
+
+function setOrAddLink(html, selectorRegex, tag) {
+  if (selectorRegex.test(html)) return html.replace(selectorRegex, tag);
+  return html.replace(/<\/head>/i, `${tag}\n</head>`);
 }
 
 function injectSeo(html, product, canonical) {
   const title = `${cleanText(product.title, 'آگهی')} | بازارک`;
   const description = buildDescription(product);
-  const image = firstImage(product.image_url);
-  const priceText = buildPriceText(product);
-  const jsonLd = buildJsonLd(product, canonical, description, image);
+  const image = imageFromProduct(product);
+  const location = locationFromProduct(product);
+  const price = priceText(product);
 
-  const replacements = [
-    [/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${esc(title)}</title>`],
-    [/<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${esc(description)}">`],
-    [/<meta\s+name=["']robots["'][^>]*>/i, '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">'],
-    [/<link\s+rel=["']canonical["'][^>]*>/i, `<link rel="canonical" href="${esc(canonical)}">`],
-    [/<meta\s+property=["']og:type["'][^>]*>/i, '<meta property="og:type" content="product">'],
-    [/<meta\s+property=["']og:title["'][^>]*>/i, `<meta property="og:title" content="${esc(title)}">`],
-    [/<meta\s+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${esc(description)}">`],
-    [/<meta\s+property=["']og:url["'][^>]*>/i, `<meta property="og:url" content="${esc(canonical)}">`],
-    [/<meta\s+property=["']og:locale["'][^>]*>/i, '<meta property="og:locale" content="fa_AF">'],
-    [/<meta\s+property=["']og:image["'][^>]*>/i, image ? `<meta property="og:image" content="${esc(image)}">` : ''],
-    [/<meta\s+name=["']twitter:card["'][^>]*>/i, '<meta name="twitter:card" content="summary_large_image">'],
-    [/<meta\s+name=["']twitter:title["'][^>]*>/i, `<meta name="twitter:title" content="${esc(title)}">`],
-    [/<meta\s+name=["']twitter:description["'][^>]*>/i, `<meta name="twitter:description" content="${esc(description)}">`],
-    [/<meta\s+name=["']twitter:image["'][^>]*>/i, image ? `<meta name="twitter:image" content="${esc(image)}">` : ''],
+  html = /<title[^>]*>[\s\S]*?<\/title>/i.test(html)
+    ? html.replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${esc(title)}</title>`)
+    : html.replace(/<\/head>/i, `<title>${esc(title)}</title>\n</head>`);
+
+  html = setOrAddMeta(
+    html,
+    /<meta\s+name=["']description["'][^>]*>/i,
+    `<meta name="description" content="${esc(description)}">`
+  );
+
+  html = setOrAddMeta(
+    html,
+    /<meta\s+name=["']robots["'][^>]*>/i,
+    '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">'
+  );
+
+  html = setOrAddLink(
+    html,
+    /<link\s+rel=["']canonical["'][^>]*>/i,
+    `<link rel="canonical" href="${esc(canonical)}">`
+  );
+
+  const metas = [
+    ['property', 'og:type', 'product'],
+    ['property', 'og:title', title],
+    ['property', 'og:description', description],
+    ['property', 'og:url', canonical],
+    ['property', 'og:locale', 'fa_AF'],
+    ['name', 'twitter:card', 'summary_large_image'],
+    ['name', 'twitter:title', title],
+    ['name', 'twitter:description', description],
   ];
 
-  for (const [pattern, tag] of replacements) {
-    const updated = upsertHeadTag(html, pattern, tag);
-    if (updated !== null) html = updated;
+  if (image) {
+    metas.push(['property', 'og:image', image]);
+    metas.push(['name', 'twitter:image', image]);
   }
 
-  // Add price information to the description only when a valid price exists.
-  // This is useful for social/search previews without inventing a price.
-  if (priceText && !description.includes(priceText)) {
-    // Keep the existing description stable; Product JSON-LD carries the exact price.
+  if (price) {
+    metas.push(['property', 'product:price:amount', String(numericPrice(product.price))]);
+    metas.push(['property', 'product:price:currency', normalizeCurrency(product.currency)]);
   }
 
+  if (location) {
+    metas.push(['property', 'og:locality', location]);
+  }
+
+  for (const [kind, key, value] of metas) {
+    const attr = kind === 'property' ? 'property' : 'name';
+    const pattern = new RegExp(`<meta\\s+${attr}=["']${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`, 'i');
+    html = setOrAddMeta(html, pattern, `<meta ${attr}="${esc(key)}" content="${esc(value)}">`);
+  }
+
+  const jsonLd = buildProductJsonLd(product, canonical, description, image);
   const jsonLdPattern = /<script\s+type=["']application\/ld\+json["'][^>]*data-bazarek-listing-seo=["']1["'][^>]*>[\s\S]*?<\/script>/i;
   const jsonLdTag = `<script type="application/ld+json" data-bazarek-listing-seo="1">${jsonLd}</script>`;
-  const existingJsonLd = upsertHeadTag(html, jsonLdPattern, jsonLdTag);
-  if (existingJsonLd !== null) {
-    html = existingJsonLd;
+
+  if (jsonLdPattern.test(html)) {
+    html = html.replace(jsonLdPattern, jsonLdTag);
   } else {
     html = html.replace(/<\/head>/i, `${jsonLdTag}\n</head>`);
   }
@@ -188,16 +234,75 @@ function injectSeo(html, product, canonical) {
   return html;
 }
 
+async function getProduct(env, id) {
+  const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/$/, '');
+  const supabaseKey = String(
+    env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.SUPABASE_KEY ||
+    env.SUPABASE_ANON_KEY ||
+    ''
+  );
+
+  if (!supabaseUrl || !supabaseKey || !id) return null;
+
+  const url = new URL(`${supabaseUrl}/rest/v1/products`);
+  url.searchParams.set(
+    'select',
+    [
+      'id',
+      'title',
+      'description',
+      'price',
+      'currency',
+      'image_url',
+      'image_urls',
+      'images',
+      'photos',
+      'photo_urls',
+      'thumbnail',
+      'cover_image',
+      'cover_image_url',
+      'category',
+      'subcategory',
+      'location_text',
+      'location',
+      'city',
+      'province',
+      'address',
+      'is_active',
+    ].join(',')
+  );
+  url.searchParams.set('id', `eq.${id}`);
+  url.searchParams.set('is_active', 'eq.true');
+  url.searchParams.set('limit', '1');
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const rows = await response.json().catch(() => []);
+  return Array.isArray(rows) ? (rows[0] || null) : null;
+}
+
 export async function onRequestGet({ request, params, env }) {
   const id = String(params.id || '').trim();
-  const origin = new URL(request.url).origin;
-  const canonical = `${origin}/listing/${encodeURIComponent(id)}`;
+  const requestUrl = new URL(request.url);
+  const canonical = `${requestUrl.origin}/listing/${encodeURIComponent(id)}`;
 
   let htmlResponse;
+
   try {
-    // Use the pretty root path so Pages does not redirect /index.html to /.
-    const assetUrl = new URL('/', request.url);
-    htmlResponse = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+    // Cloudflare recommends fetching the pretty path rather than /index.html.
+    htmlResponse = await env.ASSETS.fetch(
+      new Request(new URL('/', request.url).toString(), request)
+    );
   } catch (_) {
     return new Response('Static asset unavailable', { status: 500 });
   }
@@ -207,17 +312,20 @@ export async function onRequestGet({ request, params, env }) {
   let html = await htmlResponse.text();
 
   try {
-    const product = id ? await getProduct(env, id) : null;
-    if (product) html = injectSeo(html, product, canonical);
+    const product = await getProduct(env, id);
+    if (product) {
+      html = injectSeo(html, product, canonical);
+    }
   } catch (_) {
-    // SEO must never prevent the Flutter app from loading.
+    // SEO must never prevent the Flutter application from loading.
   }
 
   return new Response(html, {
     status: 200,
     headers: {
       'content-type': 'text/html; charset=UTF-8',
-      'Cache-Control': 'no-store',
+      'cache-control': 'no-store',
+      'x-bazarek-seo': 'listing',
     },
   });
 }
