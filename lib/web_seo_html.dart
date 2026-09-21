@@ -123,10 +123,15 @@ Future<bool> shareWeb({
     final navigator = html.window.navigator;
     final canShare = js_util.getProperty<dynamic>(navigator, 'share');
     if (canShare == null) return false;
+    // navigator.share انتظار یک Object واقعی جاوااسکریپت دارد؛ jsify کردن داده‌ها
+    // از شکست بی‌صدای Web Share در بعضی نسخه‌های Android/Chrome جلوگیری می‌کند.
+    final shareData = js_util.jsify(<String, String>{
+      'title': title,
+      'text': text,
+      'url': url,
+    });
     await js_util.promiseToFuture<dynamic>(
-      js_util.callMethod<dynamic>(navigator, 'share', [
-        <String, String>{'title': title, 'text': text, 'url': url}
-      ]),
+      js_util.callMethod<dynamic>(navigator, 'share', [shareData]),
     );
     return true;
   } catch (_) {
