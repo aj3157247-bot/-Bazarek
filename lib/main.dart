@@ -1542,21 +1542,133 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openDownloadApp() async {
-    // Always download the APK from the current Bazarek Pages deployment.
-    // This prevents the old Render URL from being opened by the app.
     final apkUrl = kIsWeb
         ? Uri.base.resolve('download/bazarek.apk').toString()
         : 'https://bazarek.pages.dev/download/bazarek.apk';
-    try {
-      final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
-      if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.')));
+    final webUrl = kIsWeb ? Uri.base.origin : 'https://bazarek.pages.dev/';
+
+    Future<void> openUrl(String url) async {
+      try {
+        final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        if (!opened && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک ممکن نشد.')));
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک ممکن نشد.')));
+        }
       }
     }
+
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF7F8FC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF667EEA), Color(0xFF764BA2)]),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const [BoxShadow(color: Color(0x33764BA2), blurRadius: 14, offset: Offset(0, 6))],
+                ),
+                child: const Icon(Icons.download_rounded, color: Colors.white, size: 34),
+              ),
+              const SizedBox(height: 10),
+              const Text('دریافت اپلیکیشن بازارک', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 5),
+              const Text('نسخه مناسب دستگاه خود را انتخاب کنید.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        await openUrl(apkUrl);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF00A878), Color(0xFF007E68)]),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: const [BoxShadow(color: Color(0x22007860), blurRadius: 12, offset: Offset(0, 5))],
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(Icons.android_rounded, color: Colors.white, size: 42),
+                            SizedBox(height: 8),
+                            Text('نسخه اندروید', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                            SizedBox(height: 3),
+                            Text('دانلود APK', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        await openUrl(webUrl);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF2563EB)]),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: const [BoxShadow(color: Color(0x222563EB), blurRadius: 12, offset: Offset(0, 5))],
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(Icons.phone_iphone_rounded, color: Colors.white, size: 42),
+                            SizedBox(height: 8),
+                            Text('نسخه آیفون', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                            SizedBox(height: 3),
+                            Text('نسخه وب‌اپ بازارک', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF2FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFD7DEFF)),
+                ),
+                child: const Text(
+                  'آیفون: نسخه وب‌اپ باز می‌شود؛ در Safari از Share و سپس Add to Home Screen استفاده کنید.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, height: 1.45, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -2208,6 +2320,38 @@ class _HomeScreenState extends State<HomeScreen> {
                                       );
                               },
                             ),
+                            if (isMobile)
+                              Container(
+                                height: 36,
+                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [Color(0xFFFFB703), Color(0xFFFB5607)]),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: const [BoxShadow(color: Color(0x33FB5607), blurRadius: 8, offset: Offset(0, 3))],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () async {
+                                      if (!await requireAccount(context)) return;
+                                      if (!context.mounted) return;
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 9),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.add_circle_rounded, color: Colors.white, size: 18),
+                                          SizedBox(width: 4),
+                                          Text('آگهی رایگان', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             if (!isMobile) ...[
                               TextButton(
                                 onPressed: () => Navigator.push(
@@ -2642,7 +2786,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   onPressed: () async {
                                     if (!await requireAccount(context)) return;
                                     if (!context.mounted) return;
-                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen()));
                                   },
                                   icon: const Icon(Icons.add_business_rounded, size: 18),
                                   label: Text(isPs ? 'پلورنځی فعال کړه' : 'فعال‌سازی فروشگاه'),
@@ -2677,7 +2821,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     onPressed: () async {
                                       if (!await requireAccount(context)) return;
                                       if (!context.mounted) return;
-                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen()));
                                     },
                                     child: Text(isPs ? 'فعالول' : 'فعال‌سازی'),
                                   ),
@@ -2805,7 +2949,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const Icon(Icons.workspace_premium_rounded, color: Color(0xFF8A5A00), size: 28),
                                 const SizedBox(width: 8),
                                 Expanded(child: Text(isPs ? 'پلورنځی لا هم فعال نه دی؟ خپل مسلکي پلورنځی فعال کړئ.' : 'فروشگاه حرفه‌ای خودت را فعال کن؛ ماهانه ۶۰۰ یا سالانه ۶۰۰۰ افغانی.', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800))),
-                                TextButton(onPressed: () async { if (!await requireAccount(context)) return; if (!context.mounted) return; Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen())); }, child: Text(isPs ? 'فعالول' : 'فعال‌سازی')),
+                                TextButton(onPressed: () async { if (!await requireAccount(context)) return; if (!context.mounted) return; Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }, child: Text(isPs ? 'فعالول' : 'فعال‌سازی')),
                               ],
                             ),
                           ),
