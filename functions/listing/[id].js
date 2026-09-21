@@ -1,4 +1,4 @@
-function esc(value) {
+function escHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -7,213 +7,256 @@ function esc(value) {
     .replace(/'/g, "&#39;");
 }
 
-function text(value) {
-  if (value == null) return "";
-  if (Array.isArray(value)) return value.join(", ");
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+function cleanText(value, max = 180) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
-function parseImages(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map(text).filter(Boolean);
-  if (typeof value === "object") {
-    return Object.values(value).map(text).filter(Boolean);
-  }
+function firstImage(value) {
+  if (!value) return "";
+  if (Array.isArray(value)) return String(value[0] || "");
   const raw = String(value).trim();
-  if (!raw) return [];
+
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.map(text).filter(Boolean);
+    if (Array.isArray(parsed)) return String(parsed[0] || "");
+    if (typeof parsed === "string") return parsed;
   } catch (_) {}
-  return raw.split(/\s*,\s*/).filter(Boolean);
-}
 
-function pick(obj, names) {
-  for (const name of names) {
-    const value = obj?.[name];
-    if (value !== null && value !== undefined && String(value).trim() !== "") {
-      return value;
-    }
+  if (raw.startsWith("[") && raw.endsWith("]")) {
+    const match = raw.match(/https?:\/\/[^"'\\\s]+/);
+    if (match) return match[0];
   }
-  return "";
-}
 
-function digitsToLatin(value) {
-  return String(value ?? "")
-    .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-    .replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  return raw;
 }
 
 function formatPrice(value, currency) {
-  if (value === "" || value == null) return "";
-  const numeric = Number(digitsToLatin(String(value)).replace(/[^\d.-]/g, ""));
-  if (!Number.isFinite(numeric)) return text(value);
-  return `${new Intl.NumberFormat("fa-AF").format(numeric)} ${currency || "AFN"}`;
-}
+  if (value === null || value === undefined || value === "") return "";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return cleanText(value, 80);
 
-function normalizeDescription(value) {
-  return text(value).replace(/\s+/g, " ").trim();
-}
+  const formatted = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(number);
 
-async function getProduct(id, env) {
-  const supabaseUrl = String(env.SUPABASE_URL || "").replace(/\/+$/, "");
-  const serviceKey = String(env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY || "");
-
-  if (!supabaseUrl || !serviceKey) return null;
-
-  const endpoint = `${supabaseUrl}/rest/v1/products?id=eq.${encodeURIComponent(id)}&select=*`;
-  const response = await fetch(endpoint, {
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      Accept: "application/json"
-    }
-  });
-
-  if (!response.ok) return null;
-  const data = await response.json();
-  if (!Array.isArray(data) || !data.length) return null;
-  return data[0];
-}
-
-function setMeta(doc, attr, key, content) {
-  if (!content) return;
-  const selector = `meta[${attr}="${key}"]`;
-  const found = doc.match(new RegExp(`<meta\\s+[^>]*${attr}=["']${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*>`, "i"));
-  const tag = `<meta ${attr}="${key}" content="${esc(content)}">`;
-  if (found) {
-    doc = doc.replace(found[0], tag);
-  } else {
-    doc = doc.replace(/<head[^>]*>/i, m => `${m}\n${tag}`);
-  }
-  return doc;
-}
-
-function injectSeo(html, product, url) {
-  const title = text(pick(product, ["title", "name", "product_name"])) || "آگهی در بازارک";
-  const description =
-    normalizeDescription(pick(product, ["description", "details", "body"])) ||
-    `${title} در بازارک؛ بازار آنلاین خرید و فروش افغانستان.`;
-
-  const price = pick(product, ["price", "amount"]);
-  const currency = text(pick(product, ["currency", "price_currency"])) || "AFN";
-  const location =
-    text(pick(product, ["location_text", "location", "city", "province", "address"])) || "افغانستان";
-  const province = text(pick(product, ["province"]));
-  const category = text(pick(product, ["category"]));
-  const subcategory = text(pick(product, ["subcategory"]));
-
-  const images = parseImages(pick(product, [
-    "image_url", "image_urls", "images", "photos", "photo_urls",
-    "thumbnail", "cover_image", "cover_image_url"
-  ]));
-  const image = images[0] || "";
-
-  const canonical = url.toString().split("?")[0];
-  const seoDescription = description.slice(0, 300);
-
-  html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(title)} | بازارک</title>`);
-  if (!/<title[\s>]/i.test(html)) {
-    html = html.replace(/<head[^>]*>/i, m => `${m}\n<title>${esc(title)} | بازارک</title>`);
-  }
-
-  html = setMeta(html, "name", "description", seoDescription);
-  html = setMeta(html, "name", "robots", "index,follow,max-image-preview:large");
-  html = setMeta(html, "property", "og:title", `${title} | بازارک`);
-  html = setMeta(html, "property", "og:description", seoDescription);
-  html = setMeta(html, "property", "og:url", canonical);
-  html = setMeta(html, "property", "og:type", "product");
-  html = setMeta(html, "property", "og:locale", "fa_AF");
-  html = setMeta(html, "name", "twitter:card", image ? "summary_large_image" : "summary");
-  html = setMeta(html, "name", "twitter:title", `${title} | بازارک`);
-  html = setMeta(html, "name", "twitter:description", seoDescription);
-
-  if (image) {
-    html = setMeta(html, "property", "og:image", image);
-    html = setMeta(html, "property", "og:image:alt", title);
-    html = setMeta(html, "name", "twitter:image", image);
-  }
-
-  if (price !== "" && price != null) {
-    html = setMeta(html, "property", "product:price:amount", String(price));
-    html = setMeta(html, "property", "product:price:currency", currency);
-  }
-
-  const oldCanonical = /<link\s+[^>]*rel=["']canonical["'][^>]*>/i;
-  const canonicalTag = `<link rel="canonical" href="${esc(canonical)}">`;
-  if (oldCanonical.test(html)) html = html.replace(oldCanonical, canonicalTag);
-  else html = html.replace(/<head[^>]*>/i, m => `${m}\n${canonicalTag}`);
-
-  const structured = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "name": title,
-    "description": seoDescription,
-    "url": canonical,
-    "image": images,
-    "category": [category, subcategory].filter(Boolean).join(" > ") || undefined,
-    "offers": price !== "" && price != null ? {
-      "@type": "Offer",
-      "price": String(price),
-      "priceCurrency": currency,
-      "availability": product.is_active === false
-        ? "https://schema.org/OutOfStock"
-        : "https://schema.org/InStock",
-      "url": canonical,
-      "itemCondition": "https://schema.org/UsedCondition"
-    } : undefined,
-    "areaServed": location,
-    "address": province ? {
-      "@type": "PostalAddress",
-      "addressRegion": province,
-      "addressCountry": "AF"
-    } : undefined
+  const labels = {
+    AFN: "افغانی",
+    USD: "دالر",
+    EUR: "یورو",
+    PKR: "روپیه",
   };
 
-  const json = JSON.stringify(structured).replace(/</g, "\\u003c");
-  html = html.replace(
-    /<script[^>]+id=["']bazarek-listing-jsonld["'][^>]*>[\s\S]*?<\/script>/i,
-    ""
-  );
-  html = html.replace(/<\/head>/i,
-    `<script id="bazarek-listing-jsonld" type="application/ld+json">${json}</script>\n</head>`
-  );
+  return `${formatted} ${labels[currency] || currency || ""}`.trim();
+}
 
-  return html;
+function replaceTag(html, tagName, key, value) {
+  const safeKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const safeValue = escHtml(value);
+  const attr = tagName === "title" ? "" : ` ${tagName}="${safeKey}"`;
+
+  if (tagName === "title") {
+    const re = /<title\b[^>]*>[\s\S]*?<\/title>/i;
+    if (re.test(html)) return html.replace(re, `<title>${safeValue}</title>`);
+    return html.replace(/<\/head>/i, `<title>${safeValue}</title>\n</head>`);
+  }
+
+  const re = new RegExp(
+    `<meta\\b[^>]*\\b${tagName}\\s*=\\s*["']${safeKey}["'][^>]*>`,
+    "i"
+  );
+  const tag = `<meta${attr} content="${safeValue}">`;
+
+  if (re.test(html)) return html.replace(re, tag);
+  return html.replace(/<\/head>/i, `${tag}\n</head>`);
+}
+
+function replaceLinkCanonical(html, href) {
+  const safeHref = escHtml(href);
+  const re = /<link\b[^>]*\brel\s*=\s*["']canonical["'][^>]*>/i;
+  const tag = `<link rel="canonical" href="${safeHref}">`;
+
+  if (re.test(html)) return html.replace(re, tag);
+  return html.replace(/<\/head>/i, `${tag}\n</head>`);
+}
+
+function replaceOrAddJsonLd(html, data) {
+  const json = JSON.stringify(data).replace(/</g, "\\u003c");
+  const tag = `<script type="application/ld+json" id="bazarek-listing-jsonld">${json}</script>`;
+  const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*id\s*=\s*["']bazarek-listing-jsonld["'][^>]*>[\s\S]*?<\/script>/i;
+
+  if (re.test(html)) return html.replace(re, tag);
+  return html.replace(/<\/head>/i, `${tag}\n</head>`);
+}
+
+async function fetchShell(env) {
+  const asset = await env.ASSETS.fetch("/");
+  if (!asset || !asset.ok) {
+    throw new Error(`ASSETS fetch failed: ${asset?.status ?? "unknown"}`);
+  }
+  return await asset.text();
+}
+
+async function getProduct(env, id) {
+  const supabaseUrl = String(env.SUPABASE_URL || "").replace(/\/+$/, "");
+  const supabaseKey =
+    env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.SUPABASE_KEY ||
+    env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  const url =
+    `${supabaseUrl}/rest/v1/products` +
+    `?select=*` +
+    `&id=eq.${encodeURIComponent(id)}` +
+    `&is_active=eq.true` +
+    `&limit=1`;
+
+  const response = await fetch(url, {
+    headers: {
+      apikey: String(supabaseKey),
+      Authorization: `Bearer ${String(supabaseKey)}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase products request failed: ${response.status}`);
+  }
+
+  const rows = await response.json();
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+function buildSeoHtml(html, product, requestUrl) {
+  const title = cleanText(product.title, 120) || "آگهی در بازارک";
+  const description =
+    cleanText(product.description, 180) ||
+    `آگهی ${title} در بازار آنلاین افغانستان، بازارک.`;
+
+  const canonical = requestUrl.toString().split("?")[0].split("#")[0];
+  const image = firstImage(product.image_url);
+  const price = formatPrice(product.price, product.currency);
+  const location =
+    cleanText(product.location_text, 120) ||
+    cleanText(product.location, 120) ||
+    cleanText(product.province, 80);
+
+  let out = html;
+
+  out = replaceTag(out, "title", "", `${title} | بازارک`);
+  out = replaceTag(out, "name", "description", description);
+  out = replaceTag(out, "name", "robots", "index,follow,max-image-preview:large");
+  out = replaceTag(out, "property", "og:title", title);
+  out = replaceTag(out, "property", "og:description", description);
+  out = replaceTag(out, "property", "og:url", canonical);
+  out = replaceTag(out, "property", "og:type", "product");
+  out = replaceTag(out, "property", "og:locale", "fa_AF");
+
+  if (image) {
+    out = replaceTag(out, "property", "og:image", image);
+    out = replaceTag(out, "property", "og:image:alt", title);
+    out = replaceTag(out, "name", "twitter:image", image);
+  }
+
+  out = replaceTag(out, "name", "twitter:card", image ? "summary_large_image" : "summary");
+  out = replaceTag(out, "name", "twitter:title", title);
+  out = replaceTag(out, "name", "twitter:description", description);
+  out = replaceLinkCanonical(out, canonical);
+
+  if (price) {
+    out = replaceTag(out, "property", "product:price:amount", String(product.price));
+    out = replaceTag(out, "property", "product:price:currency", product.currency || "AFN");
+  }
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: title,
+    description,
+    url: canonical,
+    ...(image ? { image: [image] } : {}),
+    ...(price
+      ? {
+          offers: {
+            "@type": "Offer",
+            price: String(product.price),
+            priceCurrency: product.currency || "AFN",
+            availability: product.is_active === false
+              ? "https://schema.org/OutOfStock"
+              : "https://schema.org/InStock",
+            url: canonical,
+          },
+        }
+      : {}),
+    ...(location ? { areaServed: location } : {}),
+    brand: {
+      "@type": "Brand",
+      name: "بازارک",
+    },
+  };
+
+  out = replaceOrAddJsonLd(out, jsonLd);
+  return out;
 }
 
 export async function onRequestGet(context) {
+  const url = new URL(context.request.url);
   const id = String(context.params?.id || "").trim();
 
+  // Always keep the listing route alive. SEO enhancement must never break the app.
+  let shell;
   try {
-    const product = await getProduct(id, context.env);
-    const asset = await context.env.ASSETS.fetch("/");
-    const contentType = asset.headers.get("content-type") || "text/html; charset=UTF-8";
+    shell = await fetchShell(context.env);
+  } catch (error) {
+    return new Response("Bazarek shell unavailable", {
+      status: 500,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  if (!id) {
+    return new Response(shell, {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  try {
+    const product = await getProduct(context.env, id);
 
     if (!product) {
-      const response = new Response(asset.body, asset);
-      response.headers.set("content-type", contentType);
-      response.headers.set("x-bazarek-seo", "listing-not-found");
-      return response;
+      return new Response(shell, {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "x-bazarek-seo": "listing-shell",
+        },
+      });
     }
 
-    const html = await asset.text();
-    const url = new URL(context.request.url);
-    const seoHtml = injectSeo(html, product, url);
+    const html = buildSeoHtml(shell, product, url);
 
-    return new Response(seoHtml, {
-      status: asset.status,
+    return new Response(html, {
+      status: 200,
       headers: {
-        "content-type": contentType,
+        "content-type": "text/html; charset=utf-8",
         "cache-control": "public, max-age=60, s-maxage=300",
-        "x-bazarek-seo": "listing"
-      }
+        "x-bazarek-seo": "listing-v4",
+      },
     });
   } catch (_) {
-    const asset = await context.env.ASSETS.fetch("/");
-    const response = new Response(asset.body, asset);
-    response.headers.set("x-bazarek-seo", "listing-error-fallback");
-    return response;
+    // Critical safety net: never turn a listing URL into a 500 because SEO failed.
+    return new Response(shell, {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "x-bazarek-seo": "listing-fallback",
+      },
+    });
   }
 }
