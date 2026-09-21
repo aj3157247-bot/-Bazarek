@@ -1025,7 +1025,12 @@ class ApiService {
   static Future<Map<String, dynamic>> getListingById(String id) async {
     final cleanId = id.trim();
     if (cleanId.isEmpty) throw Exception('شناسه آگهی نامعتبر است.');
-    final uri = Uri.parse('${ApiConfig.baseUrl}/listings/$cleanId');
+    // Direct shared/deep links on the Cloudflare website must not depend on Render.
+    // Other existing API calls remain untouched in this safe fix.
+    final endpoint = kIsWeb
+        ? '${Uri.base.origin}/api/listings/$cleanId'
+        : '${ApiConfig.baseUrl}/listings/$cleanId';
+    final uri = Uri.parse(endpoint);
     final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
     dynamic data;
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
@@ -4110,85 +4115,14 @@ class ProductDetailScreen extends StatelessWidget {
     ].join('\n');
 
     final shared = await shareWeb(title: title, text: text, url: url);
-    if (shared || !context.mounted) return;
-
-    // بعضی مرورگرها/نسخه‌های WebView پنجره اشتراک‌گذاری سیستم را ارائه نمی‌کنند.
-    // در این حالت به‌جای کپی خودکار، یک فهرست واضح از روش‌های اشتراک‌گذاری نشان می‌دهیم.
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final encodedText = Uri.encodeComponent(text);
-        final encodedUrl = Uri.encodeComponent(url);
-
-        Future<void> openTarget(String target) async {
-          Navigator.of(sheetContext).pop();
-          Uri? uri;
-          switch (target) {
-            case 'whatsapp':
-              uri = Uri.parse('https://wa.me/?text=$encodedText');
-              break;
-            case 'telegram':
-              uri = Uri.parse('https://t.me/share/url?url=$encodedUrl&text=${Uri.encodeComponent(title)}');
-              break;
-            case 'facebook':
-              uri = Uri.parse('https://www.facebook.com/sharer/sharer.php?u=$encodedUrl');
-              break;
-            case 'sms':
-              uri = Uri.parse('sms:?body=$encodedText');
-              break;
-          }
-          if (uri != null) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.chat_outlined)),
-                  title: Text(psText(context, 'واتساپ', 'واټساپ')),
-                  onTap: () => openTarget('whatsapp'),
-                ),
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.send_outlined)),
-                  title: Text(psText(context, 'تلگرام', 'ټیلیګرام')),
-                  onTap: () => openTarget('telegram'),
-                ),
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.facebook)),
-                  title: const Text('Facebook'),
-                  onTap: () => openTarget('facebook'),
-                ),
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.sms_outlined)),
-                  title: Text(psText(context, 'پیامک', 'پیغام')),
-                  onTap: () => openTarget('sms'),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.copy_outlined)),
-                  title: Text(psText(context, 'کپی لینک آگهی', 'د اعلان لینک کاپي')),
-                  onTap: () async {
-                    await Clipboard.setData(ClipboardData(text: url));
-                    if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(psText(context, 'لینک آگهی کپی شد.', 'د اعلان لینک کاپي شو.'))),
-                      );
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
+    if (!shared) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(psText(context, 'لینک آگهی کپی شد؛ می‌توانید آن را ارسال کنید.', 'د اعلان لینک کاپي شو؛ تاسو یې لېږلی شئ.'))),
         );
-      },
-    );
+      }
+    }
   }
 
   Future<void> _reportListing(BuildContext context) async {
