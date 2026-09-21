@@ -640,6 +640,40 @@ app.get('/api/listings', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
 
+app.get('/api/listings/:id', async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const {data,error}=await db.from('products')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({error:'آگهی پیدا نشد.'});
+
+    let seller = {};
+    if (data.vendor_id) {
+      const {data:profile,error:profileError} = await db.from('profiles')
+        .select('id,full_name,shop_name,phone,bio')
+        .eq('id', data.vendor_id)
+        .maybeSingle();
+      if (profileError) console.error('listing seller lookup:', profileError);
+      seller = profile || {};
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ...data,
+      seller_name: seller.shop_name || seller.full_name || 'فروشنده بازارک',
+      seller_phone: data.show_phone ? (data.contact_phone || seller.phone || '') : '',
+      store_description: seller.bio || '',
+    });
+  } catch (e) {
+    console.error('GET /api/listings/:id failed:', e);
+    res.status(500).json({error:'خطا در دریافت آگهی.', details: process.env.NODE_ENV === 'production' ? undefined : String(e?.message || e)});
+  }
+});
+
 app.post('/api/listings/:id/view', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.rpc('bazarek_increment_listing_view',{p_listing_id:req.params.id});if(error)throw error;res.json({views_count:Number(data||0)});}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت بازدید.'});}});
 app.get('/api/favorites', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('favorites').select('listing_id,created_at,products(id,title,price,image_url,category,is_featured,is_pinned)').eq('user_id',req.user.id).order('created_at',{ascending:false});if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت علاقه‌مندی‌ها.'});}});
 app.post('/api/favorites/:id', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data:existing}=await db.from('favorites').select('listing_id').eq('user_id',req.user.id).eq('listing_id',req.params.id).maybeSingle();if(existing){await db.from('favorites').delete().eq('user_id',req.user.id).eq('listing_id',req.params.id);return res.json({favorite:false});}const {error}=await db.from('favorites').insert([{user_id:req.user.id,listing_id:req.params.id}]);if(error)throw error;res.status(201).json({favorite:true});}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر علاقه‌مندی.'});}});
