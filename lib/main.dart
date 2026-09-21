@@ -11,8 +11,132 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'web_seo.dart';
 import 'admin_panel_screen.dart';
 import 'apk_webview_stub.dart' if (dart.library.io) 'apk_webview.dart';
+
+
+String _seoSlug(String value) {
+  var slug = value.toLowerCase().trim();
+  const fa = '۰۱۲۳۴۵۶۷۸۹';
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  const en = '0123456789';
+  for (var i = 0; i < 10; i++) {
+    slug = slug.replaceAll(fa[i], en[i]).replaceAll(ar[i], en[i]);
+  }
+  slug = slug
+      .replaceAll(RegExp(r'[^a-z0-9\u0600-\u06ff\u200c]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  return slug.isEmpty ? 'listing' : slug;
+}
+
+String _listingPath(dynamic product) {
+  final id = product['id']?.toString().trim() ?? '';
+  return '/listing/${Uri.encodeComponent(id.isEmpty ? 'unknown' : id)}';
+}
+
+String _categoryPath(String categoryId, [String? subcategoryId]) {
+  final base = '/category/${Uri.encodeComponent(categoryId)}';
+  if (subcategoryId == null || subcategoryId.isEmpty) return base;
+  return '$base/${Uri.encodeComponent(subcategoryId)}';
+}
+
+String _listingTitle(dynamic product) {
+  final title = product['title']?.toString().trim() ?? '';
+  return title.isEmpty ? 'آگهی در بازارک' : '$title | بازارک';
+}
+
+Future<void> _openListing(BuildContext context, dynamic product) async {
+  _rememberSeoContext(context);
+  final previousPath = kIsWeb ? currentWebPath() : '/';
+  final path = _listingPath(product);
+  if (kIsWeb) {
+    setBrowserPath(path);
+    final title = _listingTitle(product);
+    final description = (product['description']?.toString().trim().isNotEmpty == true)
+        ? '${product['title'] ?? 'آگهی'}؛ ${product['description']}'.replaceAll(RegExp(r'\s+'), ' ').substring(
+            0,
+            '${product['title'] ?? 'آگهی'}؛ ${product['description']}'.replaceAll(RegExp(r'\s+'), ' ').length > 250
+                ? 250
+                : '${product['title'] ?? 'آگهی'}؛ ${product['description']}'.replaceAll(RegExp(r'\s+'), ' ').length,
+          )
+        : '${product['title'] ?? 'آگهی'}؛ خرید و فروش در افغانستان | بازارک';
+    String imageUrl = '';
+    try {
+      final raw = product['image_url'];
+      final imgs = raw is List ? raw : (raw is String && raw.isNotEmpty ? jsonDecode(raw) : const []);
+      if (imgs is List && imgs.isNotEmpty) imageUrl = imgs.first.toString();
+    } catch (_) {}
+    setWebSeo(
+      title: title,
+      description: description,
+      urlPath: path,
+      imageUrl: imageUrl,
+      product: product is Map ? Map<String, dynamic>.from(product) : null,
+    );
+  }
+  await Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+  );
+  if (kIsWeb) {
+    setBrowserPath(previousPath);
+    _restoreSeoForPath(previousPath);
+  }
+}
+
+void _openCategoryRoute(BuildContext context, Map<String, dynamic> category, {String? subcategoryId, String? subcategoryTitle}) {
+  _rememberSeoContext(context);
+  final previousPath = kIsWeb ? currentWebPath() : '/';
+  final categoryId = category['id']?.toString() ?? '';
+  final title = subcategoryTitle ?? localizedCategoryTitle(context, categoryId, category['title']?.toString() ?? 'دسته‌بندی');
+  final path = _categoryPath(categoryId, subcategoryId);
+  if (kIsWeb) {
+    setBrowserPath(path);
+    setWebSeo(
+      title: '$title در افغانستان | بازارک',
+      description: 'خرید و فروش $title در افغانستان؛ آگهی‌های واقعی و جدید در بازار آنلاین بازارک.',
+      urlPath: path,
+    );
+  }
+  Future<void> restore() async {
+    if (!kIsWeb) return;
+    setBrowserPath(previousPath);
+    _restoreSeoForPath(previousPath);
+  }
+  if (subcategoryId != null && subcategoryId.isNotEmpty) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CategoryListingsScreen(
+          categoryId: categoryId,
+          subcategoryId: subcategoryId,
+          categoryTitle: title,
+        ),
+      ),
+    ).then((_) => restore());
+  } else {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SubcategoryScreen(category: category)),
+    ).then((_) => restore());
+  }
+}
+
+void _restoreSeoForPath(String path) {
+  if (!kIsWeb) return;
+  if (path.startsWith('/listing/')) {
+    // The detail screen will set this again when opened from the app.
+    return;
+  }
+  if (path.startsWith('/category/')) return;
+  setWebSeo(
+    title: 'بازارک | بازار آنلاین خرید و فروش افغانستان',
+    description: 'بازارک، بازار آنلاین خرید و فروش افغانستان؛ خرید و فروش کالا، موبایل، موتر، خانه، لوازم و خدمات در افغانستان.',
+    urlPath: '/',
+  );
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -136,7 +260,7 @@ class _BazarBuzurgAppState extends State<BazarBuzurgApp> {
         fontFamily: 'Vazirmatn',
       ),
       home: _authReady
-          ? const MainLayout()
+          ? const WebDeepLinkEntry()
           : const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             ),
@@ -900,6 +1024,17 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getListingById(String id) async {
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) throw Exception('شناسه آگهی نامعتبر است.');
+    final uri = Uri.parse('${ApiConfig.baseUrl}/listings/$cleanId');
+    final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
+    dynamic data;
+    try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode == 200 && data is Map<String, dynamic>) return data;
+    throw Exception(data is Map ? (data['error'] ?? 'آگهی پیدا نشد.') : 'آگهی پیدا نشد.');
+  }
+
   static Future<Map<String, dynamic>> submitReport({required String listingId, required String reason}) async {
     var res = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/reports'),
@@ -1362,6 +1497,178 @@ class _SavedAdsScreenState extends State<SavedAdsScreen> {
   }
 }
 
+
+class WebDeepLinkEntry extends StatefulWidget {
+  const WebDeepLinkEntry({super.key});
+
+  @override
+  State<WebDeepLinkEntry> createState() => _WebDeepLinkEntryState();
+}
+
+class _WebDeepLinkEntryState extends State<WebDeepLinkEntry> {
+  bool _showMain = false;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialPath());
+    } else {
+      _showMain = true;
+      _loading = false;
+    }
+  }
+
+  Future<void> _openInitialPath() async {
+    final path = currentWebPath();
+    if (path == '/' || path.isEmpty) {
+      if (mounted) setState(() { _showMain = true; _loading = false; });
+      return;
+    }
+
+    try {
+      final parts = path.split('/').where((p) => p.isNotEmpty).map(Uri.decodeComponent).toList();
+
+      if (parts.isNotEmpty && parts.first == 'category' && parts.length >= 2) {
+        final categoryId = parts[1];
+        final category = categories.firstWhere(
+          (c) => c['id']?.toString() == categoryId,
+          orElse: () => <String, dynamic>{},
+        );
+        if (category.isEmpty) throw Exception('دسته‌بندی پیدا نشد.');
+        final categoryTitle = localizedCategoryTitle(context, categoryId, category['title']?.toString() ?? 'دسته‌بندی');
+
+        if (parts.length >= 3) {
+          final subcategoryId = parts[2];
+          final subs = subcategories[categoryId] ?? const [];
+          Map<String, String>? sub;
+          for (final candidate in subs) {
+            if (candidate['id'] == subcategoryId) {
+              sub = candidate;
+              break;
+            }
+          }
+          final subTitle = sub?['title'] ?? subcategoryId;
+          setWebSeo(
+            title: '$subTitle در افغانستان | بازارک',
+            description: 'خرید و فروش $subTitle در افغانستان؛ آگهی‌های واقعی و جدید در بازار آنلاین بازارک.',
+            urlPath: path,
+          );
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CategoryListingsScreen(
+                categoryId: categoryId,
+                subcategoryId: subcategoryId,
+                categoryTitle: localizedSubcategoryTitle(context, categoryId, subcategoryId, subTitle),
+              ),
+            ),
+          );
+        } else {
+          setWebSeo(
+            title: '$categoryTitle در افغانستان | بازارک',
+            description: 'خرید و فروش $categoryTitle در افغانستان؛ آگهی‌های واقعی و جدید در بازار آنلاین بازارک.',
+            urlPath: path,
+          );
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => SubcategoryScreen(category: category)),
+          );
+        }
+        if (!mounted) return;
+        setBrowserPath('/');
+        _restoreSeoForPath('/');
+        setState(() { _showMain = true; _loading = false; });
+        return;
+      }
+
+      if (parts.isNotEmpty && parts.first == 'listing' && parts.length >= 2) {
+        final raw = parts[1];
+        final id = RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(raw)
+            ? raw
+            : (RegExp(r'([0-9a-fA-F-]{36})$').firstMatch(raw)?.group(1) ?? raw);
+        final product = await ApiService.getListingById(id);
+        if (!mounted) return;
+        String imageUrl = '';
+        try {
+          final rawImages = product['image_url'];
+          final imgs = rawImages is List ? rawImages : (rawImages is String && rawImages.isNotEmpty ? jsonDecode(rawImages) : const []);
+          if (imgs is List && imgs.isNotEmpty) imageUrl = imgs.first.toString();
+        } catch (_) {}
+        final title = _listingTitle(product);
+        final description = product['description']?.toString().trim().isNotEmpty == true
+            ? '${product['title'] ?? 'آگهی'}؛ ${product['description']}'.replaceAll(RegExp(r'\s+'), ' ').substring(
+                0,
+                '${product['title'] ?? 'آگهی'}؛ ${product['description']}'.replaceAll(RegExp(r'\s+'), ' ').length > 250
+                    ? 250
+                    : '${product['title'] ?? 'آگهی'}؛ ${product['description']}'.replaceAll(RegExp(r'\s+'), ' ').length,
+              )
+            : '${product['title'] ?? 'آگهی'}؛ خرید و فروش در افغانستان | بازارک';
+        setWebSeo(
+          title: title,
+          description: description,
+          urlPath: path,
+          imageUrl: imageUrl,
+          product: Map<String, dynamic>.from(product),
+        );
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+        );
+        if (!mounted) return;
+        setBrowserPath('/');
+        _restoreSeoForPath('/');
+        setState(() { _showMain = true; _loading = false; });
+        return;
+      }
+
+      setBrowserPath('/');
+      if (mounted) setState(() { _showMain = true; _loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = friendlyNetworkError(context, e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showMain) return const MainLayout();
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('بازارک')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 52),
+                const SizedBox(height: 12),
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    setBrowserPath('/');
+                    _restoreSeoForPath('/');
+                    setState(() { _error = null; _showMain = true; });
+                  },
+                  child: const Text('رفتن به صفحه اصلی'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+}
+
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
@@ -1491,7 +1798,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openCategory(Map<String, dynamic> category) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => SubcategoryScreen(category: category)));
+    _openCategoryRoute(context, category);
   }
 
   void _toggleLanguage() {
@@ -1969,12 +2276,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       return InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductDetailScreen(product: item),
-          ),
-        ),
+        onTap: () => _openListing(context, item),
         borderRadius: BorderRadius.circular(4),
         child: Container(
           decoration: BoxDecoration(
@@ -2896,7 +3198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                         if (i > 0) const SizedBox(width: 7),
                                                         Expanded(
                                                           child: InkWell(
-                                                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: previewProducts[i]))),
+                                                            onTap: () => _openListing(context, previewProducts[i]),
                                                             borderRadius: BorderRadius.circular(8),
                                                             child: Container(
                                                               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
@@ -3387,7 +3689,7 @@ class _DivarStyleListing extends StatelessWidget {
     final count = images.length;
 
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+      onTap: () => _openListing(context, item),
       child: Container(
         constraints: const BoxConstraints(minHeight: 128),
         padding: const EdgeInsets.symmetric(vertical: 11),
@@ -3618,7 +3920,7 @@ class _SpecialCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         elevation: 1,
         child: InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+          onTap: () => _openListing(context, item),
           child: Row(children: [
             SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -3660,7 +3962,7 @@ class _ProductCard extends StatelessWidget {
       shadowColor: const Color(0x220B2A55),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0x0D0B2A55))),
       child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+        onTap: () => _openListing(context, item),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(
             flex: 7,
@@ -3791,6 +4093,35 @@ class ProductDetailScreen extends StatelessWidget {
   final dynamic product;
   const ProductDetailScreen({super.key, required this.product});
 
+  Future<void> _shareListing(BuildContext context) async {
+    final title = product['title']?.toString().trim().isNotEmpty == true
+        ? product['title'].toString().trim()
+        : 'آگهی در بازارک';
+    final url = kIsWeb
+        ? Uri.base.toString()
+        : 'https://bazarek.pages.dev${_listingPath(product)}';
+    final price = _displayListingPrice(context, product);
+    final province = localizedProvince(context, product['province']?.toString() ?? '');
+    final text = [
+      '📌 $title',
+      if (price.isNotEmpty) '💰 $price',
+      if (province.isNotEmpty) '📍 $province',
+      '',
+      'مشاهده آگهی در بازارک:',
+      url,
+    ].join('\n');
+
+    final shared = await shareWeb(title: title, text: text, url: url);
+    if (!shared) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(psText(context, 'لینک آگهی کپی شد؛ می‌توانید آن را ارسال کنید.', 'د اعلان لینک کاپي شو؛ تاسو یې لېږلی شئ.'))),
+        );
+      }
+    }
+  }
+
   Future<void> _reportListing(BuildContext context) async {
     if (!await requireAccount(context)) return;
     if (!context.mounted) return;
@@ -3891,6 +4222,11 @@ class ProductDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(tr(context, 'details')),
         actions: [
+          IconButton(
+            tooltip: psText(context, 'اشتراک‌گذاری آگهی', 'د اعلان شریکول'),
+            onPressed: () => _shareListing(context),
+            icon: const Icon(Icons.share_outlined),
+          ),
           IconButton(
             tooltip: Localizations.localeOf(context).languageCode == 'ps' ? 'د اعلان راپور' : 'گزارش آگهی',
             onPressed: () => _reportListing(context),
@@ -4328,7 +4664,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
     final sizes = _professionalValues(item, 'sizes');
     final colors = _professionalValues(item, 'colors');
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+      onTap: () => _openListing(context, item),
       borderRadius: BorderRadius.circular(6),
       child: Container(
         decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(6)),
@@ -4719,7 +5055,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
               final imageUrl = images.isNotEmpty ? images.first.toString() : '';
               final price = _displayListingPrice(context, item);
               return InkWell(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: item))),
+                onTap: () => _openListing(context, item),
                 child: Container(
                   decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(4)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -5534,12 +5870,7 @@ class CategoriesScreen extends StatelessWidget {
             elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SubcategoryScreen(category: category),
-                ),
-              ),
+              onTap: () => _openCategoryRoute(context, category),
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Column(
@@ -5607,7 +5938,7 @@ class SubcategoryScreen extends StatelessWidget {
             leading: CircleAvatar(child: Icon(categoryIcon)),
             title: Text(subcategoryTitle),
             trailing: const Icon(Icons.chevron_left),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryListingsScreen(categoryId: categoryId, subcategoryId: subcategoryId, categoryTitle: subcategoryTitle))),
+            onTap: () => _openCategoryRoute(context, {'id': categoryId, 'title': categoryTitle, 'icon': categoryIcon}, subcategoryId: subcategoryId, subcategoryTitle: subcategoryTitle),
           );
         },
       ),
