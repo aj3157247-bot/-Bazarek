@@ -897,7 +897,7 @@ app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
     store_monthly:{price:600,days:30,store:true},
     store_yearly:{price:6000,days:365,store:true}
   };
-  const plan=String(req.body?.plan||'');
+  const plan=String(req.body?.plan||'').trim().toLowerCase();
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
   const p=plans[plan];
   const reference=String(req.body?.payment_reference||'').trim();
