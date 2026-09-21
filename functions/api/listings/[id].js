@@ -65,6 +65,11 @@ export async function onRequestGet({ params, env }) {
     const product = Array.isArray(rows) ? rows[0] : null;
     if (!product) return json({ error: 'آگهی پیدا نشد.', code: 'LISTING_NOT_FOUND' }, 404);
 
+    // Do not expose an inactive listing through a shared public URL.
+    if (product.is_active === false) {
+      return json({ error: 'این آگهی دیگر فعال نیست.', code: 'LISTING_INACTIVE' }, 410);
+    }
+
     let seller = {};
     if (product.vendor_id) {
       const profileUrl = new URL(`${supabaseUrl}/rest/v1/profiles`);
