@@ -950,19 +950,35 @@ class ApiService {
   }
 
   static Future<List<dynamic>> getMyStoreProducts() async {
+    // مسیر اصلی محصولات فروشگاه؛ اگر نسخه قدیمی سرور این مسیر را نداشت،
+    // از همان endpoint محصولات خود کاربر استفاده می‌کنیم و فقط store products را جدا می‌کنیم.
     Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/my/store-products'), headers: headers).timeout(const Duration(seconds: 15));
     var res = await request();
     if (res.statusCode == 401 && await refreshSession()) res = await request();
     dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
-    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت محصولات فروشگاه.') : 'خطا در دریافت محصولات فروشگاه.');
-    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+    if (res.statusCode == 200) {
+      // پاسخ 200 خالی مهم است: اگر فروشگاه منقضی شده باشد باید محصولاتش پنهان بمانند.
+      final rows = data is List ? data : List<dynamic>.from((data is Map ? data['data'] : const []) ?? const []);
+      return rows;
+    }
+
+    // فقط در صورت نبود/خطای مسیر اختصاصی، سازگاری با backend قدیمی‌تر را فعال می‌کنیم.
+    // محصولات فروشگاهی با فلگ قطعی is_store_product از لیست محصولات خود کاربر جدا می‌شوند.
+    final all = await getMyProducts();
+    return all.where((x) {
+      if (x is! Map) return false;
+      final flag = x['is_store_product'];
+      return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+    }).toList();
   }
 
   static Future<Map<String,dynamic>> createStoreProduct(Map<String,dynamic> payload) async {
+    // محصول فروشگاه از همان endpoint پایدار محصولات ثبت می‌شود، اما با هدر
+    // غیرقابل‌ابهام تا backend آن را هرگز به آگهی عادی تبدیل نکند.
     Future<http.Response> request() => http.post(
-      Uri.parse('${ApiConfig.baseUrl}/store-products'),
-      headers: {'Content-Type':'application/json', ...headers},
-      body: jsonEncode(payload),
+      Uri.parse('${ApiConfig.baseUrl}/products'),
+      headers: {'Content-Type':'application/json', 'x-bazarek-store-product':'true', ...headers},
+      body: jsonEncode({...payload, 'is_store_product': true}),
     ).timeout(const Duration(seconds: 30));
     var res = await request();
     if (res.statusCode == 401 && await refreshSession()) res = await request();
