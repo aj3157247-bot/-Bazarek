@@ -776,8 +776,8 @@ app.get('/api/stores/active', async (req,res)=>{
     const now=Date.now();
     const {data:subs,error:subsError}=await db.from('seller_subscriptions')
       .select('user_id,plan,starts_at,ends_at,status')
-      .eq('status','active')
       .in('plan',['store_monthly','store_yearly'])
+      .not('ends_at','is',null)
       .order('ends_at',{ascending:false})
       .limit(500);
     if(subsError) throw subsError;
@@ -786,7 +786,7 @@ app.get('/api/stores/active', async (req,res)=>{
     for(const sub of (subs||[])){
       const end=new Date(sub.ends_at||0).getTime();
       const start=sub.starts_at ? new Date(sub.starts_at).getTime() : 0;
-      if(!sub.user_id || !Number.isFinite(end) || end<=now || (sub.starts_at && start>now)) continue;
+      const status=String(sub.status||'').toLowerCase(); const blockedStatuses=new Set(['pending','rejected','cancelled','canceled','expired']); if(!sub.user_id || blockedStatuses.has(status) || !Number.isFinite(end) || end<=now || (sub.starts_at && start>now)) continue;
       const current=activeMap[sub.user_id];
       if(!current || end>new Date(current.ends_at||0).getTime()) activeMap[sub.user_id]=sub;
     }
