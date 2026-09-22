@@ -795,6 +795,14 @@ app.get('/api/sellers/:id', async (req,res)=>{
     res.json({...profile,followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
   }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پروفایل فروشنده.'});}
 });
+app.get('/api/sellers/:id/ads', async (req,res)=>{try{
+  const db=getSupabaseAdmin();
+  const sellerId=String(req.params.id);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',false).order('created_at',{ascending:false}).limit(100);
+  if(error)throw error;
+  res.json(data||[]);
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آگهی‌های فروشنده.'});}});
+
 app.get('/api/sellers/:id/listings', async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const sellerId=String(req.params.id);
