@@ -557,6 +557,8 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
     const featureDays = Math.max(0, Math.trunc(Number(req.body?.feature_days || 0)));
     const pinDays = Math.max(0, Math.trunc(Number(req.body?.pin_days || 0)));
     const db = getSupabaseAdmin();
+    const { data: listing } = await db.from('products').select('is_store_product').eq('id', req.params.id).maybeSingle();
+    if (listing?.is_store_product === true) return res.status(400).json({ error: 'محصول فروشگاهی قابل بوست یا ارتقای آگهی نیست.' });
     const now = Date.now();
     const payload = {
       is_featured: featureDays > 0,
@@ -768,79 +770,6 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
 app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('admin_login_events').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت رویدادهای امنیتی.'});}});
 
 
-// Active professional stores shown on the homepage. Store products are intentionally
-// excluded from /api/listings, so they can only be browsed from their store catalog.
-app.get('/api/stores/active', async (req,res)=>{
-  try {
-    const db=getSupabaseAdmin();
-    const now=Date.now();
-    const {data:subs,error:subsError}=await db.from('seller_subscriptions')
-      .select('user_id,plan,starts_at,ends_at,status')
-      .in('plan',['store_monthly','store_yearly'])
-      .not('ends_at','is',null)
-      .order('ends_at',{ascending:false})
-      .limit(500);
-    if(subsError) throw subsError;
-
-    const activeMap={};
-    for(const sub of (subs||[])){
-      const end=new Date(sub.ends_at||0).getTime();
-      const start=sub.starts_at ? new Date(sub.starts_at).getTime() : 0;
-      const status=String(sub.status||'').toLowerCase(); const blockedStatuses=new Set(['pending','rejected','cancelled','canceled','expired']); if(!sub.user_id || blockedStatuses.has(status) || !Number.isFinite(end) || end<=now || (sub.starts_at && start>now)) continue;
-      const current=activeMap[sub.user_id];
-      if(!current || end>new Date(current.ends_at||0).getTime()) activeMap[sub.user_id]=sub;
-    }
-
-    const ids=Object.keys(activeMap);
-    if(!ids.length) return res.json([]);
-    const {data:profiles,error:profilesError}=await db.from('profiles')
-      .select('id,full_name,shop_name,city,bio,avatar_url')
-      .in('id',ids);
-    if(profilesError) throw profilesError;
-    const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
-
-    const rows=await Promise.all(ids.map(async id=>{
-      const sub=activeMap[id];
-      // The store itself must never disappear just because the optional
-      // store-product counter cannot be read (for example during a partial
-      // database migration). The storefront remains visible and the count
-      // simply falls back to zero.
-      let productCount=0;
-      try {
-        const {count,error}=await db.from('products')
-          .select('id',{count:'exact',head:true})
-          .eq('vendor_id',id)
-          .eq('is_active',true)
-          .eq('is_store_product',true);
-        if(!error) productCount=count||0;
-        else console.error('Store product count failed:', id, error.message || error);
-      } catch(e) {
-        console.error('Store product count exception:', id, e?.message || e);
-      }
-      const p=pm[id]||{};
-      return {
-        vendor_id:id,
-        shop_name:p.shop_name||'',
-        seller_name:p.shop_name||p.full_name||'فروشگاه بازارک',
-        city:p.city||'',
-        description:p.bio||'',
-        avatar_url:p.avatar_url||'',
-        verified:true,
-        products_count:productCount,
-        store_plan:sub.plan,
-        store_starts_at:sub.starts_at||null,
-        store_until:sub.ends_at||null,
-      };
-    }));
-
-    rows.sort((a,b)=>Number(b.products_count||0)-Number(a.products_count||0) || String(a.shop_name||a.seller_name||'').localeCompare(String(b.shop_name||b.seller_name||''),'fa'));
-    res.json(rows);
-  } catch(e) {
-    console.error('GET /api/stores/active failed:',e);
-    res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});
-  }
-});
-
 // Marketplace social layer: seller profiles, follows, listing likes, ratings and comments.
 app.get('/api/sellers/:id', async (req,res)=>{
   try{
@@ -1001,38 +930,20 @@ app.delete('/api/stores/:id/save', requireUser, async (req,res)=>{
 app.get('/api/me/saved-stores', requireUser, async (req,res)=>{
   try {
     const db=getSupabaseAdmin();
-    // Keep this endpoint independent from optional timestamp/profile columns so
-    // one old row or partial migration cannot turn the whole screen into 500.
-    const {data,error}=await db.from('saved_stores').select('seller_id').eq('user_id',req.user.id).limit(500);
+    const {data,error}=await db.from('saved_stores').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
     if(error) throw error;
     const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
     if(!ids.length) return res.json([]);
-
-    const {data:profiles,error:pe}=await db.from('profiles')
-      .select('id,full_name,shop_name,city,bio,avatar_url')
-      .in('id',ids);
+    const {data:profiles,error:pe}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids);
     if(pe) throw pe;
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
-
     const rows=[];
     for(const x of (data||[])) {
-      const profile=pm[x.seller_id]||{};
-      let sub=null;
-      try { sub=await getActiveStoreSubscription(db,x.seller_id); }
-      catch(e) { console.error('Saved store subscription lookup failed:', x.seller_id, e?.message || e); }
-      rows.push({
-        ...profile,
-        seller_id:x.seller_id,
-        store_plan:sub?.plan||null,
-        store_until:sub?.ends_at||null,
-        is_store_active:Boolean(sub),
-      });
+      const sub=await getActiveStoreSubscription(db,x.seller_id);
+      if(sub) rows.push({...pm[x.seller_id],seller_id:x.seller_id,store_plan:sub.plan,store_until:sub.ends_at,saved_at:x.created_at});
     }
     res.json(rows);
-  } catch(e) {
-    console.error('GET /api/me/saved-stores failed:', e);
-    res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'});
-  }
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'}); }
 });
 
 app.get('/api/me/social/:type', requireUser, async (req,res)=>{
@@ -1161,7 +1072,7 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
 app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
 app.get('/api/promotions/orders', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_orders').select('*,promotion_packages(title),products(title)').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت سفارش‌ها.'});}});
-app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='bank_transfer',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});if(Number(pkg.price_afn||0)<=0)return res.status(400).json({error:'این بسته تبلیغاتی قیمت معتبر ندارد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
+app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='bank_transfer',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});if(Number(pkg.price_afn||0)<=0)return res.status(400).json({error:'این بسته تبلیغاتی قیمت معتبر ندارد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id,is_store_product').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});if(listing.is_store_product===true)return res.status(400).json({error:'محصول فروشگاهی قابل بوست یا ارتقای آگهی نیست؛ فقط آگهی‌های عادی قابل بوست هستند.'});
 if(!['manual','bank_transfer'].includes(payment_method))return res.status(400).json({error:'برای فعال‌سازی تبلیغ باید مبلغ را به حساب بازارک انتقال دهید و منتظر تأیید مدیریت بمانید.'});
 const reference=String(payment_reference||'').trim();if(!reference)return res.status(400).json({error:'شماره پیگیری/رسید انتقال بانکی را وارد کنید.'});
 const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.user.id,listing_id,package_id,amount_afn:pkg.price_afn,payment_method:'manual',payment_reference:reference.slice(0,200),status:'pending'}]).select().single();if(error)throw error;
@@ -1253,7 +1164,7 @@ app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{
 app.patch('/api/admin/transactions/:id/archive', requireAdmin, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('wallet_transactions').update({is_archived:true}).eq('id',req.params.id).select().single();if(error)throw error;res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در بایگانی تراکنش.'});}});
 
 app.post('/api/admin/wallets/:id/credit', requireAdmin, async (req,res)=>{try{const amount=Math.trunc(Number(req.body?.amount_afn||0));if(amount<=0)return res.status(400).json({error:'مبلغ نامعتبر است.'});const db=getSupabaseAdmin();const balance=await db.rpc('bazarek_wallet_credit',{p_user_id:req.params.id,p_amount:amount,p_type:'credit',p_description:String(req.body?.description||'شارژ کیف پول توسط مدیریت').slice(0,200),p_reference:'admin'});res.status(201).json({balance_afn:balance.data});}catch(e){console.error(e);res.status(500).json({error:'خطا در شارژ کیف پول.'});}});
-app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();const days=Math.max(Number(pkg.feature_days||0),Number(pkg.pin_days||0));await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,boost_level:Number(pkg.boost_level||0),boost_until:days>0?new Date(now+days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}await db.from('user_notifications').insert([{user_id:order.user_id,type:'payment',title:status==='paid'?'ارتقای آگهی فعال شد':'نتیجه سفارش ارتقا',message:status==='paid'?`پرداخت شما تأیید شد و ارتقای آگهی «${order.listing_id}» فعال گردید.`:`سفارش ارتقای آگهی شما توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
+app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:targetListing}=await db.from('products').select('id,is_store_product').eq('id',order.listing_id).maybeSingle();if(targetListing?.is_store_product===true)return res.status(400).json({error:'محصول فروشگاهی قابل بوست یا ارتقای آگهی نیست.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();const days=Math.max(Number(pkg.feature_days||0),Number(pkg.pin_days||0));await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,boost_level:Number(pkg.boost_level||0),boost_until:days>0?new Date(now+days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}await db.from('user_notifications').insert([{user_id:order.user_id,type:'payment',title:status==='paid'?'ارتقای آگهی فعال شد':'نتیجه سفارش ارتقا',message:status==='paid'?`پرداخت شما تأیید شد و ارتقای آگهی «${order.listing_id}» فعال گردید.`:`سفارش ارتقای آگهی شما توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
 app.get('/api/products', requireUser, async (req, res) => {
   try {
     const db = getSupabaseAdmin();
@@ -1272,7 +1183,7 @@ app.get('/api/products', requireUser, async (req, res) => {
       const own = x.boost_level && (!x.boost_until || new Date(x.boost_until).getTime() > now) ? Number(x.boost_level) : 0;
       const level = Math.max(own, globalLevel);
       const turboSub = (subs || []).filter(s => s.status === 'active' && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0];
-      return { ...x, effective_boost_level: level, boost_label: turboSub ? '⚡ توربو' : (labels[level] || ''), global_boost: globalLevel > 0, turbo_active: Boolean(turboSub), turbo_plan: turboSub?.plan || null, turbo_starts_at: turboSub?.starts_at || null, turbo_until: turboSub?.ends_at || null };
+      const isStoreProduct = x.is_store_product === true; const safeLevel = isStoreProduct ? 0 : level; return { ...x, effective_boost_level: safeLevel, boost_label: isStoreProduct ? '' : (turboSub ? '⚡ توربو' : (labels[safeLevel] || '')), global_boost: isStoreProduct ? false : globalLevel > 0, turbo_active: isStoreProduct ? false : Boolean(turboSub), turbo_plan: isStoreProduct ? null : (turboSub?.plan || null), turbo_starts_at: isStoreProduct ? null : (turboSub?.starts_at || null), turbo_until: isStoreProduct ? null : (turboSub?.ends_at || null) };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت محصولات.' }); }
 });
@@ -1291,7 +1202,7 @@ app.post('/api/products', requireUser, async (req, res) => {
       const storeSub = await getActiveStoreSubscription(db, req.user.id);
       if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
     }
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     try {
