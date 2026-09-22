@@ -1079,7 +1079,7 @@ class ApiService {
     };
     final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams);
     try {
-      final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
+      final res = await http.get(uri, headers: {'Accept': 'application/json', ...headers}).timeout(const Duration(seconds: 15));
       final data = jsonDecode(res.body);
       if (res.statusCode == 200) {
         if (data is List) return data;
@@ -1095,7 +1095,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getActiveStores() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/stores/active');
-    final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
+    final res = await http.get(uri, headers: {'Accept': 'application/json', ...headers}).timeout(const Duration(seconds: 15));
     dynamic data;
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
     if (res.statusCode != 200) {
