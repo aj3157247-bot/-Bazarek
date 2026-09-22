@@ -4790,6 +4790,684 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
   }
 }
 
+class MyStoreScreen extends StatefulWidget {
+  const MyStoreScreen({super.key});
+
+  @override
+  State<MyStoreScreen> createState() => _MyStoreScreenState();
+}
+
+class _MyStoreScreenState extends State<MyStoreScreen> {
+  bool loading = true;
+  String? error;
+  Map<String, dynamic> profile = {};
+  List<dynamic> listings = [];
+  List<dynamic> subscriptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (!AuthService.isLoggedIn) {
+      if (mounted) setState(() {
+        loading = false;
+        error = 'ابتدا وارد حساب شوید.';
+      });
+      return;
+    }
+    try {
+      final p = await ApiService.getMyProfile();
+      final subs = await ApiService.getSubscriptions();
+      final sellerId = (p['id']?.toString().trim().isNotEmpty == true)
+          ? p['id'].toString()
+          : (AuthService.userId ?? '');
+      if (sellerId.isEmpty) throw Exception('شناسه فروشنده پیدا نشد.');
+      final l = await ApiService.getSellerListings(sellerId);
+      if (!mounted) return;
+      setState(() {
+        profile = p;
+        subscriptions = subs;
+        listings = l;
+        loading = false;
+        error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        loading = false;
+        error = friendlyNetworkError(context, e);
+      });
+    }
+  }
+
+  bool get hasActiveStore => subscriptions.any((s) =>
+      (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
+      s['status'] == 'active' &&
+      DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+
+  String get sellerId {
+    final id = profile['id']?.toString().trim() ?? '';
+    return id.isNotEmpty ? id : (AuthService.userId ?? '');
+  }
+
+  String get shopName {
+    final shop = profile['shop_name']?.toString().trim() ?? '';
+    if (shop.isNotEmpty) return shop;
+    final name = profile['full_name']?.toString().trim() ?? '';
+    return name.isNotEmpty ? name : 'فروشگاه من';
+  }
+
+  String get shopDescription {
+    final d = profile['shop_description']?.toString().trim() ?? '';
+    if (d.isNotEmpty) return d;
+    final d2 = profile['bio']?.toString().trim() ?? '';
+    return d2.isNotEmpty ? d2 : 'فروشگاه حرفه‌ای من در بازارک';
+  }
+
+  String get storeEnd {
+    final active = subscriptions.where((s) =>
+        (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
+        s['status'] == 'active' &&
+        DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true).toList();
+    if (active.isEmpty) return '';
+    active.sort((a, b) {
+      final ad = DateTime.tryParse('${a['ends_at']}');
+      final bd = DateTime.tryParse('${b['ends_at']}');
+      if (ad == null || bd == null) return 0;
+      return bd.compareTo(ad);
+    });
+    return _dateTimeForUser(active.first['ends_at']);
+  }
+
+  String get initials {
+    final words = shopName.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    if (words.isEmpty) return 'ب';
+    if (words.length == 1) {
+      final w = words.first;
+      return w.length > 2 ? w.substring(0, 2) : w;
+    }
+    return '${words.first.substring(0, 1)}${words.last.substring(0, 1)}';
+  }
+
+  Future<void> _open(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (mounted) _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    final activeListings = listings.where((x) {
+      if (x is! Map) return false;
+      final v = x['is_active'];
+      return v == true || v.toString().toLowerCase() == 'true' || v.toString() == '1';
+    }).length;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
+      appBar: AppBar(
+        elevation: 0,
+        title: Text(ps ? 'زما مسلکي پلورنځی' : 'فروشگاه حرفه‌ای من',
+            style: const TextStyle(fontWeight: FontWeight.w900)),
+        actions: [
+          IconButton(
+            tooltip: 'به‌روزرسانی',
+            onPressed: loading ? null : _load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? OfflineErrorView(onRetry: _load, message: error!)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
+                    children: [
+                      _storeHero(ps),
+                      const SizedBox(height: 14),
+                      if (!hasActiveStore) _inactiveBanner(ps),
+                      if (!hasActiveStore) const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(child: _dashboardStat(
+                            ps ? 'محصولات' : 'محصولات',
+                            '${listings.length}',
+                            Icons.inventory_2_rounded,
+                            const Color(0xFF146EB4),
+                          )),
+                          const SizedBox(width: 10),
+                          Expanded(child: _dashboardStat(
+                            ps ? 'فعال' : 'فعال',
+                            '$activeListings',
+                            Icons.check_circle_rounded,
+                            const Color(0xFF067D62),
+                          )),
+                          const SizedBox(width: 10),
+                          Expanded(child: _dashboardStat(
+                            ps ? 'وضعیت' : 'وضعیت',
+                            hasActiveStore ? 'فعال' : 'خاموش',
+                            hasActiveStore ? Icons.verified_rounded : Icons.lock_outline_rounded,
+                            hasActiveStore ? const Color(0xFF007185) : const Color(0xFF777777),
+                          )),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _sectionHeader(
+                        ps ? 'مدیریت پلورنځی' : 'مدیریت فروشگاه',
+                        ps ? 'هر چیزی که برای اداره فروشگاه نیاز دارید' : 'همه ابزارهای مهم فروشگاه در یکجا',
+                      ),
+                      const SizedBox(height: 10),
+                      _actionGrid(ps),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(child: _sectionHeader(
+                            ps ? 'محصولات' : 'محصولات فروشگاه',
+                            ps ? 'ستاسو وروستي محصولات' : 'آخرین محصولات شما',
+                          )),
+                          TextButton(
+                            onPressed: sellerId.isEmpty
+                                ? null
+                                : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ProfessionalStoreCatalogScreen(
+                                          sellerId: sellerId,
+                                          sellerName: shopName,
+                                        ),
+                                      ),
+                                    ),
+                            child: Text(ps ? 'ټول' : 'مشاهده همه'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (listings.isEmpty)
+                        _emptyProducts(ps)
+                      else
+                        _productGrid(ps),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _storeHero(bool ps) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF172033), Color(0xFF263B57), Color(0xFF007185)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(.13), blurRadius: 18, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: -20,
+            bottom: -35,
+            child: Icon(Icons.storefront_rounded, size: 170, color: Colors.white.withOpacity(.045)),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 66,
+                      height: 66,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Color(0xFF007185),
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  shopName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              if (hasActiveStore) ...[
+                                const SizedBox(width: 7),
+                                const Icon(Icons.verified_rounded, color: Color(0xFF67E8F9), size: 21),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            hasActiveStore
+                                ? (storeEnd.isEmpty ? 'فروشگاه حرفه‌ای فعال' : 'فعال تا $storeEnd')
+                                : 'فروشگاه هنوز فعال نشده است',
+                            style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 12.5, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  shopDescription,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, height: 1.55, fontSize: 13),
+                ),
+                const SizedBox(height: 17),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: sellerId.isEmpty
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProfessionalStoreCatalogScreen(
+                                      sellerId: sellerId,
+                                      sellerName: shopName,
+                                    ),
+                                  ),
+                                ),
+                        icon: const Icon(Icons.visibility_rounded, size: 18),
+                        label: Text(ps ? 'پلورنځی وګورئ' : 'مشاهده فروشگاه'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: const Color(0xFF172033),
+                          backgroundColor: Colors.white,
+                          minimumSize: const Size(0, 46),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    IconButton(
+                      onPressed: () => _open(const ProfileScreen()),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(.14),
+                        foregroundColor: Colors.white,
+                        fixedSize: const Size(46, 46),
+                      ),
+                      icon: const Icon(Icons.edit_rounded),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inactiveBanner(bool ps) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E7),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF3D48A)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFE8A3),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.lock_open_rounded, color: Color(0xFF7A5600)),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(ps ? 'پلورنځی لا فعال نه دی' : 'فروشگاه هنوز فعال نیست',
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(ps ? 'د پلورنځي پلان فعال کړئ ترڅو مسلکي پاڼه مو ښکاره شي.' : 'یکی از پلن‌های فروشگاه را فعال کنید تا صفحه حرفه‌ای شما نمایش داده شود.',
+                    style: const TextStyle(fontSize: 12.5, height: 1.45)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => _open(const StoreSubscriptionScreen()),
+            child: Text(ps ? 'فعالول' : 'فعال‌سازی'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dashboardStat(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0xFFE3E7EB)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 23),
+          const SizedBox(height: 7),
+          Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.5, color: Colors.black54, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 3),
+        Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 11.5)),
+      ],
+    );
+  }
+
+  Widget _actionGrid(bool ps) {
+    final actions = [
+      _StoreAction(
+        icon: Icons.add_business_rounded,
+        title: ps ? 'نوی محصول' : 'افزودن محصول',
+        subtitle: ps ? 'محصول ثبت کړئ' : 'ثبت محصول جدید',
+        color: const Color(0xFF007185),
+        onTap: () => _open(const AddProductScreen()),
+      ),
+      _StoreAction(
+        icon: Icons.storefront_rounded,
+        title: ps ? 'زما پلورنځی' : 'صفحه فروشگاه',
+        subtitle: ps ? 'هغه څه چې مشتری ویني' : 'نمایش عمومی فروشگاه',
+        color: const Color(0xFF146EB4),
+        onTap: sellerId.isEmpty
+            ? null
+            : () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfessionalStoreCatalogScreen(
+                      sellerId: sellerId,
+                      sellerName: shopName,
+                    ),
+                  ),
+                ),
+      ),
+      _StoreAction(
+        icon: Icons.manage_accounts_rounded,
+        title: ps ? 'پروفایل' : 'ویرایش فروشگاه',
+        subtitle: ps ? 'نوم او معلومات' : 'نام و معرفی فروشگاه',
+        color: const Color(0xFF6B21A8),
+        onTap: () => _open(const ProfileScreen()),
+      ),
+      _StoreAction(
+        icon: Icons.workspace_premium_rounded,
+        title: ps ? 'اشتراک' : 'اشتراک فروشگاه',
+        subtitle: ps ? 'پلن او تمدید' : 'پلن و تمدید',
+        color: const Color(0xFFB45309),
+        onTap: () => _open(const StoreSubscriptionScreen()),
+      ),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: actions.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.55,
+      ),
+      itemBuilder: (_, i) {
+        final a = actions[i];
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: a.onTap,
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE3E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 39,
+                    height: 39,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: a.color.withOpacity(.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(a.icon, color: a.color, size: 21),
+                  ),
+                  const Spacer(),
+                  Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                  const SizedBox(height: 2),
+                  Text(a.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black54, fontSize: 10.5)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _emptyProducts(bool ps) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE3E7EB)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF6F6),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Icon(Icons.inventory_2_rounded, size: 34, color: Color(0xFF007185)),
+          ),
+          const SizedBox(height: 13),
+          Text(ps ? 'تر اوسه محصول نشته' : 'هنوز محصولی در فروشگاه ندارید',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(
+            ps ? 'لومړی محصول اضافه کړئ ترڅو مشتریان یې په پلورنځي کې وویني.' : 'اولین محصول خود را اضافه کنید تا مشتری‌ها آن را در فروشگاه ببینند.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.black54, height: 1.5, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () => _open(const AddProductScreen()),
+            icon: const Icon(Icons.add_rounded),
+            label: Text(ps ? 'محصول اضافه کړئ' : 'افزودن محصول'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _productGrid(bool ps) {
+    final items = listings.take(8).toList();
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: .72,
+      ),
+      itemBuilder: (_, i) {
+        final m = items[i] is Map ? Map<String, dynamic>.from(items[i]) : <String, dynamic>{};
+        final raw = m['image_url'];
+        List<dynamic> imgs = [];
+        if (raw is List) imgs = raw;
+        else if (raw is String && raw.trim().isNotEmpty) {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) imgs = decoded;
+          } catch (_) {
+            imgs = [raw];
+          }
+        }
+        final imageUrl = imgs.isNotEmpty ? imgs.first.toString() : '';
+        final active = m['is_active'] == true || m['is_active'].toString() == '1' || m['is_active'].toString().toLowerCase() == 'true';
+        final price = m['price']?.toString() ?? '—';
+
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: m)));
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE3E7EB)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        imageUrl.isNotEmpty
+                            ? Image.network(
+                                _optimizedImageUrl(imageUrl),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const ColoredBox(
+                                  color: Color(0xFFF0F2F3),
+                                  child: Icon(Icons.image_not_supported_outlined, size: 34, color: Colors.black38),
+                                ),
+                              )
+                            : const ColoredBox(
+                                color: Color(0xFFF0F2F3),
+                                child: Icon(Icons.image_outlined, size: 34, color: Colors.black38),
+                              ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: active ? const Color(0xFF067D62) : Colors.black54,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              active ? 'فعال' : 'غیرفعال',
+                              style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 9, 10, 11),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m['title']?.toString() ?? 'محصول',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, height: 1.3),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          '$price افغانی',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFFB12704), fontSize: 14, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StoreAction {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback? onTap;
+  const _StoreAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+}
+
 class StoreDirectoryScreen extends StatelessWidget {
   final List<Map<String, dynamic>> stores;
   const StoreDirectoryScreen({super.key, required this.stores});
@@ -4854,7 +5532,8 @@ class StoreDirectoryScreen extends StatelessWidget {
 
 class StoreSubscriptionScreen extends StatefulWidget {
   const StoreSubscriptionScreen({super.key});
-  @override State<StoreSubscriptionScreen> createState() => _StoreSubscriptionScreenState();
+  @override
+  State<StoreSubscriptionScreen> createState() => _StoreSubscriptionScreenState();
 }
 
 class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
@@ -4862,104 +5541,468 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
   String? error;
   List<dynamic> subscriptions = [];
 
-  @override void initState() { super.initState(); _load(); }
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
       final s = await ApiService.getSubscriptions();
-      if (mounted) setState(() { subscriptions = s; loading = false; error = null; });
+      if (mounted) setState(() {
+        subscriptions = s;
+        loading = false;
+        error = null;
+      });
     } catch (e) {
-      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+      if (mounted) setState(() {
+        loading = false;
+        error = friendlyNetworkError(context, e);
+      });
     }
   }
+
+  bool _active(String plan) => subscriptions.any((s) =>
+      s['plan'] == plan &&
+      s['status'] == 'active' &&
+      DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+
+  bool _pending(String plan) => subscriptions.any((s) =>
+      s['plan'] == plan && s['status'] == 'pending');
 
   Future<String?> _referenceDialog({required String title, required int price}) async {
     final c = TextEditingController();
     Map<String, dynamic> payment = {};
-    try { payment = await ApiService.getPaymentInfo(); } catch (_) {}
-    final bank = payment['bank'] is Map ? Map<String, dynamic>.from(payment['bank']) : <String, dynamic>{};
-    final card = (payment['card_number'] ?? bank['card_number'] ?? payment['account_number'] ?? bank['account_number'] ?? '').toString();
+    try {
+      payment = await ApiService.getPaymentInfo();
+    } catch (_) {}
+    final bank = payment['bank'] is Map
+        ? Map<String, dynamic>.from(payment['bank'])
+        : <String, dynamic>{};
+    final card = (payment['card_number'] ??
+            bank['card_number'] ??
+            payment['account_number'] ??
+            bank['account_number'] ??
+            '')
+        .toString();
     final instructions = (payment['instructions'] ?? '').toString();
     final ps = Localizations.localeOf(context).languageCode == 'ps';
+
     return showDialog<String>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(builder: (dialogContext, setDialogState) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${ps ? 'بیه' : 'قیمت'}: $price ${tr(context, 'afghani')}', style: const TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          if (card.isNotEmpty) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, borderRadius: BorderRadius.circular(12)), child: SelectableText(card, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),),
-          if (instructions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(instructions)),
-          const SizedBox(height: 10),
-          Text(ps ? 'مبلغ را انتقال کړئ، رسید/تعقیبي شمېره ولیکئ او د مدیریت تایید ته انتظار وباسئ.' : 'مبلغ را انتقال دهید، شماره رسید/پیگیری را وارد کنید و منتظر تأیید مدیریت بمانید.'),
-          const SizedBox(height: 12),
-          TextField(controller: c, onChanged: (_) => setDialogState(() {}), decoration: InputDecoration(labelText: ps ? 'د رسید شمېره' : 'شماره پیگیری / رسید', border: const OutlineInputBorder())),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(ps ? 'لغوه' : 'لغو')),
-          FilledButton(onPressed: c.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, c.text.trim()), child: Text(ps ? 'ثبت' : 'ثبت درخواست')),
-        ],
-      )),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: Row(
+            children: [
+              const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF007185)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F7F8),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    '${ps ? 'بیه' : 'قیمت'}: $price ${tr(context, 'afghani')}',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (card.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF172033), Color(0xFF263B57)]),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(ps ? 'د تادیې کارت' : 'شماره کارت / حساب',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          card,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (instructions.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(instructions, style: const TextStyle(height: 1.5)),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  ps
+                      ? 'مبلغ انتقال کړئ، د رسید شمېره ولیکئ او د مدیریت تایید ته انتظار وکړئ.'
+                      : 'مبلغ را انتقال دهید، شماره رسید یا پیگیری را وارد کنید و منتظر تأیید مدیریت بمانید.',
+                  style: const TextStyle(height: 1.5, color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: c,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: ps ? 'د رسید شمېره' : 'شماره پیگیری / رسید',
+                    prefixIcon: const Icon(Icons.receipt_long_rounded),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(ps ? 'لغوه' : 'لغو'),
+            ),
+            FilledButton.icon(
+              onPressed: c.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(dialogContext, c.text.trim()),
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: Text(ps ? 'ثبت' : 'ثبت درخواست'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Future<void> _buy(String plan, int price, String title) async {
-    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    if (!AuthService.isLoggedIn) {
+      await requireAccount(context);
+      return;
+    }
     final ref = await _referenceDialog(title: title, price: price);
     if (ref == null) return;
     try {
       await ApiService.createGlobalBoost(plan, ref);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Localizations.localeOf(context).languageCode == 'ps' ? 'ستاسو د پلورنځي غوښتنه ثبت شوه؛ د تایید وروسته فعاله کېږي.' : 'درخواست فروشگاه ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            Localizations.localeOf(context).languageCode == 'ps'
+                ? 'ستاسو د پلورنځي غوښتنه ثبت شوه؛ د تایید وروسته فعاله کېږي.'
+                : 'درخواست فروشگاه ثبت شد؛ پس از تأیید پرداخت فعال می‌شود.',
+          ),
+        ),
+      );
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(behavior: SnackBarBehavior.floating, content: Text(friendlyNetworkError(context, e))),
+        );
+      }
     }
   }
 
-  Widget _plan(String plan, int price, String title, String subtitle, IconData icon) {
-    final active = subscriptions.any((s) => s['plan'] == plan && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
-    final pending = subscriptions.any((s) => s['plan'] == plan && s['status'] == 'pending');
+  Widget _plan({
+    required String plan,
+    required int price,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool popular,
+    required String badge,
+    required bool ps,
+  }) {
+    final active = _active(plan);
+    final pending = _pending(plan);
+
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: active ? const Color(0xFFFFB700) : const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(8)),
-      child: Row(children: [
-        Container(width: 48, height: 48, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: const Color(0xFF8A5A00))),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(subtitle, style: const TextStyle(color: Colors.black54, height: 1.4)), const SizedBox(height: 8), Text('$price ${tr(context, 'afghani')}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFFB12704)))])),
-        if (active) const Chip(label: Text('فعال')) else if (pending) const Chip(label: Text('در انتظار تأیید')) else FilledButton(onPressed: () => _buy(plan, price, title), child: const Text('فعال‌سازی')),
-      ]),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(23),
+        border: Border.all(
+          color: popular ? const Color(0xFF007185) : const Color(0xFFE1E6EA),
+          width: popular ? 1.6 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 15, offset: const Offset(0, 7)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: popular
+                        ? [const Color(0xFF007185), const Color(0xFF146EB4)]
+                        : [const Color(0xFFFFF3CD), const Color(0xFFFFE8A3)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: popular ? Colors.white : const Color(0xFF8A5A00), size: 26),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              if (popular)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE7F6F5),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(badge, style: const TextStyle(color: Color(0xFF007185), fontSize: 10, fontWeight: FontWeight.w900)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 17),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('$price', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFFB12704))),
+              const SizedBox(width: 5),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(tr(context, 'afghani'), style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...[
+            ps ? 'صفحه اختصاصی پلورنځی' : 'صفحه اختصاصی فروشگاه',
+            ps ? 'نمایش محصولات با عکس و قیمت' : 'نمایش محصولات با عکس و قیمت',
+            ps ? 'حضور در فروشگاه‌های حرفه‌ای بازارک' : 'نمایش در بخش فروشگاه‌های حرفه‌ای بازارک',
+          ].map((x) => Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF007185)),
+                    const SizedBox(width: 7),
+                    Expanded(child: Text(x, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                  ],
+                ),
+              )),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: active
+                ? OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.verified_rounded),
+                    label: Text(ps ? 'فعال دی' : 'فعال است'),
+                  )
+                : pending
+                    ? OutlinedButton.icon(
+                        onPressed: null,
+                        icon: const Icon(Icons.hourglass_top_rounded),
+                        label: Text(ps ? 'د تایید په تمه' : 'در انتظار تأیید'),
+                      )
+                    : FilledButton.icon(
+                        onPressed: () => _buy(plan, price, title),
+                        icon: const Icon(Icons.rocket_launch_rounded, size: 18),
+                        label: Text(ps ? 'فعالول' : 'فعال‌سازی'),
+                      ),
+          ),
+        ],
+      ),
     );
   }
 
-  @override Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Scaffold(
-      appBar: AppBar(title: Text(ps ? '🏪 مسلکي پلورنځی' : '🏪 فروشگاه حرفه‌ای')),
-      backgroundColor: const Color(0xFFE3E6E6),
-      body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? OfflineErrorView(onRetry: _load, message: error) : ListView(padding: const EdgeInsets.all(14), children: [
-        Container(padding: const EdgeInsets.all(20), decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)])), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(ps ? 'خپل پلورنځی د بازارک په کچه مسلکي کړئ.' : 'فروشگاهت را در بازارک حرفه‌ای کن.', style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Text(ps ? 'د محصولاتو عکسونه، بیې، لوګو، د پلورنځي پاڼه او ځانګړی ځای.' : 'صفحه فروشگاه، نمایش حرفه‌ای محصولات، قیمت‌ها، برند و جایگاه ویژه در بازارک.', style: const TextStyle(color: Color(0xFFD5D9D9), height: 1.5)),
-        ])),
-        const SizedBox(height: 14),
-        _plan('store_monthly', 600, ps ? '🏪 میاشتنی' : '🏪 ماهانه', ps ? '۳۰ ورځې؛ پلورنځی او ټول محصولات.' : '۳۰ روز؛ فروشگاه حرفه‌ای و نمایش محصولات.', Icons.calendar_month_rounded),
-        const SizedBox(height: 10),
-        _plan('store_yearly', 6000, ps ? '👑 کلنی' : '👑 سالانه', ps ? '۳۶۵ ورځې؛ پلورنځی حرفه‌ای با دوام.' : '۳۶۵ روز؛ فروشگاه حرفه‌ای با ارزش بیشتر.', Icons.workspace_premium_rounded),
-        const SizedBox(height: 18),
-        Container(padding: const EdgeInsets.all(16), color: Colors.white, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(ps ? 'ویژگیونه' : 'امکانات فروشگاه حرفه‌ای', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          ...[
-            ps ? 'صفحه اختصاصی فروشگاه با نام و برند شما' : 'صفحه اختصاصی فروشگاه با نام و برند شما',
-            ps ? 'نمایش همه محصولات با عکس و قیمت' : 'نمایش تمام محصولات با عکس و قیمت',
-            ps ? 'نمایش فروشگاه در بخش فروشگاه‌های حرفه‌ای' : 'نمایش فروشگاه در بخش فروشگاه‌های حرفه‌ای',
-            ps ? 'دسترسی به جایگاه فروشگاه در Boost' : 'قرارگیری در بخش فروشگاه‌های ویژه و Boost',
-            ps ? 'پروفایل فروشنده، دنبال‌کردن و امتیازدهی' : 'پروفایل فروشنده، دنبال‌کردن و امتیازدهی',
-          ].map((x) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [const Icon(Icons.check_circle, color: Color(0xFF007185), size: 20), const SizedBox(width: 8), Expanded(child: Text(x, style: const TextStyle(fontWeight: FontWeight.w700)))]))),
-        ])),
-      ]),
+      backgroundColor: const Color(0xFFF4F6F8),
+      appBar: AppBar(
+        elevation: 0,
+        title: Text(ps ? 'مسلکي پلورنځی' : 'فروشگاه حرفه‌ای',
+            style: const TextStyle(fontWeight: FontWeight.w900)),
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? OfflineErrorView(onRetry: _load, message: error!)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 30),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                            colors: [Color(0xFF111827), Color(0xFF1F3B55), Color(0xFF007185)],
+                          ),
+                          borderRadius: BorderRadius.circular(26),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 18, offset: const Offset(0, 8)),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 58,
+                              height: 58,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(.12),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 31),
+                            ),
+                            const SizedBox(height: 15),
+                            Text(
+                              ps ? 'خپل پلورنځی د بازارک په کچه مسلکي کړئ.' : 'فروشگاه خودت را حرفه‌ای کن.',
+                              style: const TextStyle(color: Colors.white, fontSize: 25, height: 1.2, fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 9),
+                            Text(
+                              ps
+                                  ? 'د محصولاتو لپاره ځانګړې پاڼه، مسلکي نمایش او د مشتریانو لپاره روښانه تجربه.'
+                                  : 'یک صفحه اختصاصی، نمایش حرفه‌ای محصولات و تجربه بهتر برای مشتری‌ها.',
+                              style: const TextStyle(color: Color(0xFFDCE7EE), height: 1.55, fontSize: 13),
+                            ),
+                            const SizedBox(height: 17),
+                            Row(
+                              children: [
+                                _heroPill(Icons.verified_rounded, ps ? 'مسلکي' : 'حرفه‌ای'),
+                                const SizedBox(width: 8),
+                                _heroPill(Icons.inventory_2_rounded, ps ? 'محصولات' : 'محصولات'),
+                                const SizedBox(width: 8),
+                                _heroPill(Icons.storefront_rounded, ps ? 'ځانګړې پاڼه' : 'صفحه اختصاصی'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(ps ? 'پلنونه' : 'پلن‌های فروشگاه',
+                          style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 4),
+                      Text(
+                        ps ? 'هغه پلان غوره کړئ چې ستاسو د پلورنځي لپاره مناسب وي.' : 'پلنی را انتخاب کنید که برای فروشگاه شما مناسب است.',
+                        style: const TextStyle(color: Colors.black54, fontSize: 12),
+                      ),
+                      const SizedBox(height: 11),
+                      _plan(
+                        plan: 'store_yearly',
+                        price: 6000,
+                        title: ps ? '👑 کلنی' : '👑 سالانه',
+                        subtitle: ps ? '۳۶۵ ورځې' : '۳۶۵ روز',
+                        icon: Icons.workspace_premium_rounded,
+                        popular: true,
+                        badge: ps ? 'مشهور' : 'پیشنهاد ویژه',
+                        ps: ps,
+                      ),
+                      const SizedBox(height: 12),
+                      _plan(
+                        plan: 'store_monthly',
+                        price: 600,
+                        title: ps ? '🏪 میاشتنی' : '🏪 ماهانه',
+                        subtitle: ps ? '۳۰ ورځې' : '۳۰ روز',
+                        icon: Icons.calendar_month_rounded,
+                        popular: false,
+                        badge: '',
+                        ps: ps,
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFFE1E6EA)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(ps ? 'ولې مسلکي پلورنځی؟' : 'امکاناتی که دریافت می‌کنید',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 13),
+                            ...[
+                              [Icons.storefront_rounded, ps ? 'ځانګړې د پلورنځي پاڼه' : 'صفحه اختصاصی فروشگاه'],
+                              [Icons.photo_library_rounded, ps ? 'د محصولاتو عکسونه او بیې' : 'نمایش عکس و قیمت محصولات'],
+                              [Icons.explore_rounded, ps ? 'په مسلکي پلورنځیو کې ښکاره کېدل' : 'نمایش در بخش فروشگاه‌های حرفه‌ای'],
+                              [Icons.manage_accounts_rounded, ps ? 'مسلکي پلورنځي مدیریت' : 'مدیریت ساده و یکپارچه فروشگاه'],
+                            ].map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 11),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 38,
+                                        height: 38,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEAF6F6),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(item[0] as IconData, color: const Color(0xFF007185), size: 20),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(item[1] as String, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5))),
+                                    ],
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _heroPill(IconData icon, String text) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(.12)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -6063,6 +7106,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool saving = false;
   String? error;
   Map<String, dynamic> profile = {};
+  List<dynamic> subscriptions = [];
 
   @override
   void initState() {
@@ -6077,6 +7121,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     try {
       final data = await ApiService.getMyProfile();
+      try {
+        final subs = await ApiService.getSubscriptions();
+        subscriptions = subs;
+      } catch (_) {
+        subscriptions = [];
+      }
       // Calculate statistics from the same authenticated /products endpoint
       // used by «آگهی‌های من». This keeps the counters correct even when the
       // deployed backend's /api/me response does not yet include statistics.
@@ -6257,6 +7307,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final activeAds = int.tryParse('${profile['active_ads'] ?? 0}') ?? 0;
     final totalAds = int.tryParse('${profile['total_ads'] ?? 0}') ?? 0;
     final views = int.tryParse('${profile['total_views'] ?? 0}') ?? 0;
+    final activeStore = subscriptions
+        .where((s) =>
+            (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
+            s['status'] == 'active' &&
+            DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true)
+        .toList()
+      ..sort((a, b) => DateTime.tryParse('${b['ends_at']}')!.compareTo(DateTime.tryParse('${a['ends_at']}')!));
+    final hasActiveStore = activeStore.isNotEmpty;
+    final storeEnd = hasActiveStore ? _dateTimeForUser(activeStore.first['ends_at']) : '';
 
     return Scaffold(
       appBar: AppBar(
@@ -6359,6 +7418,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _infoTile(Icons.phone_outlined, 'شماره تلفن', phone),
                         _infoTile(Icons.location_on_outlined, 'شهر / ولایت', city),
                       ]),
+                    ),
+                  if (hasActiveStore)
+                    Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      elevation: 0,
+                      color: const Color(0xFFFFF8E1),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const CircleAvatar(
+                              backgroundColor: Color(0xFFFFD814),
+                              child: Icon(Icons.storefront_rounded, color: Color(0xFF111111)),
+                            ),
+                            title: const Text('فروشگاه حرفه‌ای من', style: TextStyle(fontWeight: FontWeight.w900)),
+                            subtitle: Text(
+                              storeEnd.isEmpty
+                                  ? 'فروشگاه شما فعال است'
+                                  : 'فعال تا $storeEnd',
+                            ),
+                            trailing: const Icon(Icons.chevron_left),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const MyStoreScreen()),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const MyStoreScreen()),
+                                    ),
+                                    icon: const Icon(Icons.storefront_outlined),
+                                    label: const Text('مدیریت فروشگاه'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const AddProductScreen()),
+                                    ),
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('افزودن محصول'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), subtitle: const Text('پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                   ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), subtitle: const Text('گزارش اشکال، پیشنهاد و پیام به تیم بازارک'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
