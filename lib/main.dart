@@ -8116,6 +8116,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Divider(height: 1),
             menuTile(Icons.support_agent_outlined, 'پشتیبانی و ارتباط با ما', 'کمک و گزارش مشکل', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())), color: const Color(0xFF0F766E)),
             const Divider(height: 1),
+            menuTile(Icons.admin_panel_settings_outlined, 'ورود مدیریت بازارک', 'پنل مدیریت، بررسی آگهی‌ها و گزارش‌ها', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen())), color: const Color(0xFF334155)),
+            const Divider(height: 1),
             menuTile(Icons.rocket_launch_rounded, 'Boost آگهی‌ها', 'افزایش نمایش آگهی‌های شما', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }, color: const Color(0xFFB45309)),
             const Divider(height: 1),
             SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
