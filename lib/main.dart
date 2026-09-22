@@ -993,7 +993,9 @@ class ApiService {
     final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/products/$productId/reviews'), headers: headers).timeout(const Duration(seconds: 15));
     dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
     if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت نظرات محصول.') : 'خطا در دریافت نظرات محصول.');
-    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+    if (data is List) return data;
+    if (data is Map && data['data'] is List) return List<dynamic>.from(data['data']);
+    return <dynamic>[];
   }
 
   static Future<Map<String,dynamic>> addProductReview(String productId, int rating, String review) async {
@@ -2092,6 +2094,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isWide = width >= 900;
     final isTablet = width >= 620;
     final visibleCategories = categories.take(isWide ? 10 : (isTablet ? 8 : 6)).toList();
+    final normalProducts = products.where((raw) => raw is Map && raw['store_active'] != true && raw['is_store_product'] != true).toList();
 
     // A dedicated web storefront. Native Android keeps its existing layout.
     if (kIsWeb) {
@@ -2160,7 +2163,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                             )),
                             if (products.isNotEmpty)
-                              Text('${products.length} ${Localizations.localeOf(context).languageCode == 'ps' ? 'اعلان' : 'آگهی'}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
+                              Text('${normalProducts.length} ${Localizations.localeOf(context).languageCode == 'ps' ? 'اعلان' : 'آگهی'}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
                           ],
                         ),
                         const SizedBox(height: 7),
@@ -2177,7 +2180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 hasScrollBody: false,
                 child: OfflineErrorView(onRetry: _loadProducts, message: loadError),
               )
-            else if (products.isEmpty)
+            else if (normalProducts.isEmpty)
               SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(psText(context, 'هنوز هیچ آگهی فعالی ثبت نشده است.', 'تر اوسه کوم فعال اعلان نشته.'), textAlign: TextAlign.center))))
             else
               SliverToBoxAdapter(
@@ -2190,7 +2193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? GridView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
-                              itemCount: products.length,
+                              itemCount: normalProducts.length,
                               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 390,
                                 mainAxisExtent: 154,
@@ -2205,12 +2208,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   border: Border.all(color: const Color(0xFFE5E7EB)),
                                   boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
                                 ),
-                                child: _DivarStyleListing(item: products[index]),
+                                child: _DivarStyleListing(item: normalProducts[index]),
                               ),
                             )
                           : Column(
                               children: [
-                                for (var i = 0; i < products.length; i++) ...[
+                                for (var i = 0; i < normalProducts.length; i++) ...[
                                   _DivarStyleListing(item: products[i]),
                                   if (i == 4) ...[
                                     const SizedBox(height: 8),
@@ -2219,7 +2222,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()));
                                     }),
                                   ],
-                                  if (i != products.length - 1) const Divider(height: 1, indent: 0, endIndent: 0),
+                                  if (i != normalProducts.length - 1) const Divider(height: 1, indent: 0, endIndent: 0),
                                 ],
                               ],
                             ),
@@ -2249,6 +2252,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final raw in products) {
       if (raw is! Map) continue;
       final item = Map<String, dynamic>.from(raw);
+      if (item['is_store_product'] != true) continue;
       final vendorId = item['vendor_id']?.toString().trim() ?? '';
       final shopName = item['shop_name']?.toString().trim().isNotEmpty == true
           ? item['shop_name'].toString().trim()
@@ -2288,6 +2292,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     final professionalStores = storeMap.values.toList()..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    final normalProducts = products.where((raw) => raw is Map && raw['store_active'] != true && raw['is_store_product'] != true).toList();
 
     final title = selectedCategory.isEmpty &&
             selectedProvince.isEmpty &&
@@ -3252,7 +3257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   final vendorId = store['vendor_id'].toString();
                                   final shopName = store['shop_name'].toString();
                                   final storeProducts = products
-                                      .where((raw) => raw is Map && raw['vendor_id']?.toString() == vendorId && raw['store_active'] == true && (raw['store_plan'] == 'store_monthly' || raw['store_plan'] == 'store_yearly'))
+                                      .where((raw) => raw is Map && raw['vendor_id']?.toString() == vendorId && raw['store_active'] == true && raw['is_store_product'] == true && (raw['store_plan'] == 'store_monthly' || raw['store_plan'] == 'store_yearly'))
                                       .map((raw) => Map<String, dynamic>.from(raw as Map))
                                       .toList();
                                   final storeDescription = store['description']?.toString().trim() ?? '';
@@ -3395,7 +3400,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               if (products.isNotEmpty)
                                 Text(
-                                  '${products.length} ${isPs ? 'اعلان' : 'آگهی'}',
+                                  '${normalProducts.length} ${isPs ? 'اعلان' : 'آگهی'}',
                                   style: const TextStyle(
                                     color: Colors.black54,
                                     fontWeight: FontWeight.w700,
@@ -3449,7 +3454,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     message: loadError,
                                   ),
                                 )
-                              : products.isEmpty
+                              : normalProducts.isEmpty
                                   ? Padding(
                                       padding: const EdgeInsets.all(35),
                                       child: Center(
@@ -3476,7 +3481,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           shrinkWrap: true,
                                           physics:
                                               const NeverScrollableScrollPhysics(),
-                                          itemCount: products.length,
+                                          itemCount: normalProducts.length,
                                           gridDelegate:
                                               SliverGridDelegateWithFixedCrossAxisCount(
                                             crossAxisCount: columns,
@@ -3486,7 +3491,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 isMobile ? 330 : 390,
                                           ),
                                           itemBuilder: (context, index) =>
-                                              productCard(products[index]),
+                                              productCard(normalProducts[index]),
                                         );
                                       },
                                     ),
@@ -3770,10 +3775,13 @@ String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
 String _displayListingPrice(BuildContext context, dynamic item) {
   final raw = item['price'];
   final n = num.tryParse(raw?.toString() ?? '') ?? 0;
+  final discount = num.tryParse(item['discount_percent']?.toString() ?? '') ?? 0;
+  final sale = n > 0 && discount > 0 && discount < 100 ? n * (1 - discount / 100) : n;
   final negotiable = item['is_negotiable'] == true;
   final currency = (item['currency']?.toString().toUpperCase() == 'USD') ? 'USD' : 'AFN';
-  final amount = n <= 0 ? tr(context, 'free') : (currency == 'USD' ? '\$${NumberFormatHelper.format(n)}' : '${NumberFormatHelper.format(n)} ${tr(context, 'afghani')}');
-  return negotiable ? '$amount • ${tr(context, 'price_negotiable')}' : amount;
+  final amount = sale <= 0 ? tr(context, 'free') : (currency == 'USD' ? '\$${NumberFormatHelper.format(sale)}' : '${NumberFormatHelper.format(sale)} ${tr(context, 'afghani')}');
+  final suffix = negotiable ? ' • ${tr(context, 'price_negotiable')}' : '';
+  return discount > 0 && discount < 100 ? '٪${NumberFormatHelper.format(discount)} تخفیف • $amount$suffix' : '$amount$suffix';
 }
 
 class _DivarStyleListing extends StatelessWidget {
@@ -5069,6 +5077,8 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
     final condition = item['condition']?.toString().trim() ?? '';
     final sizes = _professionalValues(item, 'sizes');
     final colors = _professionalValues(item, 'colors');
+    final discount = double.tryParse(item['discount_percent']?.toString() ?? '') ?? 0;
+    final originalPrice = double.tryParse(item['price']?.toString() ?? '') ?? 0;
     return InkWell(
       onTap: () => _openListing(context, item),
       borderRadius: BorderRadius.circular(6),
@@ -5083,8 +5093,9 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                 image.isNotEmpty
                     ? ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(6)), child: Image.network(_optimizedImageUrl(image), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 38, color: Colors.black38))))
                     : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 38, color: Colors.black38)),
-                Positioned(left: 7, right: 7, bottom: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(.72), borderRadius: BorderRadius.circular(6)), child: Text(price, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900)))),
+                Positioned(left: 7, right: 7, bottom: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(.72), borderRadius: BorderRadius.circular(6)), child: Column(mainAxisSize: MainAxisSize.min, children: [if (discount > 0 && discount < 100 && originalPrice > 0) Text('${NumberFormatHelper.format(originalPrice)} ${item['currency']?.toString() == 'USD' ? 'USD' : 'افغانی'}', style: const TextStyle(color: Colors.white60, fontSize: 9, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w700)), Text(price, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900))]))),
                 Positioned(top: 7, right: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(5)), child: Text(code, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900)))),
+                if (discount > 0 && discount < 100) Positioned(top: 7, left: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5), decoration: BoxDecoration(color: const Color(0xFFD32F2F), borderRadius: BorderRadius.circular(7)), child: Text('٪${NumberFormatHelper.format(discount)} تخفیف', style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900)))),
               ],
             ),
           ),
@@ -5233,6 +5244,16 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
       s['status'] == 'active' &&
       DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
 
+  bool get hasStoreHistory => subscriptions.any((s) => s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly');
+
+  int get storeDaysLeft {
+    if (!hasActiveStore) return 0;
+    final active = subscriptions.where((s) => (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true).toList();
+    if (active.isEmpty) return 0;
+    active.sort((a,b) => DateTime.tryParse('${a['ends_at']}')!.compareTo(DateTime.tryParse('${b['ends_at']}')!));
+    return DateTime.tryParse('${active.last['ends_at']}')?.difference(DateTime.now()).inDays ?? 0;
+  }
+
   String get sellerId {
     final id = profile['id']?.toString().trim() ?? '';
     return id.isNotEmpty ? id : (AuthService.userId ?? '');
@@ -5317,8 +5338,10 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                     children: [
                       _storeHero(ps),
                       const SizedBox(height: 14),
-                      if (!hasActiveStore) _inactiveBanner(ps),
-                      if (!hasActiveStore) const SizedBox(height: 14),
+                      if (hasActiveStore && storeDaysLeft <= 7) _renewalBanner(ps),
+                      if (!hasActiveStore && hasStoreHistory) _expiredStoreBanner(ps),
+                      if (!hasActiveStore && !hasStoreHistory) _inactiveBanner(ps),
+                      if ((!hasActiveStore && hasStoreHistory) || (!hasActiveStore && !hasStoreHistory) || (hasActiveStore && storeDaysLeft <= 7)) const SizedBox(height: 14),
                       Row(
                         children: [
                           Expanded(child: _dashboardStat(
@@ -5518,6 +5541,30 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
     );
   }
 
+  Widget _renewalBanner(bool ps) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: const Color(0xFFFFF8E7), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFF3D48A))),
+      child: Row(children: [
+        const Icon(Icons.timer_rounded, color: Color(0xFFB45309), size: 34), const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(ps ? 'ستاسو پلورنځی ژر پای ته رسېږي' : 'زمان فروشگاه شما رو به پایان است', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(ps ? 'وخت پاتې: ${storeDaysLeft} ورځې. تمدید یا کلنی پلان واخلئ.' : 'فقط ${storeDaysLeft} روز باقی مانده؛ تمدید کنید یا پلن سالانه بخرید.', style: const TextStyle(fontSize: 12, height: 1.4))])),
+        const SizedBox(width: 7), FilledButton(onPressed: () => _open(const StoreSubscriptionScreen()), child: Text(ps ? 'تمدید' : 'تمدید')),
+      ]),
+    );
+  }
+
+  Widget _expiredStoreBanner(bool ps) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFD1D5DB))),
+      child: Row(children: [
+        const Icon(Icons.store_mall_directory_outlined, color: Color(0xFF4B5563), size: 34), const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(ps ? 'ستاسو پلورنځی موقتاً پټ دی' : 'فروشگاه شما موقتاً غیرفعال و پنهان است', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(ps ? 'محصولات او پلورنځی مو حذف شوي نه دي. د بیا فعالولو لپاره پلان واخلئ.' : 'فروشگاه و محصولات حذف نشده‌اند؛ برای نمایش دوباره، اشتراک را تمدید کنید.', style: const TextStyle(fontSize: 12, height: 1.4))])),
+        const SizedBox(width: 7), FilledButton(onPressed: () => _open(const StoreSubscriptionScreen()), child: Text(ps ? 'فعالول' : 'تمدید')),
+      ]),
+    );
+  }
+
   Widget _inactiveBanner(bool ps) {
     return Container(
       padding: const EdgeInsets.all(15),
@@ -5600,7 +5647,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
         title: ps ? 'نوی محصول' : 'افزودن محصول',
         subtitle: ps ? 'محصول ثبت کړئ' : 'ثبت محصول جدید',
         color: const Color(0xFF007185),
-        onTap: () => _open(const AddProductScreen()),
+        onTap: () => _open(const AddProductScreen(professional: true)),
       ),
       _StoreAction(
         icon: Icons.storefront_rounded,
@@ -5725,7 +5772,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: () => _open(const AddProductScreen()),
+            onPressed: () => _open(const AddProductScreen(professional: true)),
             icon: const Icon(Icons.add_rounded),
             label: Text(ps ? 'محصول اضافه کړئ' : 'افزودن محصول'),
           ),
@@ -6195,23 +6242,17 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
           SizedBox(
             width: double.infinity,
             height: 46,
-            child: active
+            child: pending
                 ? OutlinedButton.icon(
                     onPressed: null,
-                    icon: const Icon(Icons.verified_rounded),
-                    label: Text(ps ? 'فعال دی' : 'فعال است'),
+                    icon: const Icon(Icons.hourglass_top_rounded),
+                    label: Text(ps ? 'د تایید په تمه' : 'در انتظار تأیید'),
                   )
-                : pending
-                    ? OutlinedButton.icon(
-                        onPressed: null,
-                        icon: const Icon(Icons.hourglass_top_rounded),
-                        label: Text(ps ? 'د تایید په تمه' : 'در انتظار تأیید'),
-                      )
-                    : FilledButton.icon(
-                        onPressed: () => _buy(plan, price, title),
-                        icon: const Icon(Icons.rocket_launch_rounded, size: 18),
-                        label: Text(ps ? 'فعالول' : 'فعال‌سازی'),
-                      ),
+                : FilledButton.icon(
+                    onPressed: () => _buy(plan, price, title),
+                    icon: Icon(active ? Icons.autorenew_rounded : Icons.rocket_launch_rounded, size: 18),
+                    label: Text(active ? (ps ? 'تمدید / صف بعدی' : 'تمدید و اضافه‌شدن به زمان باقی‌مانده') : (ps ? 'فعالول' : 'فعال‌سازی')),
+                  ),
           ),
         ],
       ),
@@ -6837,7 +6878,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 }
 
 class AddProductScreen extends StatelessWidget {
-  const AddProductScreen({super.key});
+  final bool professional;
+  const AddProductScreen({super.key, this.professional = false});
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
@@ -6851,7 +6893,29 @@ class AddProductScreen extends StatelessWidget {
             FilledButton.icon(onPressed: () => requireAccount(context), icon: const Icon(Icons.login), label: Text(psText(context,'ورود / ثبت‌نام','ننوتل / نوم لیکنه'))),
           ]))));
         }
-        return Scaffold(appBar: AppBar(title: Text(tr(context,'add'))), body: const AddProductSheet());
+        if (!professional) {
+          return Scaffold(appBar: AppBar(title: Text(tr(context,'add'))), body: const AddProductSheet());
+        }
+        return FutureBuilder<List<dynamic>>(
+          future: ApiService.getSubscriptions(),
+          builder: (context, snapshot) {
+            final subs = snapshot.data ?? const <dynamic>[];
+            final activeStore = subs.any((s) => s is Map && (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
+            if (snapshot.connectionState != ConnectionState.done) {
+              return Scaffold(appBar: AppBar(title: const Text('افزودن محصول فروشگاه')), body: const Center(child: CircularProgressIndicator()));
+            }
+            if (!activeStore) {
+              return Scaffold(appBar: AppBar(title: const Text('افزودن محصول فروشگاه')), body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.lock_outline_rounded, size: 64, color: Color(0xFF007185)),
+                const SizedBox(height: 14),
+                const Text('برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 18),
+                FilledButton.icon(onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen())), icon: const Icon(Icons.storefront_rounded), label: const Text('مدیریت فروشگاه')),
+              ]))));
+            }
+            return const Scaffold(appBar: AppBar(title: Text('افزودن محصول فروشگاه')), body: AddProductSheet(professional: true));
+          },
+        );
       },
     );
   }
@@ -7756,15 +7820,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (!AuthService.isLoggedIn) {
-      return Scaffold(
-        appBar: AppBar(title: Text(tr(context, 'profile'))),
-        body: Center(child: FilledButton.icon(
-          onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())); if (mounted) setState(() {}); },
-          icon: const Icon(Icons.login), label: Text(tr(context, 'login')),
-        )),
-      );
+      return Scaffold(appBar: AppBar(title: Text(tr(context, 'profile'))), body: Center(child: FilledButton.icon(
+        onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())); if (mounted) setState(() {}); },
+        icon: const Icon(Icons.login), label: Text(tr(context, 'login')),
+      )));
     }
-
     final name = profile['full_name']?.toString().trim().isNotEmpty == true ? profile['full_name'].toString().trim() : (AuthService.userName ?? 'کاربر بازارک');
     final city = profile['city']?.toString().trim() ?? '';
     final bio = profile['bio']?.toString().trim() ?? '';
@@ -7773,98 +7833,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final avatar = AuthService.avatarUrl ?? profile['avatar_url']?.toString() ?? '';
     final totalAds = int.tryParse('${profile['total_ads'] ?? 0}') ?? 0;
     final sellerId = profile['id']?.toString().trim() ?? AuthService.userId ?? '';
-    final activeStore = subscriptions.where((s) =>
-      (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
-      s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true
-    ).toList();
-    activeStore.sort((a,b) {
-      final ad = DateTime.tryParse('${a['ends_at']}'); final bd = DateTime.tryParse('${b['ends_at']}');
-      if (ad == null || bd == null) return 0; return bd.compareTo(ad);
-    });
+    final activeStore = subscriptions.where((s) => (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true).toList();
+    activeStore.sort((a,b) { final ad=DateTime.tryParse('${a['ends_at']}'); final bd=DateTime.tryParse('${b['ends_at']}'); if(ad==null||bd==null)return 0; return bd.compareTo(ad); });
     final hasActiveStore = activeStore.isNotEmpty;
+    final hasStoreHistory = subscriptions.any((s) => s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly');
     final storeEnd = hasActiveStore ? _dateTimeForUser(activeStore.first['ends_at']) : '';
+    final daysLeft = hasActiveStore && activeStore.first['ends_at'] != null ? (DateTime.tryParse('${activeStore.first['ends_at']}')?.difference(DateTime.now()).inDays ?? 0) : 0;
+
+    Widget menuTile(IconData icon, String title, String subtitle, VoidCallback onTap, {Color? color}) => ListTile(
+      leading: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: (color ?? const Color(0xFF4F659B)).withOpacity(.10), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color ?? const Color(0xFF4F659B))),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 11.5, color: Colors.black54)),
+      trailing: const Icon(Icons.chevron_left_rounded),
+      onTap: onTap,
+    );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('حساب من'),
-        actions: [IconButton(onPressed: loading || saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), tooltip: 'ویرایش پروفایل')],
-      ),
+      appBar: AppBar(title: const Text('حساب من'), actions: [IconButton(onPressed: loading || saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), tooltip: 'ویرایش پروفایل')]),
       body: loading ? const Center(child: CircularProgressIndicator()) : RefreshIndicator(
         onRefresh: _loadProfile,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 30),
-          children: [
-            Card(
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(children: [
-                  Stack(children: [
-                    Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.primaryContainer), child: ClipOval(child: avatar.isNotEmpty ? Image.network(_originalImageUrl(avatar), fit: BoxFit.cover, errorBuilder: (_,__,___) => Icon(Icons.person, size: 48, color: Theme.of(context).colorScheme.primary)) : Icon(Icons.person, size: 48, color: Theme.of(context).colorScheme.primary))),
-                    Positioned(bottom: 0, right: 0, child: Material(color: Theme.of(context).colorScheme.primary, shape: const CircleBorder(), child: IconButton(onPressed: saving ? null : _changeAvatar, icon: const Icon(Icons.camera_alt_outlined, color: Colors.white), tooltip: 'تغییر عکس'))),
-                  ]),
-                  const SizedBox(height: 12),
-                  Text(name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
-                  if (city.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('📍 $city', style: const TextStyle(color: Colors.black54))),
-                  if (bio.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black87, height: 1.5))),
-                  const SizedBox(height: 14),
-                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), label: const Text('ویرایش پروفایل'))),
-                ]),
-              ),
-            ),
-            if (error != null) Padding(padding: const EdgeInsets.all(8), child: Text(error!, style: const TextStyle(color: Colors.red))),
-            const SizedBox(height: 8),
-            Card(child: Column(children: [
-              ListTile(leading: const Icon(Icons.inventory_2_outlined), title: const Text('آگهی‌های من', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('$totalAds آگهی ثبت شده'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
-              const Divider(height: 1),
-              ListTile(leading: const Icon(Icons.favorite_border_rounded), title: const Text('علاقه‌مندی‌ها', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('آگهی‌های ذخیره‌شده شما'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAdsScreen()))),
-              const Divider(height: 1),
-              ListTile(leading: const Icon(Icons.storefront_outlined), title: const Text('فروشگاه‌های ذخیره‌شده', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('فروشگاه‌های حرفه‌ای مورد علاقه شما'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedStoresScreen()))),
-              const Divider(height: 1),
-              if (phone.isNotEmpty) ListTile(leading: const Icon(Icons.phone_outlined), title: const Text('شماره تلفن'), subtitle: Text(phone)),
-              if (phone.isNotEmpty) const Divider(height: 1),
-              if (shop.isNotEmpty) ListTile(leading: const Icon(Icons.store_outlined), title: const Text('نام کسب‌وکار'), subtitle: Text(shop)),
-            ])),
-            const SizedBox(height: 10),
-            if (hasActiveStore) ...[
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)]), borderRadius: BorderRadius.circular(20)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [const CircleAvatar(backgroundColor: Color(0xFFFFD814), child: Icon(Icons.storefront_rounded, color: Colors.black)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('فروشگاه حرفه‌ای من', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)), Text(storeEnd.isEmpty ? 'فعال' : 'فعال تا $storeEnd', style: const TextStyle(color: Colors.white70))])), const Icon(Icons.verified_rounded, color: Color(0xFFFFD814))]),
-                  const SizedBox(height: 15),
-                  const Text('ویترین حرفه‌ای، محصولات، نظرات مشتریان و مدیریت فروشگاه در یکجا.', style: TextStyle(color: Colors.white70, height: 1.5)),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    Expanded(child: FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyStoreScreen())), icon: const Icon(Icons.dashboard_rounded), label: const Text('مدیریت فروشگاه'))),
-                    const SizedBox(width: 8),
-                    Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreReviewsScreen())), icon: const Icon(Icons.reviews_outlined), label: const Text('نظرات مشتریان'))),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())), icon: const Icon(Icons.add_shopping_cart_rounded), label: const Text('افزودن محصول'))),
-                    const SizedBox(width: 8),
-                    Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: sellerId.isEmpty ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: sellerId, sellerName: shop.isNotEmpty ? shop : name))), icon: const Icon(Icons.storefront_outlined), label: const Text('مشاهده فروشگاه'))),
-                  ]),
-                ]),
-              ),
-              const SizedBox(height: 10),
-            ] else
-              Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.storefront_outlined)), title: const Text('فروشگاه حرفه‌ای', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: const Text('برای ساخت ویترین حرفه‌ای و امکانات فروشگاهی، اشتراک فروشگاه را فعال کنید.'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())))),
-            Card(child: Column(children: [
-              ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
-              const Divider(height: 1),
-              ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
-              const Divider(height: 1),
-              ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
-              const Divider(height: 1),
-              SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
-              const Divider(height: 1),
-              ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
-              ListTile(leading: const Icon(Icons.delete_forever_outlined, color: Colors.red), title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)), subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'), onTap: saving ? null : _deleteAccount),
-            ])),
-          ],
-        ),
+        child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 30), children: [
+          Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFEAF0FF), Color(0xFFF8FAFF)]), borderRadius: BorderRadius.circular(24)), child: Column(children: [
+            Stack(children: [CircleAvatar(radius: 48, backgroundColor: const Color(0xFF4F659B), backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, child: avatar.isEmpty ? Text(name.isNotEmpty ? name.substring(0,1) : 'ب', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)) : null), Positioned(bottom: 0, right: 0, child: InkWell(onTap: saving ? null : _changeAvatar, child: Container(width: 34, height: 34, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.camera_alt_rounded, size: 18))))]),
+            const SizedBox(height: 11), Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            if (city.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('📍 $city', style: const TextStyle(color: Colors.black54))),
+            if (bio.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(bio, textAlign: TextAlign.center, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.black87, height: 1.45))),
+            const SizedBox(height: 13), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), label: const Text('ویرایش پروفایل'))),
+          ])),
+          const SizedBox(height: 12),
+          Card(child: Column(children: [
+            menuTile(Icons.inventory_2_outlined, 'آگهی‌های من', '$totalAds آگهی ثبت شده', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
+            const Divider(height: 1),
+            menuTile(Icons.favorite_border_rounded, 'علاقه‌مندی‌ها', 'آگهی‌های ذخیره‌شده شما', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAdsScreen())), color: Colors.redAccent),
+            const Divider(height: 1),
+            menuTile(Icons.storefront_outlined, 'فروشگاه‌های ذخیره‌شده', 'فروشگاه‌های حرفه‌ای مورد علاقه شما', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedStoresScreen())), color: const Color(0xFF007185)),
+            if (phone.isNotEmpty) ...[const Divider(height: 1), menuTile(Icons.phone_outlined, 'شماره تلفن', phone, () {}, color: const Color(0xFF067D62))],
+          ])),
+          const SizedBox(height: 12),
+          if (hasActiveStore) Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF101820), Color(0xFF007185)]), borderRadius: BorderRadius.circular(22)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [const CircleAvatar(backgroundColor: Color(0xFFFFD814), child: Icon(Icons.storefront_rounded, color: Colors.black)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(shop.isEmpty ? 'فروشگاه حرفه‌ای من' : shop, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)), Text(storeEnd.isEmpty ? 'فعال' : 'فعال تا $storeEnd', style: const TextStyle(color: Colors.white70, fontSize: 11.5))])), const Icon(Icons.verified_rounded, color: Color(0xFFFFD814))]),
+            const SizedBox(height: 12), Text(daysLeft <= 7 ? 'فروشگاه شما به‌زودی منقضی می‌شود؛ برای تمدید یا خرید سالانه اقدام کنید.' : 'فروشگاه شما فعال است و محصولات فروشگاهی شما در ویترین حرفه‌ای نمایش داده می‌شوند.', style: const TextStyle(color: Colors.white70, height: 1.45, fontSize: 12)),
+            const SizedBox(height: 13), Row(children: [Expanded(child: FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyStoreScreen())), icon: const Icon(Icons.dashboard_rounded), label: const Text('مدیریت فروشگاه'))), const SizedBox(width: 8), Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen(professional: true))), icon: const Icon(Icons.add_shopping_cart_rounded), label: const Text('افزودن محصول')))]),
+            const SizedBox(height: 8), SizedBox(width: double.infinity, child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen())), icon: const Icon(Icons.autorenew_rounded), label: Text(daysLeft <= 7 ? 'تمدید / خرید سالانه' : 'مدیریت اشتراک'))),
+          ]))
+          else Card(child: menuTile(Icons.storefront_outlined, hasStoreHistory ? 'فروشگاه من پایان یافته' : 'فروشگاه حرفه‌ای', hasStoreHistory ? 'فروشگاه حذف نشده؛ برای نمایش دوباره اشتراک را تمدید کنید.' : 'ویترین اختصاصی، محصولات حرفه‌ای، تخفیف و نظر مشتریان', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen())), color: const Color(0xFF007185))),
+          const SizedBox(height: 12),
+          Card(child: Column(children: [
+            menuTile(Icons.notifications_outlined, 'اعلان‌ها', 'پیام‌ها و وضعیت درخواست‌ها', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())), color: const Color(0xFF7C3AED)),
+            const Divider(height: 1),
+            menuTile(Icons.support_agent_outlined, 'پشتیبانی و ارتباط با ما', 'کمک و گزارش مشکل', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())), color: const Color(0xFF0F766E)),
+            const Divider(height: 1),
+            menuTile(Icons.rocket_launch_rounded, 'Boost آگهی‌ها', 'افزایش نمایش آگهی‌های شما', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }, color: const Color(0xFFB45309)),
+            const Divider(height: 1),
+            SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
+            const Divider(height: 1),
+            ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+            ListTile(leading: const Icon(Icons.delete_forever_outlined, color: Colors.red), title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)), subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'), onTap: saving ? null : _deleteAccount),
+          ])),
+        ]),
       ),
     );
   }
@@ -8321,7 +8347,8 @@ class _AuthScreenState extends State<AuthScreen> {
 }
 
 class AddProductSheet extends StatefulWidget {
-  const AddProductSheet({super.key});
+  final bool professional;
+  const AddProductSheet({super.key, this.professional = false});
 
   @override
   State<AddProductSheet> createState() => _AddProductSheetState();
@@ -8343,6 +8370,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final condition = TextEditingController();
   final productCode = TextEditingController();
   final specifications = TextEditingController();
+  final discountPercent = TextEditingController();
 
   String category = '';
   String subcategory = '';
@@ -8499,6 +8527,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
         'brand': brand.text.trim(), 'model': model.text.trim(), 'sizes': sizes.text.trim(), 'colors': colors.text.trim(),
         'material': material.text.trim(), 'condition': condition.text.trim(), 'product_code': productCode.text.trim(), 'specifications': specifications.text.trim(),
+        'discount_percent': double.tryParse(discountPercent.text.replaceAll(',', '.')) ?? 0,
+        'is_store_product': widget.professional,
       });
       var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
         'Content-Type':'application/json',
@@ -8524,157 +8554,106 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final professional = widget.professional;
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
+    final cat = category;
+    final isFootwear = cat.contains('shoe') || cat.contains('footwear');
+    final isClothing = cat.contains('clothing') || cat.contains('fashion') || cat.contains('women') || cat.contains('men');
+    final isElectronics = cat.contains('electronics') || cat.contains('mobile') || cat.contains('computer');
+    final sizeHints = isFootwear
+        ? const ['39', '40', '41', '42', '43', '44', '45']
+        : isClothing
+            ? const ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+            : const <String>[];
+    final colorHints = const ['مشکی', 'سفید', 'آبی', 'قرمز', 'سبز', 'خاکستری'];
+    final discount = double.tryParse(discountPercent.text.replaceAll(',', '.')) ?? 0;
+    final basePrice = double.tryParse(price.text.replaceAll(',', '')) ?? 0;
+    final salePrice = basePrice > 0 && discount > 0 && discount < 100 ? basePrice * (1 - discount / 100) : basePrice;
+
+    Widget section(String title, String subtitle, IconData icon, Widget child) => Container(
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: title,
-            decoration: InputDecoration(labelText: psText(context, 'عنوان آگهی', 'د اعلان سرلیک')),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFE1E6EA)), boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: professional ? const Color(0xFFE7F6F5) : const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: professional ? const Color(0xFF007185) : const Color(0xFF4F659B))), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 11.5))]))]),
+        const SizedBox(height: 14), child,
+      ]),
+    );
+
+    Widget field(TextEditingController c, String label, {String? hint, TextInputType? keyboard, int maxLines = 1, String? helper}) => Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: TextField(controller: c, keyboardType: keyboard, maxLines: maxLines, decoration: InputDecoration(labelText: label, hintText: hint, helperText: helper, filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE1E6EA))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE1E6EA))), prefixIcon: null)),
+    );
+
+    Widget chips(List<String> values, TextEditingController target) => Wrap(spacing: 7, runSpacing: 7, children: values.map((v) => ActionChip(label: Text(v), onPressed: () { final current = target.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(); if (!current.contains(v)) current.add(v); setState(() => target.text = current.join(', ')); })).toList());
+
+    return Container(
+      color: const Color(0xFFF4F6F8),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (professional) Container(
+            margin: const EdgeInsets.only(bottom: 14), padding: const EdgeInsets.all(17),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF101820), Color(0xFF007185)]), borderRadius: BorderRadius.circular(24)),
+            child: Row(children: [const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 38), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('ثبت محصول حرفه‌ای', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.', style: const TextStyle(color: Colors.white70, height: 1.45, fontSize: 11.5))]))]),
           ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: category.isEmpty ? null : category,
-            hint: Text(psText(context, 'انتخاب دسته‌بندی', 'کټګوري وټاکئ')),
-            items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(),
-            onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; }),
-          ),
-          if ((subcategories[category] ?? []).isNotEmpty) ...[
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: subcategory.isEmpty ? null : subcategory,
-              hint: Text(psText(context, 'انتخاب زیر‌دسته', 'فرعي کټګوري وټاکئ')),
-              items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(),
-              onChanged: (val) => setState(() => subcategory = val ?? ''),
-            ),
-          ],
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: province.isEmpty ? null : province,
-            hint: Text(psText(context, 'انتخاب ولایت', 'ولایت وټاکئ')),
-            items: provinces
-                .map((p) => DropdownMenuItem(
-                      value: p,
-                      child: Text(localizedProvince(context, p)),
-                    ))
-                .toList(),
-            onChanged: (val) => setState(() => province = val ?? ''),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: price,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: psText(context, 'قیمت', 'بیه'),
-              hintText: psText(context, 'مثلاً 10000', 'لکه 10000'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5FF),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFD7E2FF)),
-            ),
-            child: Row(children: [
-              Expanded(child: ChoiceChip(
-                label: Text(psText(context, 'افغانی (AFN)', 'افغانۍ (AFN)')),
-                selected: currency == 'AFN',
-                onSelected: (_) => setState(() => currency = 'AFN'),
-                selectedColor: const Color(0xFF1565C0),
-                labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800),
-              )),
-              Expanded(child: ChoiceChip(
-                label: const Text('دلار (USD)'),
-                selected: currency == 'USD',
-                onSelected: (_) => setState(() => currency = 'USD'),
-                selectedColor: const Color(0xFF1565C0),
-                labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800),
-              )),
-            ]),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFF7F8F8), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE3E6E8))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('مشخصات حرفه‌ای محصول (اختیاری)', style: TextStyle(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 8),
-              TextField(controller: brand, decoration: const InputDecoration(labelText: 'برند')),
-              const SizedBox(height: 8),
-              TextField(controller: model, decoration: const InputDecoration(labelText: 'مدل')),
-              const SizedBox(height: 8),
-              TextField(controller: sizes, decoration: const InputDecoration(labelText: 'سایزها', hintText: 'مثلاً 40, 41, 42')),
-              const SizedBox(height: 8),
-              TextField(controller: colors, decoration: const InputDecoration(labelText: 'رنگ‌ها', hintText: 'مثلاً سیاه, سفید')),
-              const SizedBox(height: 8),
-              TextField(controller: material, decoration: const InputDecoration(labelText: 'جنس')),
-              const SizedBox(height: 8),
-              TextField(controller: condition, decoration: const InputDecoration(labelText: 'وضعیت کالا', hintText: 'نو، کارکرده، ...')),
-              const SizedBox(height: 8),
-              TextField(controller: productCode, decoration: const InputDecoration(labelText: 'کد اختصاصی محصول', hintText: 'اگر خالی باشد خودکار ساخته می‌شود')),
-              const SizedBox(height: 8),
-              TextField(controller: specifications, maxLines: 2, decoration: const InputDecoration(labelText: 'مشخصات محصول')),
-            ]),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: desc,
-            maxLines: 4,
-            decoration: InputDecoration(labelText: psText(context, 'توضیحات کامل محصول', 'بشپړ محصول تشریح')),
-          ),
-          if (category == 'social_pages') ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: socialLink,
-              keyboardType: TextInputType.url,
-              decoration: InputDecoration(labelText: tr(context, 'social_link'), hintText: tr(context, 'social_link_hint'), prefixIcon: const Icon(Icons.link)),
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: contactPhone,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(labelText: psText(context, 'شماره تماس', 'د اړیکې شمېره')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: locationText,
-            decoration: InputDecoration(labelText: psText(context, 'آدرس / آدرس دقیق', 'پته / دقیقه پته')),
-          ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            title: Text(psText(context, 'امکان چت مستقیم', 'مستقیمې خبرې اترې')),
-            value: allowChat,
-            onChanged: (val) => setState(() => allowChat = val),
-          ),
-          SwitchListTile(
-            title: Text(psText(context, 'نمایش شماره تماس', 'د اړیکې شمېره ښکاره کول')),
-            value: showPhone,
-            onChanged: (val) => setState(() => showPhone = val),
-          ),
-          SwitchListTile(
-            title: Text(psText(context, 'قیمت توافقی', 'توافقي بیه')),
-            value: isNegotiable,
-            onChanged: (val) => setState(() => isNegotiable = val),
-          ),
-          const SizedBox(height: 12),
-          Text('${psText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (var i = 0; i < imageBytes.length; i++)
-              Stack(children: [
-                ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(imageBytes[i], width: 86, height: 86, fit: BoxFit.contain)),
-                Positioned(top: 2, right: 2, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 16)))),
+          section('۱. تصاویر محصول', professional ? 'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.' : 'حداقل یک عکس واضح انتخاب کنید.', Icons.photo_library_rounded,
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${ps ? 'انځورونه' : 'عکس‌ها'}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 9),
+              Wrap(spacing: 9, runSpacing: 9, children: [
+                for (var i = 0; i < imageBytes.length; i++) Stack(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(imageBytes[i], width: 82, height: 82, fit: BoxFit.cover)), Positioned(top: 3, right: 3, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 15))))]),
+                if (imageBytes.length < 20) InkWell(onTap: _pickImage, borderRadius: BorderRadius.circular(12), child: Container(width: 82, height: 82, decoration: BoxDecoration(color: const Color(0xFFF8FAFB), border: Border.all(color: const Color(0xFFB8C4CC)), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.add_a_photo_rounded))),
               ]),
-            if (imageBytes.length < 20) InkWell(onTap: _pickImage, child: Container(width: 86, height: 86, decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo))),
-          ]),
-          const SizedBox(height: 18),
-          FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : const Icon(Icons.publish), label: Text(publishing ? 'در حال انتشار...' : 'ثبت و انتشار آگهی')),
-        ],
+            ]),
+          ),
+          section('۲. معرفی محصول', professional ? 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.' : 'اطلاعات اصلی آگهی را وارد کنید.', Icons.inventory_2_rounded,
+            Column(children: [
+              field(title, 'نام محصول', hint: professional ? 'مثلاً کفش مردانه چرمی مدل ۲۰۲۶' : 'عنوان آگهی'),
+              DropdownButtonFormField<String>(value: category.isEmpty ? null : category, decoration: InputDecoration(labelText: 'دسته‌بندی', filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(), onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; })),
+              if ((subcategories[category] ?? []).isNotEmpty) ...[const SizedBox(height: 11), DropdownButtonFormField<String>(value: subcategory.isEmpty ? null : subcategory, decoration: InputDecoration(labelText: 'زیر‌دسته', filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(), onChanged: (val) => setState(() => subcategory = val ?? ''))],
+              const SizedBox(height: 11),
+              DropdownButtonFormField<String>(value: province.isEmpty ? null : province, decoration: InputDecoration(labelText: 'ولایت', filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(), onChanged: (val) => setState(() => province = val ?? '')),
+              const SizedBox(height: 11),
+              field(desc, 'توضیحات محصول', hint: professional ? 'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...' : 'توضیحات کامل', maxLines: 5),
+            ]),
+          ),
+          section('۳. قیمت و تخفیف', professional ? 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.' : 'قیمت و واحد پول را مشخص کنید.', Icons.sell_rounded,
+            Column(children: [
+              Row(children: [Expanded(child: field(price, 'قیمت اصلی', hint: 'مثلاً 120000', keyboard: TextInputType.number)), const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]),
+              if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
+              Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: const Text('افغانی (AFN)'), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: const Text('دلار (USD)'), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
+              const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
+            ]),
+          ),
+          section('۴. مشخصات هوشمند', professional ? 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.' : 'مشخصات تکمیلی (اختیاری)', Icons.tune_rounded,
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              field(brand, 'برند', hint: isElectronics ? 'مثلاً Samsung' : 'مثلاً Nike'),
+              field(model, 'مدل', hint: isFootwear ? 'مثلاً Air Max 2026' : 'مثلاً X100'),
+              if (isFootwear) ...[Text('سایزهای کفش', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً 41, 42, 43')]
+              else if (isClothing) ...[Text('سایزهای لباس', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً M, L, XL')]
+              else field(sizes, 'اندازه / ظرفیت / سایز', hint: isElectronics ? 'مثلاً 128GB, 256GB' : 'در صورت نیاز وارد کنید'),
+              Text('رنگ‌ها', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(colorHints, colors), const SizedBox(height: 8), field(colors, 'رنگ‌های انتخاب‌شده', hint: 'مثلاً مشکی, سفید'),
+              field(material, 'جنس / جنس بدنه', hint: isFootwear ? 'چرم، پارچه،...' : 'مثلاً چرم، فلز، پلاستیک'),
+              field(condition, 'وضعیت', hint: 'نو، کارکرده، در حد نو'),
+              field(productCode, 'کد محصول (SKU)', hint: 'خالی بگذارید تا خودکار ساخته شود'),
+              field(specifications, 'مشخصات فنی', hint: professional ? 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.' : 'مشخصات بیشتر', maxLines: 4),
+            ]),
+          ),
+          section('۵. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
+            Column(children: [
+              field(contactPhone, 'شماره تماس', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
+              field(locationText, 'آدرس / محل', hint: 'شهر، منطقه یا آدرس فروشگاه'),
+              if (category == 'social_pages') field(socialLink, 'لینک صفحه', hint: 'https://...'),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('امکان چت مستقیم'), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
+            ]),
+          ),
+          SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? 'در حال انتشار...' : (professional ? 'انتشار در فروشگاه' : 'ثبت و انتشار آگهی')), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
+        ]),
       ),
     );
   }
+
 }
