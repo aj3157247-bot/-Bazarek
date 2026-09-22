@@ -5574,7 +5574,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [const Icon(Icons.warning_amber_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text(ps ? 'محصولاتی که هنوز داخل آگهی‌ها هستند' : 'محصولی که هنوز در آگهی‌هاست', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7A4B00))))]),
                             const SizedBox(height: 6),
-                            Text(ps ? 'دا محصولات له اعلانونو څخه پلورنځي ته انتقال کړئ.' : 'اگر این محصول را از بخش افزودن محصول فروشگاه ساخته‌اید، آن را به فروشگاه منتقل کنید. پس از انتقال دیگر در آگهی‌های عادی نمایش داده نمی‌شود.', style: const TextStyle(fontSize: 11.5, height: 1.45, color: Colors.black70)),
+                            Text(ps ? 'دا محصولات له اعلانونو څخه پلورنځي ته انتقال کړئ.' : 'اگر این محصول را از بخش افزودن محصول فروشگاه ساخته‌اید، آن را به فروشگاه منتقل کنید. پس از انتقال دیگر در آگهی‌های عادی نمایش داده نمی‌شود.', style: const TextStyle(fontSize: 11.5, height: 1.45, color: Colors.black54)),
                             const SizedBox(height: 9),
                             ...misplacedProducts.map((item) => Padding(
                               padding: const EdgeInsets.only(top: 7),
