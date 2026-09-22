@@ -1905,19 +1905,90 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadProfessionalStores() async {
+    List<Map<String, dynamic>> data = <Map<String, dynamic>>[];
     try {
-      final data = await ApiService.getActiveStores();
-      if (!mounted) return;
-      setState(() {
-        professionalStores = data;
-        _storePageIndex = 0;
-      });
-      if (_storePageController.hasClients) {
-        _storePageController.jumpToPage(0);
-      }
+      data = await ApiService.getActiveStores();
     } catch (_) {
-      if (!mounted) return;
-      setState(() => professionalStores = []);
+      data = <Map<String, dynamic>>[];
+    }
+
+    // The homepage must also show the current user's paid store even if the
+    // public active-store endpoint is temporarily stale/empty. We use the
+    // exact same subscription data that powers the user's Store Management
+    // screen, so a store shown as active there cannot disappear here.
+    final myId = AuthService.userId?.trim() ?? '';
+    if (myId.isNotEmpty) {
+      final alreadyListed = data.any((s) => s['vendor_id']?.toString() == myId);
+      if (!alreadyListed) {
+        try {
+          final subs = await ApiService.getSubscriptions();
+          final now = DateTime.now();
+          final activeStore = subs.whereType<Map>().firstWhere(
+            (s) {
+              final plan = s['plan']?.toString() ?? '';
+              final status = s['status']?.toString().toLowerCase() ?? '';
+              final end = DateTime.tryParse('${s['ends_at']}');
+              final start = s['starts_at'] == null ? null : DateTime.tryParse('${s['starts_at']}');
+              return (plan == 'store_monthly' || plan == 'store_yearly') &&
+                  status == 'active' &&
+                  end != null &&
+                  end.isAfter(now) &&
+                  (start == null || !start.isAfter(now));
+            },
+            orElse: () => <String, dynamic>{},
+          );
+
+          if (activeStore.isNotEmpty) {
+            try {
+              final profile = await ApiService.getSellerProfile(myId);
+              data = [
+                ...data,
+                {
+                  'vendor_id': myId,
+                  'shop_name': profile['shop_name'] ?? profile['full_name'] ?? 'فروشگاه بازارک',
+                  'seller_name': profile['shop_name'] ?? profile['full_name'] ?? 'فروشگاه بازارک',
+                  'city': profile['city'] ?? '',
+                  'description': profile['bio'] ?? '',
+                  'avatar_url': profile['avatar_url'] ?? '',
+                  'verified': true,
+                  'products_count': profile['products_count'] ?? 0,
+                  'store_plan': activeStore['plan'],
+                  'store_starts_at': activeStore['starts_at'],
+                  'store_until': activeStore['ends_at'],
+                },
+              ];
+            } catch (_) {
+              // If the profile request fails, still show the paid store with
+              // the information already available from the subscription.
+              data = [
+                ...data,
+                {
+                  'vendor_id': myId,
+                  'shop_name': AuthService.userName ?? 'فروشگاه بازارک',
+                  'seller_name': AuthService.userName ?? 'فروشگاه بازارک',
+                  'city': '',
+                  'description': 'فروشگاه حرفه‌ای فعال در بازارک',
+                  'avatar_url': AuthService.avatarUrl ?? '',
+                  'verified': true,
+                  'products_count': 0,
+                  'store_plan': activeStore['plan'],
+                  'store_starts_at': activeStore['starts_at'],
+                  'store_until': activeStore['ends_at'],
+                },
+              ];
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      professionalStores = data;
+      _storePageIndex = 0;
+    });
+    if (_storePageController.hasClients && data.isNotEmpty) {
+      _storePageController.jumpToPage(0);
     }
   }
 
