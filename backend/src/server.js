@@ -794,7 +794,7 @@ app.get('/api/stores/active', async (req,res)=>{
     const ids=Object.keys(activeMap);
     if(!ids.length) return res.json([]);
     const {data:profiles,error:profilesError}=await db.from('profiles')
-      .select('id,full_name,shop_name,city,bio,avatar_url,verified')
+      .select('id,full_name,shop_name,city,bio,avatar_url')
       .in('id',ids);
     if(profilesError) throw profilesError;
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
@@ -825,7 +825,7 @@ app.get('/api/stores/active', async (req,res)=>{
         city:p.city||'',
         description:p.bio||'',
         avatar_url:p.avatar_url||'',
-        verified:p.verified!==false,
+        verified:true,
         products_count:productCount,
         store_plan:sub.plan,
         store_starts_at:sub.starts_at||null,
@@ -1001,33 +1001,38 @@ app.delete('/api/stores/:id/save', requireUser, async (req,res)=>{
 app.get('/api/me/saved-stores', requireUser, async (req,res)=>{
   try {
     const db=getSupabaseAdmin();
-    const {data,error}=await db.from('saved_stores').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+    // Keep this endpoint independent from optional timestamp/profile columns so
+    // one old row or partial migration cannot turn the whole screen into 500.
+    const {data,error}=await db.from('saved_stores').select('seller_id').eq('user_id',req.user.id).limit(500);
     if(error) throw error;
     const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
     if(!ids.length) return res.json([]);
-    const {data:profiles,error:pe}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids);
+
+    const {data:profiles,error:pe}=await db.from('profiles')
+      .select('id,full_name,shop_name,city,bio,avatar_url')
+      .in('id',ids);
     if(pe) throw pe;
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
+
     const rows=[];
     for(const x of (data||[])) {
-      // Keep saved stores visible even when a store has expired. This avoids
-      // turning the saved-stores screen into an error/empty state and lets the
-      // user see that the store is temporarily unavailable.
+      const profile=pm[x.seller_id]||{};
       let sub=null;
       try { sub=await getActiveStoreSubscription(db,x.seller_id); }
       catch(e) { console.error('Saved store subscription lookup failed:', x.seller_id, e?.message || e); }
-      const profile=pm[x.seller_id]||{};
       rows.push({
         ...profile,
         seller_id:x.seller_id,
         store_plan:sub?.plan||null,
         store_until:sub?.ends_at||null,
         is_store_active:Boolean(sub),
-        saved_at:x.created_at
       });
     }
     res.json(rows);
-  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'}); }
+  } catch(e) {
+    console.error('GET /api/me/saved-stores failed:', e);
+    res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'});
+  }
 });
 
 app.get('/api/me/social/:type', requireUser, async (req,res)=>{
