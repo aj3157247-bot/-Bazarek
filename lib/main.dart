@@ -926,6 +926,13 @@ class ApiService {
     return Map<String, dynamic>.from(decoded);
   }
 
+  static Future<List<dynamic>> getSellerAds(String sellerId) async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/ads'), headers: headers).timeout(const Duration(seconds: 15));
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌های فروشنده.') : 'خطا در دریافت آگهی‌های فروشنده.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
   static Future<Map<String, dynamic>> getSellerProfile(String sellerId) async {
     Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId'), headers: headers).timeout(const Duration(seconds: 15));
     var res = await request();
@@ -2014,7 +2021,12 @@ class _HomeScreenState extends State<HomeScreen> {
         province: selectedProvince,
         query: searchQuery,
       );
-      final sorted = List<dynamic>.from(data);
+      final sorted = data.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        final isStoreProduct = flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+        return !isStoreProduct;
+      }).toList();
       if (sortMode == 'price_low') {
         sorted.sort((a, b) => _priceValue(a).compareTo(_priceValue(b)));
       } else if (sortMode == 'price_high') {
@@ -2349,7 +2361,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           : Column(
                               children: [
                                 for (var i = 0; i < normalProducts.length; i++) ...[
-                                  _DivarStyleListing(item: products[i]),
+                                  _DivarStyleListing(item: normalProducts[i]),
                                   if (i == 4) ...[
                                     const SizedBox(height: 8),
                                     _InlineBoostCard(onTap: () async {
@@ -5140,9 +5152,14 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
   Future<void> _load() async {
     try {
       final data = await ApiService.getSellerListings(widget.sellerId);
+      final storeOnly = data.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+      }).toList();
       if (!mounted) return;
       setState(() {
-        listings = data;
+        listings = storeOnly;
         loading = false;
         error = null;
       });
@@ -6678,8 +6695,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
   Future<void> _load() async {
     try {
       final p = await ApiService.getSellerProfile(widget.sellerId);
-      final l = await ApiService.getSellerListings(widget.sellerId);
-      final c = p['is_store_active'] == true ? await ApiService.getSellerComments(widget.sellerId) : <dynamic>[];
+      final isStore = p['is_store_active'] == true;
+      final l = isStore ? await ApiService.getSellerListings(widget.sellerId) : await ApiService.getSellerAds(widget.sellerId);
+      final c = isStore ? await ApiService.getSellerComments(widget.sellerId) : <dynamic>[];
       if (mounted) setState(() { profile=p; listings=l; comments=c; following=p['is_following']==true; loading=false; error=null; });
     } catch(e) { if(mounted) setState(() {loading=false; error=friendlyNetworkError(context,e);}); }
   }
@@ -7200,7 +7218,9 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
       final filtered = data.where((item) {
         final m = item is Map ? item : const <String, dynamic>{};
         // Store products belong only to the professional store catalog.
-        if (m['is_store_product'] == true) return false;
+        final storeFlag = m['is_store_product'];
+        final isStoreProduct = storeFlag == true || storeFlag?.toString().trim().toLowerCase() == 'true' || storeFlag?.toString().trim() == '1';
+        if (isStoreProduct) return false;
         if (!widget.activeOnly) return true;
         final value = m['is_active'];
         return value == true || value.toString().toLowerCase() == 'true' || value.toString() == '1';
