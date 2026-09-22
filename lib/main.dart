@@ -942,6 +942,20 @@ class ApiService {
     return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
   }
 
+  static Future<Map<String,dynamic>> claimStoreProduct(String id) async {
+    Future<http.Response> request() => http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/store-products/${Uri.encodeComponent(id)}/claim'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 20));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) {
+      throw Exception(data is Map ? (data['error'] ?? 'انتقال محصول به فروشگاه ناموفق بود.') : 'انتقال محصول به فروشگاه ناموفق بود.');
+    }
+    return Map<String,dynamic>.from(data as Map);
+  }
+
   static Future<Map<String,dynamic>> toggleSellerFollow(String sellerId, bool follow) async {
     Future<http.Response> request() => follow
       ? http.post(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/follow'), headers: headers)
@@ -5365,6 +5379,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
   String? error;
   Map<String, dynamic> profile = {};
   List<dynamic> listings = [];
+  List<dynamic> misplacedProducts = [];
   List<dynamic> subscriptions = [];
 
   @override
@@ -5389,11 +5404,30 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
           : (AuthService.userId ?? '');
       if (sellerId.isEmpty) throw Exception('شناسه فروشنده پیدا نشد.');
       final l = await ApiService.getSellerListings(sellerId);
+      List<dynamic> misplaced = [];
+      final activeStore = subs.whereType<Map>().where((s) =>
+        (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
+        s['status'] == 'active' &&
+        DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true &&
+        (s['starts_at'] == null || !DateTime.parse('${s['starts_at']}').isAfter(DateTime.now()))
+      ).toList();
+      if (l.isEmpty && activeStore.isNotEmpty) {
+        try {
+          final all = await ApiService.getMyProducts();
+          final start = DateTime.tryParse('${activeStore.first['starts_at']}');
+          misplaced = all.where((x) {
+            if (x is! Map || x['is_store_product'] == true || x['is_active'] != true) return false;
+            final created = DateTime.tryParse('${x['created_at']}');
+            return start == null || created == null || !created.isBefore(start);
+          }).take(10).toList();
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
         profile = p;
         subscriptions = subs;
         listings = l;
+        misplacedProducts = misplaced;
         loading = false;
         error = null;
       });
@@ -5532,6 +5566,32 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                           )),
                         ],
                       ),
+                      if (misplacedProducts.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF0C36A))),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [const Icon(Icons.warning_amber_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text(ps ? 'محصولاتی که هنوز داخل آگهی‌ها هستند' : 'محصولی که هنوز در آگهی‌هاست', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7A4B00))))]),
+                            const SizedBox(height: 6),
+                            Text(ps ? 'دا محصولات له اعلانونو څخه پلورنځي ته انتقال کړئ.' : 'اگر این محصول را از بخش افزودن محصول فروشگاه ساخته‌اید، آن را به فروشگاه منتقل کنید. پس از انتقال دیگر در آگهی‌های عادی نمایش داده نمی‌شود.', style: const TextStyle(fontSize: 11.5, height: 1.45, color: Colors.black70)),
+                            const SizedBox(height: 9),
+                            ...misplacedProducts.map((item) => Padding(
+                              padding: const EdgeInsets.only(top: 7),
+                              child: Row(children: [Expanded(child: Text(item['title']?.toString() ?? 'محصول', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))), const SizedBox(width: 8), OutlinedButton.icon(onPressed: () async {
+                                try {
+                                  await ApiService.claimStoreProduct(item['id'].toString());
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ps ? 'محصول به پلورنځي انتقال شو.' : 'محصول با موفقیت به فروشگاه منتقل شد.')));
+                                  _load();
+                                } catch (e) {
+                                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+                                }
+                              }, icon: const Icon(Icons.move_to_inbox_rounded, size: 17), label: Text(ps ? 'انتقال' : 'انتقال به فروشگاه'))])),
+                            ),
+                          ]),
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       _sectionHeader(
                         ps ? 'مدیریت پلورنځی' : 'مدیریت فروشگاه',
@@ -7138,8 +7198,10 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
     try {
       final data = await ApiService.getMyProducts();
       final filtered = data.where((item) {
-        if (!widget.activeOnly) return true;
         final m = item is Map ? item : const <String, dynamic>{};
+        // Store products belong only to the professional store catalog.
+        if (m['is_store_product'] == true) return false;
+        if (!widget.activeOnly) return true;
         final value = m['is_active'];
         return value == true || value.toString().toLowerCase() == 'true' || value.toString() == '1';
       }).toList();
@@ -8704,10 +8766,12 @@ class _AddProductSheetState extends State<AddProductSheet> {
       var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
         'Content-Type':'application/json',
         if (AuthService.token != null) 'Authorization':'Bearer ${AuthService.token}',
+        if (widget.professional) 'X-Bazarek-Store-Product':'true',
       }, body: payload).timeout(const Duration(seconds: 30));
       if (response.statusCode == 401 && await ApiService.refreshSession()) {
         response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
           'Content-Type':'application/json', 'Authorization':'Bearer ${AuthService.token}',
+          if (widget.professional) 'X-Bazarek-Store-Product':'true',
         }, body: payload).timeout(const Duration(seconds: 30));
       }
       final data = jsonDecode(response.body);
