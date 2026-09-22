@@ -2014,7 +2014,12 @@ class _HomeScreenState extends State<HomeScreen> {
         province: selectedProvince,
         query: searchQuery,
       );
-      final sorted = List<dynamic>.from(data);
+      final sorted = data.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        final isStoreProduct = flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+        return !isStoreProduct;
+      }).toList();
       if (sortMode == 'price_low') {
         sorted.sort((a, b) => _priceValue(a).compareTo(_priceValue(b)));
       } else if (sortMode == 'price_high') {
@@ -2349,7 +2354,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           : Column(
                               children: [
                                 for (var i = 0; i < normalProducts.length; i++) ...[
-                                  _DivarStyleListing(item: products[i]),
+                                  _DivarStyleListing(item: normalProducts[i]),
                                   if (i == 4) ...[
                                     const SizedBox(height: 8),
                                     _InlineBoostCard(onTap: () async {
@@ -5140,9 +5145,14 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
   Future<void> _load() async {
     try {
       final data = await ApiService.getSellerListings(widget.sellerId);
+      final storeOnly = data.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+      }).toList();
       if (!mounted) return;
       setState(() {
-        listings = data;
+        listings = storeOnly;
         loading = false;
         error = null;
       });
@@ -5574,7 +5584,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [const Icon(Icons.warning_amber_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text(ps ? 'محصولاتی که هنوز داخل آگهی‌ها هستند' : 'محصولی که هنوز در آگهی‌هاست', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF7A4B00))))]),
                             const SizedBox(height: 6),
-                            Text(ps ? 'دا محصولات له اعلانونو څخه پلورنځي ته انتقال کړئ.' : 'اگر این محصول را از بخش افزودن محصول فروشگاه ساخته‌اید، آن را به فروشگاه منتقل کنید. پس از انتقال دیگر در آگهی‌های عادی نمایش داده نمی‌شود.', style: const TextStyle(fontSize: 11.5, height: 1.45, color: Colors.black54)),
+                            Text(ps ? 'دا محصولات له اعلانونو څخه پلورنځي ته انتقال کړئ.' : 'اگر این محصول را از بخش افزودن محصول فروشگاه ساخته‌اید، آن را به فروشگاه منتقل کنید. پس از انتقال دیگر در آگهی‌های عادی نمایش داده نمی‌شود.', style: const TextStyle(fontSize: 11.5, height: 1.45, color: Colors.black70)),
                             const SizedBox(height: 9),
                             ...misplacedProducts.map((item) => Padding(
                               padding: const EdgeInsets.only(top: 7),
