@@ -3403,6 +3403,66 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 12),
+          // Always keep a visible store-purchase CTA under the professional-store carousel.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Color(0xFF172B3A), Color(0xFF0F6B78)],
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD814),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(Icons.storefront_rounded, color: Color(0xFF172B3A), size: 27),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isPs ? 'خپل مسلکي پلورنځی جوړ کړئ' : 'فروشگاه حرفه‌ای خودت را بساز',
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        isPs ? 'محصولات، تخفیف او د مشتریانو نظرونه' : 'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 10, height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD814),
+                    foregroundColor: const Color(0xFF111111),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  ),
+                  onPressed: () async {
+                    if (!await requireAccount(context)) return;
+                    if (!context.mounted) return;
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
+                  },
+                  child: Text(isPs ? 'فعالول' : 'خرید / فعال‌سازی', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     ),
