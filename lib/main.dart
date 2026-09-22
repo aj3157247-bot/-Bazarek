@@ -949,6 +949,28 @@ class ApiService {
     return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
   }
 
+  static Future<List<dynamic>> getMyStoreProducts() async {
+    Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/my/store-products'), headers: headers).timeout(const Duration(seconds: 15));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت محصولات فروشگاه.') : 'خطا در دریافت محصولات فروشگاه.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
+  static Future<Map<String,dynamic>> createStoreProduct(Map<String,dynamic> payload) async {
+    Future<http.Response> request() => http.post(
+      Uri.parse('${ApiConfig.baseUrl}/store-products'),
+      headers: {'Content-Type':'application/json', ...headers},
+      body: jsonEncode(payload),
+    ).timeout(const Duration(seconds: 30));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'خطا در ثبت محصول فروشگاه.') : 'خطا در ثبت محصول فروشگاه.');
+    return Map<String,dynamic>.from(data as Map);
+  }
+
   static Future<Map<String,dynamic>> claimStoreProduct(String id) async {
     Future<http.Response> request() => http.patch(
       Uri.parse('${ApiConfig.baseUrl}/store-products/${Uri.encodeComponent(id)}/claim'),
@@ -5502,7 +5524,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
           ? p['id'].toString()
           : (AuthService.userId ?? '');
       if (sellerId.isEmpty) throw Exception('شناسه فروشنده پیدا نشد.');
-      final l = await ApiService.getSellerListings(sellerId);
+      final l = await ApiService.getMyStoreProducts();
       List<dynamic> misplaced = [];
       final activeStore = subs.whereType<Map>().where((s) =>
         (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
@@ -7895,7 +7917,12 @@ class _CategoryListingsScreenState extends State<CategoryListingsScreen> {
   Future<void> _load() async {
     try {
       final d = await ApiService.getProducts(category: widget.categoryId, subcategory: widget.subcategoryId);
-      if (mounted) setState(() { ads = d; loading = false; error = null; });
+      final normalOnly = d.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        return !(flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1');
+      }).toList();
+      if (mounted) setState(() { ads = normalOnly; loading = false; error = null; });
     } catch (e) {
       if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
     }
@@ -7995,16 +8022,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // deployed backend's /api/me response does not yet include statistics.
       try {
         final myProducts = await ApiService.getMyProducts();
-        final activeCount = myProducts.where((item) {
+        final normalAds = myProducts.where((item) {
+          final m = item is Map ? item : const <String, dynamic>{};
+          final flag = m['is_store_product'];
+          final isStore = flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+          return !isStore;
+        }).toList();
+        final activeCount = normalAds.where((item) {
           final m = item is Map ? item : const <String, dynamic>{};
           final value = m['is_active'];
           return value == true || value.toString().toLowerCase() == 'true' || value.toString() == '1';
         }).length;
-        final totalViews = myProducts.fold<int>(0, (sum, item) {
+        final totalViews = normalAds.fold<int>(0, (sum, item) {
           final m = item is Map ? item : const <String, dynamic>{};
           return sum + (int.tryParse('${m['views_count'] ?? 0}') ?? 0);
         });
-        data['total_ads'] = myProducts.length;
+        data['total_ads'] = normalAds.length;
         data['active_ads'] = activeCount;
         data['total_views'] = totalViews;
       } catch (_) {
@@ -8867,38 +8900,23 @@ class _AddProductSheetState extends State<AddProductSheet> {
         'discount_percent': double.tryParse(discountPercent.text.replaceAll(',', '.')) ?? 0,
         'is_store_product': widget.professional,
       });
-      var response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
-        'Content-Type':'application/json',
-        if (AuthService.token != null) 'Authorization':'Bearer ${AuthService.token}',
-        if (widget.professional) 'X-Bazarek-Store-Product':'true',
-      }, body: payload).timeout(const Duration(seconds: 30));
-      if (response.statusCode == 401 && await ApiService.refreshSession()) {
-        response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
-          'Content-Type':'application/json', 'Authorization':'Bearer ${AuthService.token}',
-          if (widget.professional) 'X-Bazarek-Store-Product':'true',
-        }, body: payload).timeout(const Duration(seconds: 30));
-      }
-      dynamic data;
-      try { data = jsonDecode(response.body); } catch (_) { data = null; }
-      if (response.statusCode == 401) {
-        throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.');
-      }
-      if (response.statusCode != 201) {
-        throw Exception(data is Map ? (data['error'] ?? tr(context, 'publish_error')) : tr(context, 'publish_error'));
-      }
-
-      // در حالت فروشگاه، حتی اگر سرور قدیمی header اختصاصی را نادیده گرفته باشد،
-      // محصول ایجادشده را بلافاصله به کاتالوگ فروشگاه منتقل می‌کنیم.
-      // این مرحله فقط برای AddProductScreen(professional: true) اجرا می‌شود.
-      if (widget.professional && data is Map) {
-        final createdId = data['id']?.toString() ?? '';
-        final markedAsStore = data['is_store_product'] == true ||
-            data['is_store_product']?.toString().trim().toLowerCase() == 'true' ||
-            data['is_store_product']?.toString().trim() == '1';
-        if (createdId.isEmpty) throw Exception('شناسه محصول فروشگاه دریافت نشد.');
-        if (!markedAsStore) {
-          await ApiService.claimStoreProduct(createdId);
+      Map<String,dynamic> data;
+      if (widget.professional) {
+        // مسیر اختصاصی فروشگاه: این درخواست از مسیر آگهی‌های عادی جداست.
+        data = await ApiService.createStoreProduct(jsonDecode(payload) as Map<String,dynamic>);
+        if (data['is_store_product'] != true && data['is_store_product']?.toString().trim().toLowerCase() != 'true' && data['is_store_product']?.toString().trim() != '1') {
+          throw Exception('محصول فروشگاه با شناسه فروشگاهی ثبت نشد.');
         }
+      } else {
+        final response = await http.post(Uri.parse('${ApiConfig.baseUrl}/products'), headers: {
+          'Content-Type':'application/json',
+          if (AuthService.token != null) 'Authorization':'Bearer ${AuthService.token}',
+        }, body: payload).timeout(const Duration(seconds: 30));
+        dynamic decoded;
+        try { decoded = jsonDecode(response.body); } catch (_) { decoded = null; }
+        if (response.statusCode == 401) throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.');
+        if (response.statusCode != 201) throw Exception(decoded is Map ? (decoded['error'] ?? tr(context, 'publish_error')) : tr(context, 'publish_error'));
+        data = Map<String,dynamic>.from(decoded as Map);
       }
       if (!mounted) return;
       _msg(widget.professional ? 'محصول با موفقیت در فروشگاه ثبت شد.' : tr(context, 'publish_success'));
