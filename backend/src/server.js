@@ -801,12 +801,22 @@ app.get('/api/stores/active', async (req,res)=>{
 
     const rows=await Promise.all(ids.map(async id=>{
       const sub=activeMap[id];
-      const {count,error}=await db.from('products')
-        .select('id',{count:'exact',head:true})
-        .eq('vendor_id',id)
-        .eq('is_active',true)
-        .eq('is_store_product',true);
-      if(error) throw error;
+      // The store itself must never disappear just because the optional
+      // store-product counter cannot be read (for example during a partial
+      // database migration). The storefront remains visible and the count
+      // simply falls back to zero.
+      let productCount=0;
+      try {
+        const {count,error}=await db.from('products')
+          .select('id',{count:'exact',head:true})
+          .eq('vendor_id',id)
+          .eq('is_active',true)
+          .eq('is_store_product',true);
+        if(!error) productCount=count||0;
+        else console.error('Store product count failed:', id, error.message || error);
+      } catch(e) {
+        console.error('Store product count exception:', id, e?.message || e);
+      }
       const p=pm[id]||{};
       return {
         vendor_id:id,
@@ -816,7 +826,7 @@ app.get('/api/stores/active', async (req,res)=>{
         description:p.bio||'',
         avatar_url:p.avatar_url||'',
         verified:p.verified!==false,
-        products_count:count||0,
+        products_count:productCount,
         store_plan:sub.plan,
         store_starts_at:sub.starts_at||null,
         store_until:sub.ends_at||null,
@@ -1000,8 +1010,21 @@ app.get('/api/me/saved-stores', requireUser, async (req,res)=>{
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
     const rows=[];
     for(const x of (data||[])) {
-      const sub=await getActiveStoreSubscription(db,x.seller_id);
-      if(sub) rows.push({...pm[x.seller_id],seller_id:x.seller_id,store_plan:sub.plan,store_until:sub.ends_at,saved_at:x.created_at});
+      // Keep saved stores visible even when a store has expired. This avoids
+      // turning the saved-stores screen into an error/empty state and lets the
+      // user see that the store is temporarily unavailable.
+      let sub=null;
+      try { sub=await getActiveStoreSubscription(db,x.seller_id); }
+      catch(e) { console.error('Saved store subscription lookup failed:', x.seller_id, e?.message || e); }
+      const profile=pm[x.seller_id]||{};
+      rows.push({
+        ...profile,
+        seller_id:x.seller_id,
+        store_plan:sub?.plan||null,
+        store_until:sub?.ends_at||null,
+        is_store_active:Boolean(sub),
+        saved_at:x.created_at
+      });
     }
     res.json(rows);
   } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'}); }
