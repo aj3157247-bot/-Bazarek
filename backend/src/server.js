@@ -834,13 +834,22 @@ app.get('/api/stores/active', async (req,res)=>{try{
 
 // One-click repair for a product that was accidentally created as an ordinary ad from the store flow.
 app.patch('/api/store-products/:id/claim', requireUser, async (req,res)=>{try{
-  const db=getSupabaseAdmin(); const id=String(req.params.id); const storeSub=await getActiveStoreSubscription(db,req.user.id);
-  if(!storeSub)return res.status(403).json({error:'فروشگاه حرفه‌ای فعال نیست.'});
+  const db=getSupabaseAdmin(); const id=String(req.params.id);
+  // قبول فروشگاه فعال بر اساس بازه زمانی جاری؛ این کار اختلاف status قدیمی/جدید را هم پوشش می‌دهد.
+  const now=Date.now();
+  const {data:subs,error:se}=await db.from('seller_subscriptions').select('plan,starts_at,ends_at,status').eq('user_id',req.user.id).in('plan',['store_monthly','store_yearly']).order('ends_at',{ascending:false}).limit(20);
+  if(se) throw se;
+  const storeSub=(subs||[]).find(s=>new Date(s.ends_at||0).getTime()>now && (!s.starts_at || new Date(s.starts_at).getTime()<=now));
+  if(!storeSub)return res.status(403).json({error:'فروشگاه حرفه‌ای فعال نیست یا تاریخ آن به پایان رسیده است.'});
   const {data:product,error:pe}=await db.from('products').select('id,vendor_id,is_active,is_store_product').eq('id',id).maybeSingle();
-  if(pe)throw pe;if(!product)return res.status(404).json({error:'محصول پیدا نشد.'});if(product.vendor_id!==req.user.id)return res.status(403).json({error:'این محصول متعلق به شما نیست.'});if(product.is_active!==true)return res.status(400).json({error:'فقط محصول فعال قابل انتقال است.'});
+  if(pe)throw pe;
+  if(!product)return res.status(404).json({error:'محصول پیدا نشد.'});
+  if(String(product.vendor_id)!==String(req.user.id))return res.status(403).json({error:'این محصول متعلق به شما نیست.'});
+  if(product.is_active!==true)return res.status(400).json({error:'فقط محصول فعال قابل انتقال است.'});
   const {data,error}=await db.from('products').update({is_store_product:true,is_featured:false,is_pinned:false,featured_until:null,pinned_until:null,boost_level:0,boost_until:null,updated_at:new Date().toISOString()}).eq('id',id).eq('vendor_id',req.user.id).select().single();
-  if(error)throw error;res.json(data);
-}catch(e){console.error(e);res.status(500).json({error:'انتقال محصول به فروشگاه ناموفق بود.'});}});
+  if(error)throw error;
+  res.json(data);
+}catch(e){console.error('store product claim error:',e);res.status(500).json({error:e?.message ? `انتقال محصول به فروشگاه ناموفق بود: ${e.message}` : 'انتقال محصول به فروشگاه ناموفق بود.'});}});
 
 
 app.post('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const sellerId=String(req.params.id);if(sellerId===req.user.id)return res.status(400).json({error:'نمی‌توانید خودتان را دنبال کنید.'});const db=getSupabaseAdmin();const {data:seller}=await db.from('profiles').select('id').eq('id',sellerId).maybeSingle();if(!seller)return res.status(404).json({error:'فروشنده پیدا نشد.'});const {error}=await db.from('seller_follows').upsert([{user_id:req.user.id,seller_id:sellerId}],{onConflict:'user_id,seller_id'});if(error)throw error;res.status(201).json({following:true});}catch(e){console.error(e);res.status(500).json({error:'دنبال‌کردن فروشنده ناموفق بود.'});}});
