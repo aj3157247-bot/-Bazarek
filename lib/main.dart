@@ -5401,11 +5401,10 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
   @override
   Widget build(BuildContext context) {
     final ps = Localizations.localeOf(context).languageCode == 'ps';
-    final activeListings = listings.where((x) {
-      if (x is! Map) return false;
-      final v = x['is_active'];
-      return v == true || v.toString().toLowerCase() == 'true' || v.toString() == '1';
-    }).length;
+    // /sellers/:id/listings already returns only active store products.
+    // The old code expected an is_active field that this endpoint intentionally
+    // does not expose, so an active store with products was incorrectly shown as 0.
+    final activeListings = listings.length;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
@@ -5444,6 +5443,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                             '${listings.length}',
                             Icons.inventory_2_rounded,
                             const Color(0xFF146EB4),
+                            onTap: () => _open(ProfessionalStoreCatalogScreen(sellerId: sellerId, sellerName: shopName)),
                           )),
                           const SizedBox(width: 10),
                           Expanded(child: _dashboardStat(
@@ -5703,8 +5703,8 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
     );
   }
 
-  Widget _dashboardStat(String label, String value, IconData icon, Color color) {
-    return Container(
+  Widget _dashboardStat(String label, String value, IconData icon, Color color, {VoidCallback? onTap}) {
+    final card = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -5719,9 +5719,14 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
           const SizedBox(height: 2),
           Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11.5, color: Colors.black54, fontWeight: FontWeight.w700)),
+          if (onTap != null) ...[
+            const SizedBox(height: 3),
+            const Text('برای مشاهده لمس کنید', style: TextStyle(fontSize: 8.5, color: Colors.black45, fontWeight: FontWeight.w700)),
+          ],
         ],
       ),
     );
+    return onTap == null ? card : InkWell(onTap: onTap, borderRadius: BorderRadius.circular(17), child: card);
   }
 
   Widget _sectionHeader(String title, String subtitle) {
