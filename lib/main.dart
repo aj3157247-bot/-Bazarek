@@ -976,8 +976,8 @@ class ApiService {
     // محصول فروشگاه از همان endpoint پایدار محصولات ثبت می‌شود، اما با هدر
     // غیرقابل‌ابهام تا backend آن را هرگز به آگهی عادی تبدیل نکند.
     Future<http.Response> request() => http.post(
-      Uri.parse('${ApiConfig.baseUrl}/products'),
-      headers: {'Content-Type':'application/json', 'x-bazarek-store-product':'true', ...headers},
+      Uri.parse('${ApiConfig.baseUrl}/store-products'),
+      headers: {'Content-Type':'application/json', ...headers},
       body: jsonEncode({...payload, 'is_store_product': true}),
     ).timeout(const Duration(seconds: 30));
     var res = await request();
