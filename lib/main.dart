@@ -6913,7 +6913,7 @@ class AddProductScreen extends StatelessWidget {
                 FilledButton.icon(onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen())), icon: const Icon(Icons.storefront_rounded), label: const Text('مدیریت فروشگاه')),
               ]))));
             }
-            return const Scaffold(appBar: AppBar(title: Text('افزودن محصول فروشگاه')), body: AddProductSheet(professional: true));
+            return Scaffold(appBar: AppBar(title: const Text('افزودن محصول فروشگاه')), body: AddProductSheet(professional: true));
           },
         );
       },
