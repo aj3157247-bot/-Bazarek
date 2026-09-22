@@ -593,7 +593,7 @@ app.get('/api/translate', async (req, res) => {
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -767,6 +767,69 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
 
 app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('admin_login_events').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت رویدادهای امنیتی.'});}});
 
+
+// Active professional stores shown on the homepage. Store products are intentionally
+// excluded from /api/listings, so they can only be browsed from their store catalog.
+app.get('/api/stores/active', async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const now=Date.now();
+    const {data:subs,error:subsError}=await db.from('seller_subscriptions')
+      .select('user_id,plan,starts_at,ends_at,status')
+      .eq('status','active')
+      .in('plan',['store_monthly','store_yearly'])
+      .order('ends_at',{ascending:false})
+      .limit(500);
+    if(subsError) throw subsError;
+
+    const activeMap={};
+    for(const sub of (subs||[])){
+      const end=new Date(sub.ends_at||0).getTime();
+      const start=sub.starts_at ? new Date(sub.starts_at).getTime() : 0;
+      if(!sub.user_id || !Number.isFinite(end) || end<=now || (sub.starts_at && start>now)) continue;
+      const current=activeMap[sub.user_id];
+      if(!current || end>new Date(current.ends_at||0).getTime()) activeMap[sub.user_id]=sub;
+    }
+
+    const ids=Object.keys(activeMap);
+    if(!ids.length) return res.json([]);
+    const {data:profiles,error:profilesError}=await db.from('profiles')
+      .select('id,full_name,shop_name,city,bio,avatar_url,verified')
+      .in('id',ids);
+    if(profilesError) throw profilesError;
+    const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
+
+    const rows=await Promise.all(ids.map(async id=>{
+      const sub=activeMap[id];
+      const {count,error}=await db.from('products')
+        .select('id',{count:'exact',head:true})
+        .eq('vendor_id',id)
+        .eq('is_active',true)
+        .eq('is_store_product',true);
+      if(error) throw error;
+      const p=pm[id]||{};
+      return {
+        vendor_id:id,
+        shop_name:p.shop_name||'',
+        seller_name:p.shop_name||p.full_name||'فروشگاه بازارک',
+        city:p.city||'',
+        description:p.bio||'',
+        avatar_url:p.avatar_url||'',
+        verified:p.verified!==false,
+        products_count:count||0,
+        store_plan:sub.plan,
+        store_starts_at:sub.starts_at||null,
+        store_until:sub.ends_at||null,
+      };
+    }));
+
+    rows.sort((a,b)=>Number(b.products_count||0)-Number(a.products_count||0) || String(a.shop_name||a.seller_name||'').localeCompare(String(b.shop_name||b.seller_name||''),'fa'));
+    res.json(rows);
+  } catch(e) {
+    console.error('GET /api/stores/active failed:',e);
+    res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});
+  }
+});
 
 // Marketplace social layer: seller profiles, follows, listing likes, ratings and comments.
 app.get('/api/sellers/:id', async (req,res)=>{
