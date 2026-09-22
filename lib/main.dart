@@ -5264,59 +5264,141 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
     final item = Map<String, dynamic>.from(raw as Map);
     final image = _professionalFirstImage(item);
     final code = _professionalProductCode(item);
-    final title = item['title']?.toString() ?? '';
     final price = _displayListingPrice(context, item);
-    final category = _professionalCategoryId(item);
-    final ps = Localizations.localeOf(context).languageCode == 'ps';
-    final brand = item['brand']?.toString().trim() ?? '';
-    final model = item['model']?.toString().trim() ?? '';
-    final material = item['material']?.toString().trim() ?? '';
-    final condition = item['condition']?.toString().trim() ?? '';
-    final sizes = _professionalValues(item, 'sizes');
-    final colors = _professionalValues(item, 'colors');
     final discount = double.tryParse(item['discount_percent']?.toString() ?? '') ?? 0;
     final originalPrice = double.tryParse(item['price']?.toString() ?? '') ?? 0;
-    return InkWell(
-      onTap: () => _openListing(context, item),
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(6)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          AspectRatio(
-            aspectRatio: 1.08,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                image.isNotEmpty
-                    ? ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(6)), child: Image.network(_optimizedImageUrl(image), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 38, color: Colors.black38))))
-                    : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 38, color: Colors.black38)),
-                Positioned(left: 7, right: 7, bottom: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(.72), borderRadius: BorderRadius.circular(6)), child: Column(mainAxisSize: MainAxisSize.min, children: [if (discount > 0 && discount < 100 && originalPrice > 0) Text('${NumberFormatHelper.format(originalPrice)} ${item['currency']?.toString() == 'USD' ? 'USD' : 'افغانی'}', style: const TextStyle(color: Colors.white60, fontSize: 9, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w700)), Text(price, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900))]))),
-                Positioned(top: 7, right: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(5)), child: Text(code, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900)))),
-                if (discount > 0 && discount < 100) Positioned(top: 7, left: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5), decoration: BoxDecoration(color: const Color(0xFFD32F2F), borderRadius: BorderRadius.circular(7)), child: Text('٪${NumberFormatHelper.format(discount)} تخفیف', style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900)))),
-              ],
-            ),
+    final currency = item['currency']?.toString() == 'USD' ? 'USD' : 'افغانی';
+    final rating = double.tryParse('${item['average_rating'] ?? item['rating'] ?? 0}') ?? 0;
+    final reviewsCount = int.tryParse('${item['reviews_count'] ?? item['review_count'] ?? 0}') ?? 0;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openListing(context, item),
+        child: AspectRatio(
+          aspectRatio: .82,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (image.isNotEmpty)
+                Image.network(
+                  _optimizedImageUrl(image),
+                  fit: BoxFit.cover,
+                  loadingBuilder: _bazarekImageLoading,
+                  errorBuilder: (_, __, ___) => const ColoredBox(
+                    color: Color(0xFFF3F5F6),
+                    child: Icon(Icons.image_not_supported_outlined, size: 42, color: Colors.black38),
+                  ),
+                )
+              else
+                const ColoredBox(
+                  color: Color(0xFFF3F5F6),
+                  child: Icon(Icons.image_outlined, size: 42, color: Colors.black38),
+                ),
+
+              // سایه‌ی پایین برای خوانایی قیمت روی خود عکس.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 86,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black.withOpacity(.82)],
+                    ),
+                  ),
+                ),
+              ),
+
+              // واترمارک تخفیف روی خود عکس.
+              if (discount > 0 && discount < 100)
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.20), blurRadius: 8, offset: const Offset(0, 3))],
+                    ),
+                    child: Text(
+                      '${NumberFormatHelper.format(discount)}٪ تخفیف',
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.92),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(code, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900)),
+                ),
+              ),
+
+              if (rating > 0)
+                Positioned(
+                  right: 10,
+                  bottom: 54,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.black.withOpacity(.58), borderRadius: BorderRadius.circular(10)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.star_rounded, color: Color(0xFFFFD54F), size: 14),
+                      const SizedBox(width: 2),
+                      Text(rating.toStringAsFixed(1), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                      if (reviewsCount > 0) Text(' ($reviewsCount)', style: const TextStyle(color: Colors.white70, fontSize: 8)),
+                    ]),
+                  ),
+                ),
+
+              Positioned(
+                left: 11,
+                right: 11,
+                bottom: 9,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (discount > 0 && discount < 100 && originalPrice > 0)
+                            Text(
+                              '${NumberFormatHelper.format(originalPrice)} $currency',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white70, fontSize: 10, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w700),
+                            ),
+                          Text(
+                            price,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.touch_app_rounded, color: Colors.white70, size: 18),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(9, 8, 9, 10),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, height: 1.25)),
-              const SizedBox(height: 4),
-              Text(_professionalCategoryTitle(context, category), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700)),
-              if (brand.isNotEmpty || model.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text([if (brand.isNotEmpty) 'برند: $brand', if (model.isNotEmpty) 'مدل: $model'].join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
-              ],
-              if (sizes.isNotEmpty || colors.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text([if (sizes.isNotEmpty) '${ps ? 'اندازې' : 'سایز'}: ${sizes.join('، ')}', if (colors.isNotEmpty) '${ps ? 'رنګونه' : 'رنگ'}: ${colors.join('، ')}'].join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Colors.black54)),
-              ],
-              if (material.isNotEmpty || condition.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text([if (material.isNotEmpty) '${ps ? 'جنس' : 'جنس'}: $material', if (condition.isNotEmpty) '${ps ? 'حالت' : 'وضعیت'}: $condition'].join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Colors.black54)),
-              ],
-            ]),
-          ),
-        ]),
+        ),
       ),
     );
   }
@@ -8796,13 +8878,30 @@ class _AddProductSheetState extends State<AddProductSheet> {
           if (widget.professional) 'X-Bazarek-Store-Product':'true',
         }, body: payload).timeout(const Duration(seconds: 30));
       }
-      final data = jsonDecode(response.body);
+      dynamic data;
+      try { data = jsonDecode(response.body); } catch (_) { data = null; }
       if (response.statusCode == 401) {
         throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.');
       }
-      if (response.statusCode != 201) throw Exception(data['error'] ?? tr(context, 'publish_error'));
+      if (response.statusCode != 201) {
+        throw Exception(data is Map ? (data['error'] ?? tr(context, 'publish_error')) : tr(context, 'publish_error'));
+      }
+
+      // در حالت فروشگاه، حتی اگر سرور قدیمی header اختصاصی را نادیده گرفته باشد،
+      // محصول ایجادشده را بلافاصله به کاتالوگ فروشگاه منتقل می‌کنیم.
+      // این مرحله فقط برای AddProductScreen(professional: true) اجرا می‌شود.
+      if (widget.professional && data is Map) {
+        final createdId = data['id']?.toString() ?? '';
+        final markedAsStore = data['is_store_product'] == true ||
+            data['is_store_product']?.toString().trim().toLowerCase() == 'true' ||
+            data['is_store_product']?.toString().trim() == '1';
+        if (createdId.isEmpty) throw Exception('شناسه محصول فروشگاه دریافت نشد.');
+        if (!markedAsStore) {
+          await ApiService.claimStoreProduct(createdId);
+        }
+      }
       if (!mounted) return;
-      _msg(tr(context, 'publish_success'));
+      _msg(widget.professional ? 'محصول با موفقیت در فروشگاه ثبت شد.' : tr(context, 'publish_success'));
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
