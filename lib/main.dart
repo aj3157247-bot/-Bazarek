@@ -1255,8 +1255,8 @@ class ApiService {
   }
 
   static Future<Map<String,dynamic>> createGlobalBoost(String plan, String reference) async {
-    // Use the exact same backend endpoint as the working Boost purchases.
-    // This keeps weekly/monthly/yearly Boost purchases and store purchases on one flow.
+    // Use the exact same backend endpoint as the working weekly/monthly/yearly Boost purchases.
+    // Store plans are already supported by /api/subscriptions on the existing backend.
     var res = await http.post(Uri.parse('${ApiConfig.baseUrl}/subscriptions'), headers: headers, body: jsonEncode({
       'plan': plan, 'payment_reference': reference.trim(),
     })).timeout(const Duration(seconds: 20));
