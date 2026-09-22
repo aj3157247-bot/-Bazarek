@@ -989,6 +989,68 @@ class ApiService {
     return Map<String,dynamic>.from(data as Map);
   }
 
+  static Future<List<dynamic>> getProductReviews(String productId) async {
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/products/$productId/reviews'), headers: headers).timeout(const Duration(seconds: 15));
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت نظرات محصول.') : 'خطا در دریافت نظرات محصول.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
+  static Future<Map<String,dynamic>> addProductReview(String productId, int rating, String review) async {
+    Future<http.Response> request() => http.post(
+      Uri.parse('${ApiConfig.baseUrl}/products/$productId/reviews'),
+      headers: headers,
+      body: jsonEncode({'rating': rating, 'review': review.trim()}),
+    ).timeout(const Duration(seconds: 20));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت نظر ناموفق بود.') : 'ثبت نظر ناموفق بود.');
+    return Map<String,dynamic>.from(data as Map);
+  }
+
+  static Future<Map<String,dynamic>> replyProductReview(String reviewId, String reply) async {
+    Future<http.Response> request() => http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/product-reviews/$reviewId/reply'),
+      headers: headers,
+      body: jsonEncode({'reply': reply.trim()}),
+    ).timeout(const Duration(seconds: 20));
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'پاسخ ثبت نشد.') : 'پاسخ ثبت نشد.');
+    return Map<String,dynamic>.from(data as Map);
+  }
+
+  static Future<List<dynamic>> getMyStoreReviews() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/store-reviews'), headers: headers).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/store-reviews'), headers: headers).timeout(const Duration(seconds: 20));
+    }
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت نظرات فروشگاه.') : 'خطا در دریافت نظرات فروشگاه.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
+  static Future<List<dynamic>> getMySavedStores() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/saved-stores'), headers: headers).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) res = await http.get(Uri.parse('${ApiConfig.baseUrl}/me/saved-stores'), headers: headers).timeout(const Duration(seconds: 20));
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت فروشگاه‌های ذخیره‌شده.') : 'خطا در دریافت فروشگاه‌های ذخیره‌شده.');
+    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+  }
+
+  static Future<Map<String,dynamic>> toggleStoreSave(String sellerId, bool save) async {
+    Future<http.Response> request() => save
+      ? http.post(Uri.parse('${ApiConfig.baseUrl}/stores/$sellerId/save'), headers: headers)
+      : http.delete(Uri.parse('${ApiConfig.baseUrl}/stores/$sellerId/save'), headers: headers);
+    var res = await request();
+    if (res.statusCode == 401 && await refreshSession()) res = await request();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ذخیره فروشگاه ناموفق بود.') : 'ذخیره فروشگاه ناموفق بود.');
+    return data is Map ? Map<String,dynamic>.from(data) : <String,dynamic>{};
+  }
+
   static Future<List<dynamic>> getMySocialList(String type) async {
     final allowed = {'followers','following','ratings','comments','likes'};
     if (!allowed.contains(type)) throw Exception('نوع فهرست نامعتبر است.');
@@ -1647,6 +1709,22 @@ class _WebDeepLinkEntryState extends State<WebDeepLinkEntry> {
           context,
           MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
         );
+        if (!mounted) return;
+        setBrowserPath('/');
+        _restoreSeoForPath('/');
+        setState(() { _showMain = true; _loading = false; });
+        return;
+      }
+
+      if (parts.isNotEmpty && parts.first == 'store' && parts.length >= 2) {
+        final sellerId = parts[1];
+        final profile = await ApiService.getSellerProfile(sellerId);
+        if (profile['is_store_active'] != true) throw Exception('این فروشگاه حرفه‌ای در حال حاضر فعال نیست.');
+        final name = profile['shop_name']?.toString().trim().isNotEmpty == true
+            ? profile['shop_name'].toString().trim()
+            : (profile['full_name']?.toString().trim().isNotEmpty == true ? profile['full_name'].toString().trim() : 'فروشگاه بازارک');
+        setWebSeo(title: '$name | فروشگاه حرفه‌ای بازارک', description: 'مشاهده محصولات و اطلاعات فروشگاه $name در بازارک.', urlPath: path);
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: sellerId, sellerName: name)));
         if (!mounted) return;
         setBrowserPath('/');
         _restoreSeoForPath('/');
@@ -3808,6 +3886,303 @@ class _SaveButtonState extends State<_SaveButton> {
   @override Widget build(BuildContext context) => IconButton(onPressed: _toggle, visualDensity: VisualDensity.compact, icon: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: saved ? Colors.red : Colors.black45, size: 21));
 }
 
+
+class _ProfessionalProductReviews extends StatefulWidget {
+  final Map<String, dynamic> product;
+  const _ProfessionalProductReviews({required this.product});
+  @override State<_ProfessionalProductReviews> createState() => _ProfessionalProductReviewsState();
+}
+
+class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews> {
+  bool loading = true;
+  bool sending = false;
+  List<dynamic> reviews = [];
+  String? error;
+  bool storeActive = false;
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    final id = widget.product['id']?.toString() ?? '';
+    if (id.isEmpty) { if (mounted) setState(() => loading = false); return; }
+    try {
+      storeActive = widget.product['store_active'] == true;
+      if (!storeActive) {
+        try {
+          final fresh = await ApiService.getListingById(id);
+          storeActive = fresh['store_active'] == true;
+        } catch (_) {}
+      }
+      if (!storeActive) { if (mounted) setState(() => loading = false); return; }
+      final data = await ApiService.getProductReviews(id);
+      if (mounted) setState(() { reviews = data; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  Future<void> _addReview() async {
+    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    int rating = 5;
+    final text = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('نظر و امتیاز محصول'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('این محصول را چگونه ارزیابی می‌کنید؟'),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) => IconButton(
+              onPressed: () => setDialog(() => rating = i + 1),
+              icon: Icon(i < rating ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.amber, size: 34),
+            ))),
+            TextField(controller: text, minLines: 3, maxLines: 6, maxLength: 1200, decoration: const InputDecoration(labelText: 'نظر شما', hintText: 'تجربه خود را درباره این محصول بنویسید...', border: OutlineInputBorder())),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('انصراف')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, text.text.trim().isNotEmpty), child: const Text('ثبت نظر')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) { text.dispose(); return; }
+    setState(() => sending = true);
+    try {
+      await ApiService.addProductReview(widget.product['id'].toString(), rating, text.text);
+      await _load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نظر شما ثبت شد.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally { text.dispose(); if (mounted) setState(() => sending = false); }
+  }
+
+  @override Widget build(BuildContext context) {
+    if (!storeActive && !loading) return const SizedBox.shrink();
+    final values = reviews.map((x) => double.tryParse('${x['rating']}')).whereType<double>().toList();
+    final average = values.isEmpty ? 0.0 : values.reduce((a,b) => a+b) / values.length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Divider(height: 34),
+      Row(children: [
+        const Icon(Icons.star_rounded, color: Colors.amber, size: 27),
+        const SizedBox(width: 6),
+        const Expanded(child: Text('نظرات و امتیازهای محصول', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+        if (!loading) Text('${average.toStringAsFixed(1)} ★  (${reviews.length})', style: const TextStyle(fontWeight: FontWeight.w900)),
+      ]),
+      const SizedBox(height: 10),
+      SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: sending ? null : _addReview, icon: const Icon(Icons.rate_review_outlined), label: const Text('نظر بده و امتیاز بده'))),
+      const SizedBox(height: 10),
+      if (loading) const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+      else if (error != null) Text(error!, style: const TextStyle(color: Colors.red))
+      else if (reviews.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('هنوز نظری برای این محصول ثبت نشده است.'))
+      else ...reviews.take(30).map((raw) {
+        final r = raw is Map ? Map<String,dynamic>.from(raw) : <String,dynamic>{};
+        final stars = int.tryParse('${r['rating']}') ?? 0;
+        final reply = r['seller_reply']?.toString().trim() ?? '';
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFF7F8FA), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE3E7EB))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [Expanded(child: Text(r['user_name']?.toString() ?? 'کاربر بازارک', style: const TextStyle(fontWeight: FontWeight.w900))), Text(List.filled(stars, '★').join(), style: const TextStyle(color: Colors.amber, fontSize: 16))]),
+            const SizedBox(height: 6),
+            Text(r['review']?.toString() ?? '', style: const TextStyle(height: 1.5)),
+            if (reply.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.storefront_rounded, size: 18, color: Color(0xFF007185)), const SizedBox(width: 7), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('پاسخ فروشگاه', style: TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(reply, style: const TextStyle(height: 1.4))]))])),
+            ],
+          ]),
+        );
+      }),
+    ]);
+  }
+}
+
+class _ProfessionalStoreActions extends StatefulWidget {
+  final String sellerId;
+  final String sellerName;
+  const _ProfessionalStoreActions({required this.sellerId, required this.sellerName});
+  @override State<_ProfessionalStoreActions> createState() => _ProfessionalStoreActionsState();
+}
+
+class _ProfessionalStoreActionsState extends State<_ProfessionalStoreActions> {
+  bool saved = false;
+  bool busy = false;
+  int savedCount = 0;
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    try {
+      final p = await ApiService.getSellerProfile(widget.sellerId);
+      if (mounted) setState(() { saved = p['is_saved'] == true; savedCount = int.tryParse('${p['saved_count'] ?? 0}') ?? 0; });
+    } catch (_) {}
+  }
+  Future<void> _toggle() async {
+    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      final r = await ApiService.toggleStoreSave(widget.sellerId, !saved);
+      if (mounted) setState(() { saved = r['saved'] == true; savedCount = int.tryParse('${r['saved_count'] ?? savedCount}') ?? savedCount; });
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
+    finally { if (mounted) setState(() => busy = false); }
+  }
+  Future<void> _share() async {
+    final url = 'https://bazarek.pages.dev/store/${widget.sellerId}';
+    final text = '🏪 ${widget.sellerName}\nفروشگاه حرفه‌ای در بازارک\n\nمشاهده فروشگاه:\n$url';
+    final ok = await shareWeb(title: widget.sellerName, text: text, url: url);
+    if (!ok) { await Clipboard.setData(ClipboardData(text: url)); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لینک فروشگاه کپی شد.'))); }
+  }
+  @override Widget build(BuildContext context) => Row(children: [
+    IconButton(tooltip: saved ? 'فروشگاه ذخیره شد' : 'ذخیره فروشگاه', onPressed: busy ? null : _toggle, icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: saved ? const Color(0xFF007185) : null)),
+    IconButton(tooltip: 'اشتراک‌گذاری فروشگاه', onPressed: _share, icon: const Icon(Icons.share_outlined)),
+  ]);
+}
+
+class SavedStoresScreen extends StatefulWidget {
+  const SavedStoresScreen({super.key});
+  @override State<SavedStoresScreen> createState() => _SavedStoresScreenState();
+}
+
+class _SavedStoresScreenState extends State<SavedStoresScreen> {
+  bool loading = true;
+  String? error;
+  List<dynamic> stores = [];
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    try {
+      final d = await ApiService.getMySavedStores();
+      if (mounted) setState(() { loading = false; error = null; stores = d; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('فروشگاه‌های ذخیره‌شده')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? OfflineErrorView(onRetry: _load, message: error)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: stores.isEmpty
+                      ? ListView(children: const [Padding(padding: EdgeInsets.all(35), child: Center(child: Text('هنوز فروشگاهی ذخیره نکرده‌اید.')))])
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: stores.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, i) {
+                            final m = stores[i] is Map ? Map<String,dynamic>.from(stores[i]) : <String,dynamic>{};
+                            final id = m['seller_id']?.toString() ?? m['id']?.toString() ?? '';
+                            final name = m['shop_name']?.toString().trim().isNotEmpty == true
+                                ? m['shop_name'].toString()
+                                : (m['full_name']?.toString() ?? 'فروشگاه بازارک');
+                            return Card(
+                              child: ListTile(
+                                leading: const CircleAvatar(child: Icon(Icons.storefront_rounded)),
+                                title: Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
+                                subtitle: Text(m['city']?.toString() ?? ''),
+                                trailing: const Icon(Icons.chevron_left),
+                                onTap: id.isEmpty ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: id, sellerName: name))),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+    );
+  }
+}
+
+class StoreReviewsScreen extends StatefulWidget {
+  const StoreReviewsScreen({super.key});
+  @override State<StoreReviewsScreen> createState() => _StoreReviewsScreenState();
+}
+
+class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
+  bool loading = true;
+  String? error;
+  List<dynamic> items = [];
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    try {
+      final data = await ApiService.getMyStoreReviews();
+      if (mounted) setState(() { items = data; loading = false; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  Future<void> _reply(Map<String,dynamic> item) async {
+    final c = TextEditingController(text: item['seller_reply']?.toString() ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('پاسخ به نظر مشتری'),
+        content: TextField(controller: c, minLines: 3, maxLines: 6, maxLength: 1200, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'پاسخ حرفه‌ای خود را بنویسید...')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('انصراف')),
+          FilledButton(onPressed: () => Navigator.pop(d, c.text.trim().isNotEmpty), child: const Text('ارسال پاسخ')),
+        ],
+      ),
+    );
+    if (ok != true) { c.dispose(); return; }
+    try {
+      await ApiService.replyProductReview(item['id'].toString(), c.text);
+      await _load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('پاسخ فروشگاه ثبت شد.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally { c.dispose(); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('نظرات مشتریان')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? OfflineErrorView(onRetry: _load, message: error)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: items.isEmpty
+                      ? ListView(children: const [Padding(padding: EdgeInsets.all(35), child: Center(child: Text('هنوز نظری برای محصولات فروشگاه شما ثبت نشده است.')))])
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: items.length,
+                          separatorBuilder: (_,__) => const SizedBox(height: 10),
+                          itemBuilder: (context, i) {
+                            final m = items[i] is Map ? Map<String,dynamic>.from(items[i]) : <String,dynamic>{};
+                            final reply = m['seller_reply']?.toString().trim() ?? '';
+                            final rating = int.tryParse('${m['rating'] ?? 0}') ?? 0;
+                            return Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(m['product_title']?.toString() ?? 'محصول', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                                  const SizedBox(height: 6),
+                                  Row(children: [Expanded(child: Text(m['user_name']?.toString() ?? 'مشتری', style: const TextStyle(fontWeight: FontWeight.w800))), Text(List.filled(rating, '★').join(), style: const TextStyle(color: Colors.amber))]),
+                                  const SizedBox(height: 7),
+                                  Text(m['review']?.toString() ?? '', style: const TextStyle(height: 1.5)),
+                                  if (reply.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 9), child: Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFF3F7F8), borderRadius: BorderRadius.circular(10)), child: Text('پاسخ شما: $reply'))),
+                                  const SizedBox(height: 10),
+                                  Align(alignment: Alignment.centerLeft, child: OutlinedButton.icon(onPressed: () => _reply(m), icon: const Icon(Icons.reply_rounded), label: Text(reply.isEmpty ? 'پاسخ به مشتری' : 'ویرایش پاسخ'))),
+                                ]),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+    );
+  }
+}
+
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -4298,6 +4673,7 @@ class ProductDetailScreen extends StatelessWidget {
                   _SellerCard(product: product),
                   const SizedBox(height: 10),
                   _ListingLikeBar(listingId: product['id']?.toString() ?? ''),
+                  _ProfessionalProductReviews(product: product is Map ? Map<String,dynamic>.from(product) : <String,dynamic>{}),
                   const Divider(height: 32),
                   Text(
                     tr(context, 'description'),
@@ -4746,7 +5122,10 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
       backgroundColor: const Color(0xFFE3E6E6),
       appBar: AppBar(
         title: Text(widget.sellerName),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))],
+        actions: [
+          _ProfessionalStoreActions(sellerId: widget.sellerId, sellerName: widget.sellerName),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -5248,6 +5627,13 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
         onTap: () => _open(const ProfileScreen()),
       ),
       _StoreAction(
+        icon: Icons.reviews_rounded,
+        title: ps ? 'د مشتریانو نظرونه' : 'نظرات مشتریان',
+        subtitle: ps ? 'نظرونه ولولئ او ځواب ورکړئ' : 'خواندن و پاسخ‌دادن به نظرات',
+        color: const Color(0xFF0F766E),
+        onTap: () => _open(const StoreReviewsScreen()),
+      ),
+      _StoreAction(
         icon: Icons.workspace_premium_rounded,
         title: ps ? 'اشتراک' : 'اشتراک فروشگاه',
         subtitle: ps ? 'پلن او تمدید' : 'پلن و تمدید',
@@ -5484,51 +5870,42 @@ class StoreDirectoryScreen extends StatelessWidget {
     final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Scaffold(
       appBar: AppBar(title: Text(ps ? 'مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای')),
-      backgroundColor: const Color(0xFFE3E6E6),
+      backgroundColor: const Color(0xFFF4F6F8),
       body: stores.isEmpty
           ? Center(child: Text(ps ? 'تر اوسه مسلکي پلورنځی نشته.' : 'هنوز فروشگاه حرفه‌ای فعالی پیدا نشد.'))
-          : GridView.builder(
-              padding: const EdgeInsets.all(14),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 390,
-                mainAxisExtent: 330,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
+          : ListView.separated(
+              padding: const EdgeInsets.all(12),
               itemCount: stores.length,
+              separatorBuilder: (_,__) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final store = stores[index];
                 final vendorId = store['vendor_id'].toString();
                 final name = store['shop_name'].toString();
                 String imageUrl = '';
-                try {
-                  final raw = store['image_url'];
-                  final imgs = raw is String && raw.isNotEmpty ? jsonDecode(raw) : (raw is List ? raw : const []);
-                  if (imgs is List && imgs.isNotEmpty) imageUrl = imgs.first.toString();
-                } catch (_) {}
+                try { final raw = store['image_url']; final imgs = raw is String && raw.isNotEmpty ? jsonDecode(raw) : (raw is List ? raw : const []); if (imgs is List && imgs.isNotEmpty) imageUrl = imgs.first.toString(); } catch (_) {}
                 final minPrice = (store['min_price'] as num?)?.toDouble() ?? 0;
-                return InkWell(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: name))),
-                  child: Container(
-                    decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(4)),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Expanded(
-                        child: imageUrl.isNotEmpty
-                            ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded, size: 68, color: Color(0xFF37475A)))
-                            : const Icon(Icons.storefront_rounded, size: 68, color: Color(0xFF37475A)),
-                      ),
-                      Padding(padding: const EdgeInsets.fromLTRB(13, 10, 13, 14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 5),
-                        Text('${store['count']} ${ps ? 'محصولات' : 'محصول'}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
-                        if (minPrice > 0) ...[
-                          const SizedBox(height: 5),
-                          Text('شروع قیمت از ${NumberFormatHelper.format(minPrice)} افغانی', style: const TextStyle(color: Color(0xFFB12704), fontWeight: FontWeight.w900)),
-                        ],
-                        const SizedBox(height: 8),
-                        Text(ps ? 'کتل ټول محصولات →' : 'مشاهده همه محصولات →', style: const TextStyle(color: Color(0xFF007185), fontWeight: FontWeight.w900)),
-                      ])),
-                    ]),
+                return Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: name))),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE0E5E8))),
+                      child: Row(children: [
+                        Container(width: 96, height: 96, decoration: BoxDecoration(color: const Color(0xFFF2F5F6), borderRadius: BorderRadius.circular(14)), child: imageUrl.isNotEmpty ? ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.storefront_rounded, size: 42, color: Color(0xFF37475A)))) : const Icon(Icons.storefront_rounded, size: 42, color: Color(0xFF37475A))),
+                        const SizedBox(width: 13),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))), const Icon(Icons.verified_rounded, color: Color(0xFF007185), size: 20)]),
+                          const SizedBox(height: 6),
+                          Text('${store['count']} ${ps ? 'محصول' : 'محصول'}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
+                          if (minPrice > 0) Padding(padding: const EdgeInsets.only(top: 5), child: Text('شروع قیمت از ${NumberFormatHelper.format(minPrice)} افغانی', style: const TextStyle(color: Color(0xFFB12704), fontWeight: FontWeight.w900))),
+                          const SizedBox(height: 8),
+                          Text(ps ? 'کتل پلورنځی →' : 'مشاهده فروشگاه →', style: const TextStyle(color: Color(0xFF007185), fontWeight: FontWeight.w900)),
+                        ])),
+                      ]),
+                    ),
                   ),
                 );
               },
@@ -6030,7 +6407,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     try {
       final p = await ApiService.getSellerProfile(widget.sellerId);
       final l = await ApiService.getSellerListings(widget.sellerId);
-      final c = await ApiService.getSellerComments(widget.sellerId);
+      final c = p['is_store_active'] == true ? await ApiService.getSellerComments(widget.sellerId) : <dynamic>[];
       if (mounted) setState(() { profile=p; listings=l; comments=c; following=p['is_following']==true; loading=false; error=null; });
     } catch(e) { if(mounted) setState(() {loading=false; error=friendlyNetworkError(context,e);}); }
   }
@@ -6086,71 +6463,151 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     if(ok!=true)return;
     try{await ApiService.addSellerComment(widget.sellerId,c.text);await _load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(friendlyNetworkError(context,e))));}finally{c.dispose();}
   }
-  @override Widget build(BuildContext context){
-    if(loading)return Scaffold(appBar:AppBar(title:Text(widget.sellerName)),body:const Center(child:CircularProgressIndicator()));
-    if(error!=null)return Scaffold(appBar:AppBar(title:Text(widget.sellerName)),body:Center(child:Text(error!,textAlign:TextAlign.center)));
-    final name=profile['shop_name']?.toString().trim().isNotEmpty==true?profile['shop_name'].toString():(profile['full_name']?.toString().trim().isNotEmpty==true?profile['full_name'].toString():widget.sellerName);
-    final avatar=profile['avatar_url']?.toString()??''; final followers=int.tryParse('${profile['followers_count']??0}')??0; final rating=double.tryParse('${profile['rating']??0}')??0;
-    return Scaffold(appBar:AppBar(title:Text(name),actions:[IconButton(onPressed:_load,icon:const Icon(Icons.refresh))]),body:RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(12),children:[
-      Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[SizedBox(width:92,height:92,child:avatar.isNotEmpty?Image.network(_originalImageUrl(avatar),width:92,height:92,fit:BoxFit.contain,errorBuilder:(_,__,___)=>const Icon(Icons.person,size:46)):const Icon(Icons.person,size:46)),const SizedBox(height:10),Text(name,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),if((profile['city']??'').toString().isNotEmpty)Text('📍 ${profile['city']}',style:const TextStyle(color:Colors.black54)),if((profile['bio']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(profile['bio'].toString(),textAlign:TextAlign.center)),const SizedBox(height:12),Row(mainAxisAlignment:MainAxisAlignment.center,children:[Text('$followers دنبال‌کننده'),const SizedBox(width:20),Text('⭐ ${rating.toStringAsFixed(1)}')]),const SizedBox(height:12),Wrap(spacing:8,children:[FilledButton.icon(onPressed:busy?null:_follow,icon:Icon(following?Icons.notifications_active:Icons.notifications_none),label:Text(following?'دنبال می‌کنم':'دنبال کردن')),OutlinedButton.icon(onPressed:_rate,icon:const Icon(Icons.star_outline),label:const Text('امتیاز')),OutlinedButton.icon(onPressed:_comment,icon:const Icon(Icons.comment_outlined),label:const Text('دیدگاه'))])]))),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(4, 18, 4, 10),
-        child: Row(children: [
-          Expanded(child: Text('محصولات فروشگاه (${listings.length})', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900))),
-          const Icon(Icons.verified_outlined, size: 20, color: Color(0xFF007185)),
-          const SizedBox(width: 5),
-          const Text('فروشگاه حرفه‌ای', style: TextStyle(fontSize: 11, color: Color(0xFF007185), fontWeight: FontWeight.w900)),
-        ]),
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Scaffold(appBar: AppBar(title: Text(widget.sellerName)), body: const Center(child: CircularProgressIndicator()));
+    }
+    if (error != null) {
+      return Scaffold(appBar: AppBar(title: Text(widget.sellerName)), body: Center(child: Text(error!, textAlign: TextAlign.center)));
+    }
+
+    final name = profile['shop_name']?.toString().trim().isNotEmpty == true
+        ? profile['shop_name'].toString()
+        : (profile['full_name']?.toString().trim().isNotEmpty == true ? profile['full_name'].toString() : widget.sellerName);
+    final avatar = profile['avatar_url']?.toString() ?? '';
+    final isStore = profile['is_store_active'] == true;
+    final followers = int.tryParse('${profile['followers_count'] ?? 0}') ?? 0;
+    final rating = double.tryParse('${profile['rating'] ?? 0}') ?? 0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(name),
+        actions: [
+          if (isStore) _ProfessionalStoreActions(sellerId: widget.sellerId, sellerName: name),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
       ),
-      if(listings.isEmpty)
-        const Padding(padding: EdgeInsets.all(20), child: Center(child: Text('این فروشگاه هنوز محصول فعالی ندارد.'))),
-      if(listings.isNotEmpty)
-        LayoutBuilder(builder: (context, c) {
-          final cols = c.maxWidth >= 1100 ? 4 : (c.maxWidth >= 700 ? 3 : 2);
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: listings.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cols,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              mainAxisExtent: c.maxWidth < 600 ? 300 : 340,
-            ),
-            itemBuilder: (context, i) {
-              final item = listings[i] is Map ? Map<String,dynamic>.from(listings[i]) : <String,dynamic>{};
-              List<dynamic> images = [];
-              try {
-                final raw = item['image_url'];
-                if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
-                if (raw is List) images = raw;
-              } catch (_) {}
-              final imageUrl = images.isNotEmpty ? images.first.toString() : '';
-              final price = _displayListingPrice(context, item);
-              return InkWell(
-                onTap: () => _openListing(context, item),
-                child: Container(
-                  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(4)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Expanded(child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 45))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 45))),
-                    Padding(padding: const EdgeInsets.fromLTRB(11, 9, 11, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.3)),
-                      const SizedBox(height: 6),
-                      Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFB12704), fontSize: 17, fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 5),
-                      Text((item['province']?.toString() ?? '').isEmpty ? 'افغانستان' : item['province'].toString(), style: const TextStyle(fontSize: 10, color: Colors.black54)),
-                    ])),
-                  ]),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: 92,
+                      height: 92,
+                      child: avatar.isNotEmpty
+                          ? ClipOval(child: Image.network(_originalImageUrl(avatar), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 46)))
+                          : const CircleAvatar(radius: 46, child: Icon(Icons.person, size: 46)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                    if ((profile['city'] ?? '').toString().isNotEmpty) Text('📍 ${profile['city']}', style: const TextStyle(color: Colors.black54)),
+                    if ((profile['bio'] ?? '').toString().isNotEmpty)
+                      Padding(padding: const EdgeInsets.only(top: 8), child: Text(profile['bio'].toString(), textAlign: TextAlign.center)),
+                    const SizedBox(height: 12),
+                    if (isStore) ...[
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Text('$followers دنبال‌کننده'), const SizedBox(width: 20), Text('⭐ ${rating.toStringAsFixed(1)}'),
+                      ]),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(onPressed: busy ? null : _follow, icon: Icon(following ? Icons.notifications_active : Icons.notifications_none), label: Text(following ? 'دنبال می‌کنم' : 'دنبال کردن')),
+                          OutlinedButton.icon(onPressed: _rate, icon: const Icon(Icons.star_outline), label: const Text('امتیاز فروشگاه')),
+                          OutlinedButton.icon(onPressed: _comment, icon: const Icon(Icons.comment_outlined), label: const Text('دیدگاه فروشگاه')),
+                        ],
+                      ),
+                    ] else
+                      const Padding(padding: EdgeInsets.only(top: 10), child: Text('پروفایل کاربر', style: TextStyle(color: Colors.black54))),
+                  ],
                 ),
-              );
-            },
-          );
-        }),
-      const Divider(height:28),
-      const Text('دیدگاه‌ها',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900)),
-      if(comments.isEmpty)const Padding(padding:EdgeInsets.all(16),child:Text('هنوز دیدگاهی ثبت نشده است.')),
-      ...comments.map((x)=>ListTile(leading:const CircleAvatar(child:Icon(Icons.person,size:18)),title:Text(x['user_name']?.toString()??'کاربر بازارک',style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text(x['comment']?.toString()??''),trailing:x['rating']!=null?Text('⭐ ${x['rating']}'):null)),
-    ])));
+              ),
+            ),
+            if (isStore) ...[
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)]), borderRadius: BorderRadius.circular(18)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('🏪 فروشگاه حرفه‌ای', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  const Text('فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.', style: TextStyle(color: Colors.white70, height: 1.4)),
+                  const SizedBox(height: 12),
+                  SizedBox(width: double.infinity, child: FilledButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: widget.sellerId, sellerName: name))),
+                    icon: const Icon(Icons.storefront_rounded), label: const Text('ورود به فروشگاه'),
+                  )),
+                ]),
+              ),
+            ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 18, 4, 10),
+              child: Row(children: [
+                Expanded(child: Text(isStore ? 'محصولات فروشگاه (${listings.length})' : 'آگهی‌های $name (${listings.length})', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900))),
+                if (isStore) const Icon(Icons.verified_outlined, size: 20, color: Color(0xFF007185)),
+              ]),
+            ),
+            if (listings.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Center(child: Text('هنوز آگهی فعالی وجود ندارد.'))),
+            if (listings.isNotEmpty)
+              LayoutBuilder(
+                builder: (context, c) {
+                  final cols = c.maxWidth >= 1100 ? 4 : (c.maxWidth >= 700 ? 3 : 2);
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: listings.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, crossAxisSpacing: 10, mainAxisSpacing: 10, mainAxisExtent: c.maxWidth < 600 ? 300 : 340),
+                    itemBuilder: (context, i) {
+                      final item = listings[i] is Map ? Map<String,dynamic>.from(listings[i]) : <String,dynamic>{};
+                      List<dynamic> images = [];
+                      try {
+                        final raw = item['image_url'];
+                        if (raw is String && raw.isNotEmpty) images = jsonDecode(raw);
+                        if (raw is List) images = raw;
+                      } catch (_) {}
+                      final imageUrl = images.isNotEmpty ? images.first.toString() : '';
+                      final price = _displayListingPrice(context, item);
+                      return InkWell(
+                        onTap: () => _openListing(context, item),
+                        child: Container(
+                          decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(12)),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                            Expanded(child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 45))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 45))),
+                            Padding(padding: const EdgeInsets.fromLTRB(11, 9, 11, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.3)),
+                              const SizedBox(height: 6),
+                              Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFB12704), fontSize: 17, fontWeight: FontWeight.w900)),
+                            ])),
+                          ]),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            if (isStore) ...[
+              const Divider(height: 28),
+              const Text('دیدگاه‌های عمومی فروشگاه', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              if (comments.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('هنوز دیدگاهی ثبت نشده است.')),
+              ...comments.map((x) => ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person, size: 18)),
+                title: Text(x['user_name']?.toString() ?? 'کاربر بازارک', style: const TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Text(x['comment']?.toString() ?? ''),
+                trailing: x['rating'] != null ? Text('⭐ ${x['rating']}') : null,
+              )),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -7301,26 +7758,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!AuthService.isLoggedIn) {
       return Scaffold(
         appBar: AppBar(title: Text(tr(context, 'profile'))),
-        body: Center(child: FilledButton.icon(onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())); if (mounted) setState(() {}); }, icon: const Icon(Icons.login), label: Text(tr(context, 'login')))),
+        body: Center(child: FilledButton.icon(
+          onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())); if (mounted) setState(() {}); },
+          icon: const Icon(Icons.login), label: Text(tr(context, 'login')),
+        )),
       );
     }
 
-    final name = profile['full_name']?.toString().trim().isNotEmpty == true ? profile['full_name'].toString() : (AuthService.userName ?? 'کاربر بازارک');
-    final city = profile['city']?.toString() ?? '';
-    final bio = profile['bio']?.toString() ?? '';
-    final shop = profile['shop_name']?.toString() ?? '';
-    final phone = profile['phone']?.toString() ?? '';
+    final name = profile['full_name']?.toString().trim().isNotEmpty == true ? profile['full_name'].toString().trim() : (AuthService.userName ?? 'کاربر بازارک');
+    final city = profile['city']?.toString().trim() ?? '';
+    final bio = profile['bio']?.toString().trim() ?? '';
+    final shop = profile['shop_name']?.toString().trim() ?? '';
+    final phone = profile['phone']?.toString().trim() ?? '';
     final avatar = AuthService.avatarUrl ?? profile['avatar_url']?.toString() ?? '';
-    final activeAds = int.tryParse('${profile['active_ads'] ?? 0}') ?? 0;
     final totalAds = int.tryParse('${profile['total_ads'] ?? 0}') ?? 0;
-    final views = int.tryParse('${profile['total_views'] ?? 0}') ?? 0;
-    final activeStore = subscriptions
-        .where((s) =>
-            (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
-            s['status'] == 'active' &&
-            DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true)
-        .toList()
-      ..sort((a, b) => DateTime.tryParse('${b['ends_at']}')!.compareTo(DateTime.tryParse('${a['ends_at']}')!));
+    final sellerId = profile['id']?.toString().trim() ?? AuthService.userId ?? '';
+    final activeStore = subscriptions.where((s) =>
+      (s['plan'] == 'store_monthly' || s['plan'] == 'store_yearly') &&
+      s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true
+    ).toList();
+    activeStore.sort((a,b) {
+      final ad = DateTime.tryParse('${a['ends_at']}'); final bd = DateTime.tryParse('${b['ends_at']}');
+      if (ad == null || bd == null) return 0; return bd.compareTo(ad);
+    });
     final hasActiveStore = activeStore.isNotEmpty;
     final storeEnd = hasActiveStore ? _dateTimeForUser(activeStore.first['ends_at']) : '';
 
@@ -7329,177 +7789,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('حساب من'),
         actions: [IconButton(onPressed: loading || saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), tooltip: 'ویرایش پروفایل')],
       ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadProfile,
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
-                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer),
-                    child: Column(
-                      children: [
-                        Stack(
-                          children: [
-                            Container(
-                              width: 108,
-                              height: 108,
-                              alignment: Alignment.center,
-                              color: Theme.of(context).colorScheme.surface,
-                              child: avatar.isNotEmpty
-                                  ? Image.network(
-                                      _originalImageUrl(avatar),
-                                      width: 108,
-                                      height: 108,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (_, __, ___) => Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
-                                    )
-                                  : Icon(Icons.person, size: 54, color: Theme.of(context).colorScheme.primary),
-                            ),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Material(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: const CircleBorder(),
-                                child: IconButton(onPressed: saving ? null : _changeAvatar, icon: const Icon(Icons.camera_alt_outlined, color: Colors.white), tooltip: 'تغییر عکس'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                        if (city.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text('📍 $city', style: Theme.of(context).textTheme.bodyMedium),
-                        ],
-                        if (bio.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Text(bio, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
-                        ],
-                        const SizedBox(height: 14),
-                        FilledButton.icon(onPressed: saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), label: const Text('ویرایش پروفایل')),
-                      ],
-                    ),
-                  ),
-                  if (error != null) Padding(padding: const EdgeInsets.all(12), child: Text(error!, style: const TextStyle(color: Colors.red))),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns = constraints.maxWidth >= 900 ? 4 : 3;
-                        final gap = 8.0;
-                        final cardWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
-                        final followers = int.tryParse('${profile['followers_count'] ?? 0}') ?? 0;
-                        final following = int.tryParse('${profile['following_count'] ?? 0}') ?? 0;
-                        final ratingsCount = int.tryParse('${profile['ratings_count'] ?? 0}') ?? 0;
-                        final comments = int.tryParse('${profile['comments_count'] ?? 0}') ?? 0;
-                        final likesReceived = int.tryParse('${profile['likes_received_count'] ?? 0}') ?? 0;
-                        final rating = double.tryParse('${profile['rating'] ?? 0}') ?? 0;
-                        return Wrap(
-                          spacing: gap,
-                          runSpacing: gap,
-                          children: [
-                            SizedBox(width: cardWidth, child: _statCard('آگهی‌ها', '$totalAds', Icons.inventory_2_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen())))),
-                            SizedBox(width: cardWidth, child: _statCard('فعال', '$activeAds', Icons.check_circle_outline, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(activeOnly: true))))),
-                            SizedBox(width: cardWidth, child: _statCard('بازدید', '$views', Icons.visibility_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen(sortByViews: true))))),
-                            SizedBox(width: cardWidth, child: _statCard('دنبال‌کننده', '$followers', Icons.people_alt_outlined, () => _openSocialStat('followers', 'دنبال‌کننده‌های من'))),
-                            SizedBox(width: cardWidth, child: _statCard('دنبال‌شونده', '$following', Icons.person_add_alt_1_outlined, () => _openSocialStat('following', 'دنبال‌شونده‌های من'))),
-                            SizedBox(width: cardWidth, child: _statCard('امتیاز', rating > 0 ? '${rating.toStringAsFixed(1)} ★' : '—', Icons.star_outline, () => _openSocialStat('ratings', 'امتیازهای من'))),
-                            SizedBox(width: cardWidth, child: _statCard('امتیازها', '$ratingsCount', Icons.rate_review_outlined, () => _openSocialStat('ratings', 'امتیازهای دریافت‌شده'))),
-                            SizedBox(width: cardWidth, child: _statCard('دیدگاه‌ها', '$comments', Icons.comment_outlined, () => _openSocialStat('comments', 'دیدگاه‌های من'))),
-                            SizedBox(width: cardWidth, child: _statCard('پسندیده‌ها', '$likesReceived', Icons.thumb_up_outlined, () => _openSocialStat('likes', 'پسندیده‌های آگهی‌های من'))),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  if (shop.isNotEmpty || phone.isNotEmpty || city.isNotEmpty)
-                    Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      child: Column(children: [
-                        const ListTile(title: Text('اطلاعات پروفایل', style: TextStyle(fontWeight: FontWeight.bold)), leading: Icon(Icons.person_outline)),
-                        _infoTile(Icons.store_outlined, 'فروشگاه', shop),
-                        _infoTile(Icons.phone_outlined, 'شماره تلفن', phone),
-                        _infoTile(Icons.location_on_outlined, 'شهر / ولایت', city),
-                      ]),
-                    ),
-                  if (hasActiveStore)
-                    Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      elevation: 0,
-                      color: const Color(0xFFFFF8E1),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Color(0xFFFFD814),
-                              child: Icon(Icons.storefront_rounded, color: Color(0xFF111111)),
-                            ),
-                            title: const Text('فروشگاه حرفه‌ای من', style: TextStyle(fontWeight: FontWeight.w900)),
-                            subtitle: Text(
-                              storeEnd.isEmpty
-                                  ? 'فروشگاه شما فعال است'
-                                  : 'فعال تا $storeEnd',
-                            ),
-                            trailing: const Icon(Icons.chevron_left),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const MyStoreScreen()),
-                            ),
-                          ),
-                          const Divider(height: 1),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const MyStoreScreen()),
-                                    ),
-                                    icon: const Icon(Icons.storefront_outlined),
-                                    label: const Text('مدیریت فروشگاه'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const AddProductScreen()),
-                                    ),
-                                    icon: const Icon(Icons.add),
-                                    label: const Text('افزودن محصول'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), subtitle: const Text('پیام‌های سیستم و نتیجه رسیدگی به گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
-                  ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), subtitle: const Text('گزارش اشکال، پیشنهاد و پیام به تیم بازارک'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
-                  ListTile(leading: const Icon(Icons.admin_panel_settings_outlined), title: const Text('ورود مدیریت بازارک'), subtitle: const Text('پنل مدیریت، بررسی آگهی‌ها و گزارش‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()))),
-                  ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
-                  ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: Text(tr(context, 'download_app')), subtitle: Text(tr(context, 'download_app_desc')), onTap: () async { final apkUrl = kIsWeb ? '${Uri.base.origin}/download/bazarek.apk' : 'https://bazarek.pages.dev/download/bazarek.apk'; try { final opened = await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication); if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن لینک دانلود ممکن نشد.'))); } }),
-                  const Divider(),
-                  SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
-                  ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
-                    title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'),
-                    onTap: saving ? null : _deleteAccount,
-                  ),
-                  const SizedBox(height: 30),
-                ],
+      body: loading ? const Center(child: CircularProgressIndicator()) : RefreshIndicator(
+        onRefresh: _loadProfile,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 30),
+          children: [
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(children: [
+                  Stack(children: [
+                    Container(width: 100, height: 100, decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.primaryContainer), child: ClipOval(child: avatar.isNotEmpty ? Image.network(_originalImageUrl(avatar), fit: BoxFit.cover, errorBuilder: (_,__,___) => Icon(Icons.person, size: 48, color: Theme.of(context).colorScheme.primary)) : Icon(Icons.person, size: 48, color: Theme.of(context).colorScheme.primary))),
+                    Positioned(bottom: 0, right: 0, child: Material(color: Theme.of(context).colorScheme.primary, shape: const CircleBorder(), child: IconButton(onPressed: saving ? null : _changeAvatar, icon: const Icon(Icons.camera_alt_outlined, color: Colors.white), tooltip: 'تغییر عکس'))),
+                  ]),
+                  const SizedBox(height: 12),
+                  Text(name, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+                  if (city.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('📍 $city', style: const TextStyle(color: Colors.black54))),
+                  if (bio.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black87, height: 1.5))),
+                  const SizedBox(height: 14),
+                  SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: saving ? null : _editProfile, icon: const Icon(Icons.edit_outlined), label: const Text('ویرایش پروفایل'))),
+                ]),
               ),
             ),
+            if (error != null) Padding(padding: const EdgeInsets.all(8), child: Text(error!, style: const TextStyle(color: Colors.red))),
+            const SizedBox(height: 8),
+            Card(child: Column(children: [
+              ListTile(leading: const Icon(Icons.inventory_2_outlined), title: const Text('آگهی‌های من', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('$totalAds آگهی ثبت شده'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
+              const Divider(height: 1),
+              ListTile(leading: const Icon(Icons.favorite_border_rounded), title: const Text('علاقه‌مندی‌ها', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('آگهی‌های ذخیره‌شده شما'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAdsScreen()))),
+              const Divider(height: 1),
+              ListTile(leading: const Icon(Icons.storefront_outlined), title: const Text('فروشگاه‌های ذخیره‌شده', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('فروشگاه‌های حرفه‌ای مورد علاقه شما'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedStoresScreen()))),
+              const Divider(height: 1),
+              if (phone.isNotEmpty) ListTile(leading: const Icon(Icons.phone_outlined), title: const Text('شماره تلفن'), subtitle: Text(phone)),
+              if (phone.isNotEmpty) const Divider(height: 1),
+              if (shop.isNotEmpty) ListTile(leading: const Icon(Icons.store_outlined), title: const Text('نام کسب‌وکار'), subtitle: Text(shop)),
+            ])),
+            const SizedBox(height: 10),
+            if (hasActiveStore) ...[
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)]), borderRadius: BorderRadius.circular(20)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [const CircleAvatar(backgroundColor: Color(0xFFFFD814), child: Icon(Icons.storefront_rounded, color: Colors.black)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('فروشگاه حرفه‌ای من', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)), Text(storeEnd.isEmpty ? 'فعال' : 'فعال تا $storeEnd', style: const TextStyle(color: Colors.white70))])), const Icon(Icons.verified_rounded, color: Color(0xFFFFD814))]),
+                  const SizedBox(height: 15),
+                  const Text('ویترین حرفه‌ای، محصولات، نظرات مشتریان و مدیریت فروشگاه در یکجا.', style: TextStyle(color: Colors.white70, height: 1.5)),
+                  const SizedBox(height: 14),
+                  Row(children: [
+                    Expanded(child: FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyStoreScreen())), icon: const Icon(Icons.dashboard_rounded), label: const Text('مدیریت فروشگاه'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreReviewsScreen())), icon: const Icon(Icons.reviews_outlined), label: const Text('نظرات مشتریان'))),
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())), icon: const Icon(Icons.add_shopping_cart_rounded), label: const Text('افزودن محصول'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54)), onPressed: sellerId.isEmpty ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: sellerId, sellerName: shop.isNotEmpty ? shop : name))), icon: const Icon(Icons.storefront_outlined), label: const Text('مشاهده فروشگاه'))),
+                  ]),
+                ]),
+              ),
+              const SizedBox(height: 10),
+            ] else
+              Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.storefront_outlined)), title: const Text('فروشگاه حرفه‌ای', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: const Text('برای ساخت ویترین حرفه‌ای و امکانات فروشگاهی، اشتراک فروشگاه را فعال کنید.'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())))),
+            Card(child: Column(children: [
+              ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('اعلان‌ها'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
+              const Divider(height: 1),
+              ListTile(leading: const Icon(Icons.support_agent_outlined), title: const Text('پشتیبانی و ارتباط با ما'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
+              const Divider(height: 1),
+              ListTile(leading: const Icon(Icons.rocket_launch), title: Text('🚀 ${tr(context, 'boost')}'), subtitle: const Text('افزایش نمایش آگهی و اشتراک ویژه'), onTap: () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }),
+              const Divider(height: 1),
+              SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
+              const Divider(height: 1),
+              ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('خروج از حساب', style: TextStyle(color: Colors.red)), onTap: saving ? null : () async { await AuthService.logout(); if (mounted) setState(() {}); }),
+              ListTile(leading: const Icon(Icons.delete_forever_outlined, color: Colors.red), title: const Text('حذف همیشگی حساب', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)), subtitle: const Text('پروفایل و اطلاعات حساب برای همیشه حذف می‌شود'), onTap: saving ? null : _deleteAccount),
+            ])),
+          ],
+        ),
+      ),
     );
   }
 
