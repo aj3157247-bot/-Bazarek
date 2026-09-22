@@ -1269,6 +1269,64 @@ app.post('/api/products', requireUser, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ثبت محصول.' }); }
 });
 
+app.post('/api/store-products', requireUser, async (req, res) => {
+  try {
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
+    if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
+    if (!String(province).trim()) return res.status(400).json({ error: 'ولایت محصول الزامی است.' });
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
+    const cleanCode = String(product_code || '').trim().slice(0,80);
+    const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
+    const discount = Math.min(99, Math.max(0, Number(discount_percent) || 0));
+    const payload = {
+      vendor_id: req.user.id,
+      title: title.trim(),
+      price: Math.max(0, Number(price) || 0),
+      cost_price: Math.max(0, Number(cost_price) || 0),
+      description: String(description).slice(0,10000),
+      category: String(category), subcategory: String(subcategory), image_url: String(image_url),
+      allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone),
+      contact_phone: String(contact_phone).trim().slice(0,30),
+      location_text: String(location_text).trim().slice(0,160),
+      external_link: String(req.body?.external_link || '').trim().slice(0,500),
+      province: String(province).trim().slice(0,80),
+      is_negotiable: Boolean(is_negotiable),
+      currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN',
+      stock: Math.max(0, Math.trunc(Number(stock) || 0)),
+      brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120),
+      sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300),
+      material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120),
+      product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000),
+      discount_percent: discount,
+      is_store_product: true,
+      is_featured: false, is_pinned: false, featured_until: null, pinned_until: null,
+      boost_level: 0, boost_until: null,
+    };
+    const { data, error } = await db.from('products').insert([payload]).select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در ثبت محصول فروشگاه.' });
+  }
+});
+
+app.get('/api/my/store-products', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.json([]);
+    const { data, error } = await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id', req.user.id).eq('is_active', true).eq('is_store_product', true).order('created_at', { ascending: false }).limit(100);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در دریافت محصولات فروشگاه.' });
+  }
+});
+
 app.patch('/api/products/:id/status', requireUser, async (req, res) => {
   try {
     const isActive = req.body?.is_active === true;
