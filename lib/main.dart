@@ -1255,8 +1255,14 @@ class ApiService {
   }
 
   static Future<Map<String,dynamic>> createGlobalBoost(String plan, String reference) async {
+    // Store purchases on Web must use the same-origin Cloudflare Pages Function.
+    // Keep the existing backend for non-Web clients and all other API calls untouched.
+    final endpoint = kIsWeb
+        ? '${Uri.base.origin}/api/subscriptions'
+        : '${ApiConfig.baseUrl}/subscriptions';
+
     Future<http.Response> send() => http.post(
-      Uri.parse('${ApiConfig.baseUrl}/subscriptions'),
+      Uri.parse(endpoint),
       headers: headers,
       body: jsonEncode({
         'plan': plan,
@@ -1283,9 +1289,7 @@ class ApiService {
       }
       throw Exception('ثبت درخواست اشتراک ناموفق بود.');
     }
-    if (data == null) {
-      throw Exception('پاسخ نامعتبر از سرور دریافت شد.');
-    }
+    if (data == null) throw Exception('پاسخ نامعتبر از سرور دریافت شد.');
     return data;
   }
 
