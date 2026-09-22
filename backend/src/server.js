@@ -791,11 +791,50 @@ app.get('/api/sellers/:id', async (req,res)=>{
       is_following=!!f;
       try { const {data:sv}=await db.from('saved_stores').select('user_id').eq('user_id',req.user.id).eq('seller_id',id).maybeSingle(); is_saved=!!sv; } catch (_) {}
     }
-    const {count:products_count}=await db.from('products').select('*',{count:'exact',head:true}).eq('vendor_id',id).eq('is_active',true);
+    const {count:products_count}=await db.from('products').select('*',{count:'exact',head:true}).eq('vendor_id',id).eq('is_active',true).eq('is_store_product',true);
     res.json({...profile,followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
   }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پروفایل فروشنده.'});}
 });
-app.get('/api/sellers/:id/listings', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('vendor_id',req.params.id).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);if(error)throw error;const {data:subs}=await db.from('seller_subscriptions').select('plan,starts_at,ends_at,status').eq('user_id',req.params.id).eq('status','active').in('plan',['store_monthly','store_yearly']).order('ends_at',{ascending:false}).limit(5);const now=Date.now();const active=(subs||[]).find(s=>new Date(s.ends_at||0).getTime()>now&&(!s.starts_at||new Date(s.starts_at).getTime()<=now));const storeActive=Boolean(active);res.json((data||[]).map(x=>({...x,store_active:storeActive,store_plan:active?.plan||null,store_starts_at:active?.starts_at||null,store_until:active?.ends_at||null})));}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آگهی‌های فروشنده.'});}});
+app.get('/api/sellers/:id/listings', async (req,res)=>{try{
+  const db=getSupabaseAdmin();
+  const sellerId=String(req.params.id);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
+  if(error)throw error;
+  const storeSub=await getActiveStoreSubscription(db,sellerId);
+  const storeActive=Boolean(storeSub);
+  res.json((data||[]).map(x=>({...x,store_active:storeActive,store_plan:storeSub?.plan||null,store_starts_at:storeSub?.starts_at||null,store_until:storeSub?.ends_at||null})));
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
+
+// Public directory of active professional stores. Product counts are strictly store-product counts.
+app.get('/api/stores/active', async (req,res)=>{try{
+  const db=getSupabaseAdmin(); const now=new Date().toISOString();
+  const {data:subs,error:se}=await db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('plan',['store_monthly','store_yearly']).eq('status','active').gt('ends_at',now).order('ends_at',{ascending:false}).limit(500);
+  if(se)throw se;
+  const active=(subs||[]).filter(s=>!s.starts_at||new Date(s.starts_at).getTime()<=Date.now());
+  const ids=[...new Set(active.map(s=>s.user_id).filter(Boolean))];
+  if(!ids.length)return res.json([]);
+  const [{data:profiles,error:pe},{data:products,error:prode}]=await Promise.all([
+    db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified').in('id',ids),
+    db.from('products').select('vendor_id').in('vendor_id',ids).eq('is_active',true).eq('is_store_product',true)
+  ]);
+  if(pe)throw pe;if(prode)throw prode;
+  const counts={}; for(const p of (products||[])) counts[p.vendor_id]=(counts[p.vendor_id]||0)+1;
+  const pm=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
+  const best={}; for(const s of active){if(!best[s.user_id]||new Date(s.ends_at).getTime()>new Date(best[s.user_id].ends_at).getTime())best[s.user_id]=s;}
+  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.shop_name||p.full_name||'فروشگاه بازارک',city:p.city||'',description:p.bio||'',avatar_url:p.avatar_url||'',verified:p.verified!==false,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});}});
+
+// One-click repair for a product that was accidentally created as an ordinary ad from the store flow.
+app.patch('/api/store-products/:id/claim', requireUser, async (req,res)=>{try{
+  const db=getSupabaseAdmin(); const id=String(req.params.id); const storeSub=await getActiveStoreSubscription(db,req.user.id);
+  if(!storeSub)return res.status(403).json({error:'فروشگاه حرفه‌ای فعال نیست.'});
+  const {data:product,error:pe}=await db.from('products').select('id,vendor_id,is_active,is_store_product').eq('id',id).maybeSingle();
+  if(pe)throw pe;if(!product)return res.status(404).json({error:'محصول پیدا نشد.'});if(product.vendor_id!==req.user.id)return res.status(403).json({error:'این محصول متعلق به شما نیست.'});if(product.is_active!==true)return res.status(400).json({error:'فقط محصول فعال قابل انتقال است.'});
+  const {data,error}=await db.from('products').update({is_store_product:true,is_featured:false,is_pinned:false,featured_until:null,pinned_until:null,boost_level:0,boost_until:null,updated_at:new Date().toISOString()}).eq('id',id).eq('vendor_id',req.user.id).select().single();
+  if(error)throw error;res.json(data);
+}catch(e){console.error(e);res.status(500).json({error:'انتقال محصول به فروشگاه ناموفق بود.'});}});
+
+
 app.post('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const sellerId=String(req.params.id);if(sellerId===req.user.id)return res.status(400).json({error:'نمی‌توانید خودتان را دنبال کنید.'});const db=getSupabaseAdmin();const {data:seller}=await db.from('profiles').select('id').eq('id',sellerId).maybeSingle();if(!seller)return res.status(404).json({error:'فروشنده پیدا نشد.'});const {error}=await db.from('seller_follows').upsert([{user_id:req.user.id,seller_id:sellerId}],{onConflict:'user_id,seller_id'});if(error)throw error;res.status(201).json({following:true});}catch(e){console.error(e);res.status(500).json({error:'دنبال‌کردن فروشنده ناموفق بود.'});}});
 app.delete('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('seller_follows').delete().eq('user_id',req.user.id).eq('seller_id',req.params.id);if(error)throw error;res.json({following:false});}catch(e){console.error(e);res.status(500).json({error:'لغو دنبال‌کردن ناموفق بود.'});}});
 app.post('/api/listings/:id/like', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('listing_likes').upsert([{user_id:req.user.id,listing_id:req.params.id}],{onConflict:'user_id,listing_id'});if(error)throw error;const {count}=await db.from('listing_likes').select('*',{count:'exact',head:true}).eq('listing_id',req.params.id);res.status(201).json({liked:true,likes_count:count||0});}catch(e){console.error(e);res.status(500).json({error:'پسندیدن آگهی ناموفق بود.'});}});
@@ -1191,13 +1230,14 @@ app.get('/api/products', requireUser, async (req, res) => {
 app.post('/api/products', requireUser, async (req, res) => {
   try {
     const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
+    const forceStoreProduct = String(req.headers['x-bazarek-store-product'] || '').toLowerCase() === 'true';
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
     const cleanCode = String(product_code || '').trim().slice(0,80);
     const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
     const discount = Math.min(99, Math.max(0, Number(discount_percent) || 0));
-    let storeProduct = Boolean(is_store_product);
+    let storeProduct = Boolean(is_store_product) || forceStoreProduct;
     if (storeProduct) {
       const storeSub = await getActiveStoreSubscription(db, req.user.id);
       if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
