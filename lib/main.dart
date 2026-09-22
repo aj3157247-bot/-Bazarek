@@ -943,10 +943,33 @@ class ApiService {
   }
 
   static Future<List<dynamic>> getSellerListings(String sellerId) async {
-    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/listings'), headers: headers).timeout(const Duration(seconds: 15));
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/listings');
+    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
     dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
-    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌های فروشنده.') : 'خطا در دریافت آگهی‌های فروشنده.');
-    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+    if (res.statusCode == 200) {
+      final items = data is List ? data : List<dynamic>.from((data is Map ? data['data'] : const []) ?? const []);
+      return items.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+      }).toList();
+    }
+    // Compatibility fallback for deployments where the dedicated store route
+    // has not reached the backend yet. Never mixes ordinary ads into the store.
+    if (res.statusCode == 404 || res.statusCode == 405) {
+      try {
+        final profileId = AuthService.userId;
+        if (profileId != null && profileId.toString() == sellerId.toString()) {
+          final own = await getMyProducts();
+          return own.where((raw) {
+            if (raw is! Map) return false;
+            final flag = raw['is_store_product'];
+            return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+          }).toList();
+        }
+      } catch (_) {}
+    }
+    throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت محصولات فروشگاه.') : 'خطا در دریافت محصولات فروشگاه.');
   }
 
   static Future<List<dynamic>> getMyStoreProducts() async {
@@ -954,8 +977,25 @@ class ApiService {
     var res = await request();
     if (res.statusCode == 401 && await refreshSession()) res = await request();
     dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
-    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت محصولات فروشگاه.') : 'خطا در دریافت محصولات فروشگاه.');
-    return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
+    if (res.statusCode == 200) {
+      final items = data is List ? data : List<dynamic>.from((data is Map ? data['data'] : const []) ?? const []);
+      return items.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+      }).toList();
+    }
+    // Compatibility fallback: read the authenticated user's products and
+    // keep only rows explicitly marked as store products.
+    if (res.statusCode == 404 || res.statusCode == 405) {
+      final own = await getMyProducts();
+      return own.where((raw) {
+        if (raw is! Map) return false;
+        final flag = raw['is_store_product'];
+        return flag == true || flag?.toString().trim().toLowerCase() == 'true' || flag?.toString().trim() == '1';
+      }).toList();
+    }
+    throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت محصولات فروشگاه.') : 'خطا در دریافت محصولات فروشگاه.');
   }
 
   static Future<Map<String,dynamic>> createStoreProduct(Map<String,dynamic> payload) async {
@@ -967,6 +1007,18 @@ class ApiService {
     var res = await request();
     if (res.statusCode == 401 && await refreshSession()) res = await request();
     dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    // Compatibility fallback for an older backend that already supports the
+    // /products endpoint but does not yet expose /store-products. The header
+    // is server-validated; the client cannot turn an ordinary ad into a store
+    // product by JSON alone.
+    if (res.statusCode == 404 || res.statusCode == 405) {
+      res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/products'),
+        headers: {'Content-Type':'application/json', 'X-Bazarek-Store-Product':'true', ...headers},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 30));
+      try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    }
     if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'خطا در ثبت محصول فروشگاه.') : 'خطا در ثبت محصول فروشگاه.');
     return Map<String,dynamic>.from(data as Map);
   }
