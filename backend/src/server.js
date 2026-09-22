@@ -1245,10 +1245,11 @@ app.post('/api/products', requireUser, async (req, res) => {
     const cleanCode = String(product_code || '').trim().slice(0,80);
     const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
     const discount = Math.min(99, Math.max(0, Number(discount_percent) || 0));
-    // The server is the final authority: only the dedicated store-product flow
-    // (explicit header) may create a store product. A normal ad can never become
-    // a store product merely by sending is_store_product=true in JSON.
-    const storeProduct = forceStoreProduct;
+    // The server is the final authority: a store product is accepted only
+    // for an authenticated user with an active professional store.
+    // Accept the explicit JSON flag as well as the dedicated header so older/newer
+    // web clients cannot accidentally create a store product as an ordinary ad.
+    const storeProduct = forceStoreProduct || is_store_product === true || String(is_store_product).trim().toLowerCase() === 'true' || String(is_store_product).trim() === '1';
     if (storeProduct) {
       const storeSub = await getActiveStoreSubscription(db, req.user.id);
       if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
