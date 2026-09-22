@@ -16,6 +16,13 @@ import 'admin_panel_screen.dart';
 import 'apk_webview_stub.dart' if (dart.library.io) 'apk_webview.dart';
 
 
+String _dateTimeForUser(dynamic value) {
+  final dt = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+  if (dt == null) return '';
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${dt.year}/${two(dt.month)}/${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+}
+
 String _seoSlug(String value) {
   var slug = value.toLowerCase().trim();
   const fa = '۰۱۲۳۴۵۶۷۸۹';
