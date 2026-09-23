@@ -806,12 +806,15 @@ app.get('/api/sellers/:id/ads', async (req,res)=>{try{
 app.get('/api/sellers/:id/listings', async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const sellerId=String(req.params.id);
+  // A store product is public only while the seller has an active store.
+  // Check the subscription first so an expired store never leaks products.
+  const storeSub=await getActiveStoreSubscription(db,sellerId);
+  if(!storeSub) return res.json([]);
   const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
   if(error)throw error;
-  const storeSub=await getActiveStoreSubscription(db,sellerId);
-  const storeActive=Boolean(storeSub);
-  res.json((data||[]).map(x=>({...x,store_active:storeActive,store_plan:storeSub?.plan||null,store_starts_at:storeSub?.starts_at||null,store_until:storeSub?.ends_at||null})));
-}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
+  res.set('Cache-Control','no-store');
+  res.json((data||[]).map(x=>({...x,store_active:true,store_plan:storeSub.plan||null,store_starts_at:storeSub.starts_at||null,store_until:storeSub.ends_at||null})));
+}catch(e){console.error('seller store products error:',e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
 
 // Public directory of active professional stores. Product counts are strictly store-product counts.
 app.get('/api/stores/active', async (req,res)=>{try{
@@ -852,7 +855,8 @@ app.patch('/api/store-products/:id/claim', requireUser, async (req,res)=>{try{
   res.json(data);
 }catch(e){
   console.error('store product claim error:',e);
-  res.status(500).json({error:`انتقال محصول به فروشگاه ناموفق بود${e?.message ? `: ${e.message}` : '.'}`});
+  const detail=String(e?.message||'').trim();
+  res.status(500).json({error:detail ? `انتقال محصول به فروشگاه ناموفق بود: ${detail}` : 'انتقال محصول به فروشگاه ناموفق بود.'});
 }});
 
 
@@ -869,16 +873,22 @@ app.post('/api/sellers/:id/rating', requireUser, async (req,res)=>{try{const rat
 
 // Professional store reviews and saved stores.
 async function getActiveStoreSubscription(db, sellerId) {
+  const now = new Date().toISOString();
   const { data, error } = await db.from('seller_subscriptions')
     .select('plan,starts_at,ends_at,status')
-    .eq('user_id', sellerId)
+    .eq('user_id', String(sellerId))
     .eq('status', 'active')
     .in('plan', ['store_monthly','store_yearly'])
+    .gt('ends_at', now)
     .order('ends_at', { ascending: false })
-    .limit(10);
+    .limit(20);
   if (error) throw error;
-  const now = Date.now();
-  return (data || []).find(s => new Date(s.ends_at || 0).getTime() > now && (!s.starts_at || new Date(s.starts_at).getTime() <= now)) || null;
+  const nowMs = Date.now();
+  return (data || []).find(s => {
+    const end = s?.ends_at ? new Date(s.ends_at).getTime() : 0;
+    const start = s?.starts_at ? new Date(s.starts_at).getTime() : 0;
+    return end > nowMs && (!start || start <= nowMs);
+  }) || null;
 }
 
 app.get('/api/products/:id/reviews', async (req,res)=>{
@@ -990,20 +1000,61 @@ app.delete('/api/stores/:id/save', requireUser, async (req,res)=>{
 app.get('/api/me/saved-stores', requireUser, async (req,res)=>{
   try {
     const db=getSupabaseAdmin();
-    const {data,error}=await db.from('saved_stores').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+    const {data:saved,error}=await db.from('saved_stores')
+      .select('seller_id,created_at')
+      .eq('user_id',req.user.id)
+      .order('created_at',{ascending:false})
+      .limit(500);
     if(error) throw error;
-    const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
+    const rows=saved||[];
+    const ids=[...new Set(rows.map(x=>x.seller_id).filter(Boolean))];
     if(!ids.length) return res.json([]);
-    const {data:profiles,error:pe}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids);
+
+    // Batch-load profiles and active store subscriptions. This avoids one
+    // failing subscription lookup aborting the whole saved-stores request.
+    const now=new Date().toISOString();
+    const [{data:profiles,error:pe},{data:subs,error:se}]=await Promise.all([
+      db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids),
+      db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status')
+        .in('user_id',ids)
+        .in('plan',['store_monthly','store_yearly'])
+        .eq('status','active')
+        .gt('ends_at',now)
+        .order('ends_at',{ascending:false})
+        .limit(1000)
+    ]);
     if(pe) throw pe;
+    if(se) throw se;
+
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
-    const rows=[];
-    for(const x of (data||[])) {
-      const sub=await getActiveStoreSubscription(db,x.seller_id);
-      if(sub) rows.push({...pm[x.seller_id],seller_id:x.seller_id,store_plan:sub.plan,store_until:sub.ends_at,saved_at:x.created_at});
+    const bestSub={};
+    for(const sub of (subs||[])) {
+      const startOk=!sub.starts_at || new Date(sub.starts_at).getTime()<=Date.now();
+      if(!startOk) continue;
+      if(!bestSub[sub.user_id] || new Date(sub.ends_at||0).getTime()>new Date(bestSub[sub.user_id].ends_at||0).getTime()) {
+        bestSub[sub.user_id]=sub;
+      }
     }
-    res.json(rows);
-  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'}); }
+    const result=rows
+      .map(x=>{
+        const sub=bestSub[x.seller_id];
+        if(!sub) return null;
+        const profile=pm[x.seller_id]||{};
+        return {
+          ...profile,
+          seller_id:x.seller_id,
+          store_plan:sub.plan,
+          store_until:sub.ends_at,
+          saved_at:x.created_at
+        };
+      })
+      .filter(Boolean);
+    res.set('Cache-Control','no-store');
+    res.json(result);
+  } catch(e) {
+    console.error('saved stores error:',e);
+    res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'});
+  }
 });
 
 app.get('/api/me/social/:type', requireUser, async (req,res)=>{
