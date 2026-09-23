@@ -25,7 +25,7 @@ on conflict (id) do update set
 alter table public.seller_subscriptions drop constraint if exists seller_subscriptions_plan_check;
 alter table public.seller_subscriptions
   add constraint seller_subscriptions_plan_check
-  check (plan in ('basic','pro','business','monthly_boost','yearly_boost'));
+  check (plan in ('basic','pro','business','monthly_boost','yearly_boost','boost_weekly','boost_monthly','boost_yearly','store_monthly','store_yearly'));
 
 create index if not exists seller_subscriptions_boost_active_idx
   on public.seller_subscriptions(user_id,status,ends_at desc)

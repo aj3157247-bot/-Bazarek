@@ -38,7 +38,7 @@ on conflict (id) do update set
 alter table if exists public.seller_subscriptions drop constraint if exists seller_subscriptions_plan_check;
 alter table if exists public.seller_subscriptions
   add constraint seller_subscriptions_plan_check
-  check (plan in ('basic','pro','business','boost_monthly','boost_yearly'));
+  check (plan in ('basic','pro','business','monthly_boost','yearly_boost','boost_weekly','boost_monthly','boost_yearly','store_monthly','store_yearly'));
 
 update public.seller_subscriptions
 set price_afn = 300

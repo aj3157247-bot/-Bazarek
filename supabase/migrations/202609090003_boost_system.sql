@@ -10,7 +10,7 @@ create index if not exists products_boost_idx on public.products(boost_level des
 alter table if exists public.seller_subscriptions add column if not exists payment_method text not null default 'manual';
 alter table if exists public.seller_subscriptions add column if not exists payment_reference text;
 alter table if exists public.seller_subscriptions drop constraint if exists seller_subscriptions_plan_check;
-alter table if exists public.seller_subscriptions add constraint seller_subscriptions_plan_check check (plan in ('basic','pro','business','boost_monthly','boost_yearly'));
+alter table if exists public.seller_subscriptions add constraint seller_subscriptions_plan_check check (plan in ('basic','pro','business','monthly_boost','yearly_boost','boost_weekly','boost_monthly','boost_yearly','store_monthly','store_yearly'));
 
 -- Replace the old promotion catalog with the simpler Boost catalog.
 update public.promotion_packages set is_active=false
