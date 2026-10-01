@@ -16,29 +16,42 @@ Future<bool> start() async {
     _stream = await devices.getUserMedia(<String, dynamic>{'audio': true});
     _chunks.clear();
 
-    // Let the browser choose its native supported audio format. Forcing
-    // audio/webm can fail on some Android browsers/webviews.
+    // Let the browser choose its native format first. If that fails, try
+    // common WebM/OGG MIME types using the current dart:html constructor API.
     html.MediaRecorder? recorder;
     try {
       recorder = html.MediaRecorder(_stream!);
     } catch (_) {
-      try {
-        recorder = html.MediaRecorder(_stream!, 'audio/webm;codecs=opus');
-      } catch (_) {
+      for (final mime in <String>[
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+      ]) {
         try {
-          recorder = html.MediaRecorder(_stream!, 'audio/ogg;codecs=opus');
-        } catch (_) {
-          await cancel();
-          return false;
-        }
+          if (!html.MediaRecorder.isTypeSupported(mime)) continue;
+          recorder = html.MediaRecorder(_stream!, <String, dynamic>{'mimeType': mime});
+          break;
+        } catch (_) {}
       }
     }
 
+    if (recorder == null) {
+      await cancel();
+      return false;
+    }
+
     _recorder = recorder;
-    _recorder!.onDataAvailable.listen((html.BlobEvent event) {
-      final data = event.data;
-      if (data != null && data.size > 0) {
-        _chunks.add(data);
+
+    // MediaRecorder exposes these as generic DOM events in the current
+    // dart:html bindings, so use the generic event accessor instead of
+    // removed onDataAvailable/onStop getters.
+    _recorder!.on['dataavailable'].listen((html.Event event) {
+      if (event is html.BlobEvent) {
+        final data = event.data;
+        if (data != null && data.size > 0) {
+          _chunks.add(data);
+        }
       }
     });
 
@@ -57,26 +70,24 @@ Future<Uint8List?> stop() async {
 
   final completer = Completer<void>();
   late StreamSubscription<html.Event> sub;
-  sub = recorder.onStop.listen((_) {
+  sub = recorder.on['stop'].listen((_) {
     if (!completer.isCompleted) completer.complete();
     sub.cancel();
   });
 
   try {
-    try {
-      recorder.requestData();
-    } catch (_) {}
+    // The final dataavailable event is emitted when stop() is called.
     recorder.stop();
     await completer.future.timeout(const Duration(seconds: 6));
 
     if (_chunks.isEmpty) return null;
 
-    final mime = recorder.mimeType.isNotEmpty ? recorder.mimeType : 'audio/webm';
+    final mime = recorder.mimeType ?? 'audio/webm';
     final blob = html.Blob(_chunks, mime);
     final reader = html.FileReader();
     final read = Completer<Uint8List?>();
-    late StreamSubscription loadSub;
-    late StreamSubscription errorSub;
+    late StreamSubscription<html.Event> loadSub;
+    late StreamSubscription<html.Event> errorSub;
 
     void cleanup() {
       loadSub.cancel();

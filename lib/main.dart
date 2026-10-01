@@ -430,32 +430,7 @@ String uiText(BuildContext context, String fa, [String? ps]) {
       'لینک صفحه':'Page Link','قیمت توافقی':'Negotiable Price','در حال انتشار...':'Publishing...','انتشار در فروشگاه':'Publish to Store','ثبت و انتشار آگهی':'Publish Ad',
       'حداقل یک عکس واضح انتخاب کنید.':'Choose at least one clear photo.','عکس‌ها':'Photos','دسترسی به میکروفون داده نشد.':'Microphone permission was not granted.',
       'حداقل یک عکس برای آگهی انتخاب کنید.':'Choose at least one photo for the ad.','برای انتشار آگهی ابتدا وارد حساب خود شوید.':'Log in before publishing an ad.',
-      'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.':'Choose a clear main photo; customers see the photo first.',
-      'اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.',      'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.',
-      '۱. تصاویر محصول':'1. Product Images','۲. معرفی محصول':'2. Product Information','۳. قیمت و تخفیف':'3. Price & Discount','۴. ارتباط و انتشار':'4. Contact & Publish','۵. ارتباط و انتشار':'5. Contact & Publish','۴. مشخصات هوشمند':'4. Smart Specifications',
-      'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.':'Choose a clear main photo; customers see the photo first.',
-      'اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.',
-      'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.':'Choose a category to show product-specific options.',
-      'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.':'Enter the original price and discount percentage; the final price is calculated automatically.',
-      'قیمت و واحد پول را مشخص کنید.':'Set the price and currency.',
-      'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.':'Fill in only the specifications that apply to this product category.',
-      'مشخصات تکمیلی (اختیاری)':'Additional specifications (optional)',
-      'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.',
-      'توضیحات کامل':'Full Description','در صورت نیاز وارد کنید':'Enter if needed','خالی بگذارید تا خودکار ساخته شود':'Leave blank to generate automatically',
-      'مثلاً کفش مردانه چرمی مدل ۲۰۲۶':'e.g. 2026 leather men’s shoes','مثلاً 120000':'e.g. 120000','مثلاً 15':'e.g. 15','مثلاً 10':'e.g. 10',
-      'مثلاً 41, 42, 43':'e.g. 41, 42, 43','مثلاً M, L, XL':'e.g. M, L, XL','مثلاً 128GB, 256GB':'e.g. 128GB, 256GB',
-      'مثلاً Nike':'e.g. Nike','مثلاً Samsung':'e.g. Samsung','مثلاً X100':'e.g. X100','مثلاً Air Max 2026':'e.g. Air Max 2026',
-      'مثلاً مشکی, سفید':'e.g. Black, White','مثلاً چرم، فلز، پلاستیک':'e.g. Leather, Metal, Plastic',
-      'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...':'Write benefits, material, use, warranty and important notes...',
-      'نو، کارکرده، در حد نو':'New, Used, Like New','ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.':'Briefly list the important technical features.',
-      'شهر، منطقه یا آدرس فروشگاه':'City, area or store address','https://...':'https://...','۰ تا ۹۹٪':'0 to 99%',
-      'سایزهای کفش':'Shoe Sizes','سایزهای لباس':'Clothing Sizes','سایزهای انتخاب‌شده':'Selected Sizes','رنگ‌های انتخاب‌شده':'Selected Colors',
-      'اندازه / ظرفیت / سایز':'Size / Capacity','کد محصول (SKU)':'Product Code (SKU)','جنس / جنس بدنه':'Material',
-      'قیمت بعد از تخفیف:':'Price after discount:','محصول با موفقیت در فروشگاه ثبت شد.':'Product was successfully added to the store.',
-      'محصول فروشگاه با شناسه فروشگاهی ثبت نشد.':'Store product could not be created with the store ID.',
-      'نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید.':'Your session is no longer valid. Please log in again.',
-      'نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.':'Your session is no longer valid. Please log in again and publish again.',
-
+      'اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.','اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.',
     };
     return en[fa] ?? _localizeStaticText(fa, 'en');
   }
@@ -741,7 +716,7 @@ String _localizeStaticText(String value, String lang) {
     'حداقل یک عکس برای آگهی انتخاب کنید.':'د اعلان لپاره لږ تر لږه یو انځور وټاکئ.',
     'برای انتشار آگهی ابتدا وارد حساب خود شوید.':'د اعلان خپرولو لپاره لومړی خپل حساب ته ننوځئ.',
     'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می\u200cبیند.':'اصلي انځور روښانه وټاکئ؛ مشتری لومړی انځور ویني.',
-    
+    'اطلاعات اصلی آگهی را وارد کنید.':'د اعلان اصلي معلومات ولیکئ.',
     'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'د اړیکې معلومات او له مشتری سره د اړیکې طریقه تنظیم کړئ.',
     'مقدار':'مقدار',
     'تماس و انتشار':'اړیکه او خپرول',
@@ -749,18 +724,7 @@ String _localizeStaticText(String value, String lang) {
     'چت مستقیم':'مستقیم چټ',
     'نمایش شماره':'د اړیکې شمېره ښکاره کول',
     'قیمت قابل مذاکره':'د هوکړې بیه',
-  
-'مثلاً کفش مردانه چرمی مدل ۲۰۲۶':'لکه د ۲۰۲۶ کال د نارینه وو چرمي بوټان',
-    'مثلاً 120000':'لکه 120000','مثلاً 15':'لکه 15','مثلاً 10':'لکه 10','مثلاً 41, 42, 43':'لکه 41، 42، 43',
-    'مثلاً M, L, XL':'لکه M، L، XL','مثلاً 128GB, 256GB':'لکه 128GB، 256GB','مثلاً Nike':'لکه Nike','مثلاً Samsung':'لکه Samsung',
-    'مثلاً X100':'لکه X100','مثلاً Air Max 2026':'لکه Air Max 2026','مثلاً مشکی, سفید':'لکه تور، سپین',
-    'مثلاً چرم، فلز، پلاستیک':'لکه چرم، فلز، پلاستیک','مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...':'ګټې، جنس، کارونه، تضمین او مهمې خبرې ولیکئ...',
-    'نو، کارکرده، در حد نو':'نوی، کارول شوی، د نوي په کچه','ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.':'مهم تخنیکي ځانګړنې لنډې او منظمې ولیکئ.',
-    'شهر، منطقه یا آدرس فروشگاه':'ښار، سیمه یا د پلورنځي پته','در صورت نیاز وارد کنید':'که اړتیا وي ولیکئ','خالی بگذارید تا خودکار ساخته شود':'تش پرېږدئ چې په اوتومات ډول جوړ شي',
-    '۰ تا ۹۹٪':'۰ تر ۹۹٪','محصول با موفقیت در فروشگاه ثبت شد.':'محصول په بریالیتوب سره په پلورنځي کې ثبت شو.',
-    'محصول فروشگاه با شناسه فروشگاهی ثبت نشد.':'د پلورنځي محصول د پلورنځي له پېژند سره ثبت نه شو.',
-    'نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید.':'ستاسو ناسته معتبره نه ده. مهرباني وکړئ بیا حساب ته ننوځئ.',
-    'نشست شما معتبر نیست. لطفاً دوباره وارد حساب شوید و دوباره انتشار را بزنید.':'ستاسو ناسته معتبره نه ده. مهرباني وکړئ بیا حساب ته ننوځئ او بیا یې خپور کړئ.',};
+  };
 
   // Source-wide UI fallback translations for strings used outside the main dictionaries.
   const enUiFallback = <String,String>{
@@ -9949,7 +9913,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFE1E6EA)), boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: professional ? const Color(0xFFE7F6F5) : const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: professional ? const Color(0xFF007185) : const Color(0xFF4F659B))), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(uiText(context, title), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(uiText(context, subtitle), style: const TextStyle(color: Colors.black54, fontSize: 11.5))]))]),
+        Row(children: [Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: professional ? const Color(0xFFE7F6F5) : const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: professional ? const Color(0xFF007185) : const Color(0xFF4F659B))), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 11.5))]))]),
         const SizedBox(height: 14), child,
       ]),
     );
@@ -9969,11 +9933,11 @@ class _AddProductSheetState extends State<AddProductSheet> {
           if (professional) Container(
             margin: const EdgeInsets.only(bottom: 14), padding: const EdgeInsets.all(17),
             decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF101820), Color(0xFF007185)]), borderRadius: BorderRadius.circular(24)),
-            child: Row(children: [const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 38), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('ثبت محصول حرفه‌ای', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(uiText(context, 'محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.'), style: const TextStyle(color: Colors.white70, height: 1.45, fontSize: 11.5))]))]),
+            child: Row(children: [const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 38), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('ثبت محصول حرفه‌ای', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.', style: const TextStyle(color: Colors.white70, height: 1.45, fontSize: 11.5))]))]),
           ),
           section('۱. تصاویر محصول', professional ? 'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.' : 'حداقل یک عکس واضح انتخاب کنید.', Icons.photo_library_rounded,
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${uiText(context, 'عکس‌ها')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text('${ps ? 'انځورونه' : 'عکس‌ها'}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.w900)),
               const SizedBox(height: 9),
               Wrap(spacing: 9, runSpacing: 9, children: [
                 for (var i = 0; i < imageBytes.length; i++) Stack(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(imageBytes[i], width: 82, height: 82, fit: BoxFit.cover)), Positioned(top: 3, right: 3, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 15))))]),
