@@ -12,9 +12,11 @@ Future<bool> start() async {
   try {
     _stream = await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
     _chunks.clear();
-    _recorder = html.MediaRecorder(_stream!, 'audio/webm');
-    _recorder!.onDataAvailable.listen((event) {
-      if (event.data != null && event.data!.size > 0) _chunks.add(event.data!);
+    _recorder = html.MediaRecorder(_stream!, {'mimeType': 'audio/webm'});
+    _recorder!.on['dataavailable'].listen((event) {
+      final blobEvent = event as html.BlobEvent;
+      final data = blobEvent.data;
+      if (data != null && data.size > 0) _chunks.add(data);
     });
     _recorder!.start();
     isRecording = true;
@@ -30,7 +32,7 @@ Future<Uint8List?> stop() async {
   final recorder = _recorder!;
   final completer = Completer<void>();
   late StreamSubscription sub;
-  sub = recorder.onStop.listen((_) {
+  sub = recorder.on['stop'].listen((_) {
     if (!completer.isCompleted) completer.complete();
     sub.cancel();
   });
