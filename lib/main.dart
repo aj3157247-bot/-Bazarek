@@ -449,12 +449,22 @@ String _localizeStaticText(String value, String lang) {
 
   const enExtra = <String, String>{
     'فروشگاه‌های حرفه‌ای':'Professional Stores',
+    'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'Browse active and verified stores and enter a store.',
     'فروشگاه حرفه‌ای':'Professional Store',
+    'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'View this store’s products and information on its store page.',
+    'فروشگاه بازارک':'Bazarek Store',
+    'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان':'Dedicated storefront, products, discounts and customer reviews',
+    'همه':'All',
+    'جدیدترین':'Newest',
+    'ارزان‌ترین':'Lowest Price',
+    'گران‌ترین':'Highest Price',
+    'ویژه‌سازی':'Promote',
+    'آگهی':'Ad',
+    'آگهی‌ها':'Ads',
     'فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.':'Store, products, ratings and customer reviews in one place.',
     'ورود به فروشگاه':'Visit Store',
     'ورود به فروشگاه و مشاهده محصولات':'Visit Store & View Products',
     'فروشگاه خودت را بساز':'Create Your Professional Store',
-    'خرید / فعال‌سازی':'Buy / Activate',
     'فعالول':'Activate',
     'محصولات فروشگاه':'Store Products',
     'ثبت محصول حرفه‌ای':'Add Professional Product',
@@ -549,9 +559,23 @@ String _localizeStaticText(String value, String lang) {
     'مشکی':'Black','سفید':'White','آبی':'Blue','قرمز':'Red','سبز':'Green','خاکستری':'Gray',
     'لطفاً از وصل بودن اینترنت خود مطمئن شوید و دوباره تلاش کنید.':'Please make sure you are connected to the internet and try again.',
     'پیام صوتی ناموفق بود.':'Voice message recording failed.',
+    'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.':'No active professional store is available to display right now.',
+    'فروشگاه حرفه‌ای خودت را بساز':'Create Your Professional Store',
+    'محصولات، تخفیف و نظر مشتریان':'Products, discounts and customer reviews',
+    'خرید / فعال‌سازی':'Buy / Activate',
+    'محصول فروشگاه':'Store Product',
+    'همه محصولات':'All Products',
+    'آگهی‌های من':'My Ads',
+    'آگهی‌های ویژه':'Featured Ads',
+    'آگهی‌های شما':'Your Ads',
+    'بازار افغانستان، همه‌چیز یک‌جا':'Afghanistan Marketplace — Everything in One Place',
+    'دیدن همه آگهی‌ها':'View All Ads',
   };
   const psExtra = <String, String>{
-    'فروشگاه‌های حرفه‌ای':'مسلکي پلورنځي','فروشگاه حرفه‌ای':'مسلکي پلورنځی',
+    'فروشگاه‌های حرفه‌ای':'مسلکي پلورنځي','فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'فعال او تایید شوي پلورنځي وګورئ او پلورنځي ته ننوځئ.', 'فروشگاه حرفه‌ای':'مسلکي پلورنځی',
+    'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'د دې پلورنځي محصولات او معلومات د پلورنځي په پاڼه کې وګورئ.',
+    'فروشگاه بازارک':'د بازارک پلورنځی','ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان':'ځانګړی ویترین، محصولات، تخفیفونه او د مشتریانو نظرونه',
+    'همه':'ټول','جدیدترین':'نوي','ارزان‌ترین':'ارزانه','گران‌ترین':'ګران','ویژه‌سازی':'ځانګړی کول','آگهی':'اعلان','آگهی‌ها':'اعلانونه',
     'فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.':'پلورنځی، محصولات، درجه بندۍ او د مشتریانو نظرونه په یوه پاڼه کې.',
     'ورود به فروشگاه':'پلورنځي ته ننوتل','ورود به فروشگاه و مشاهده محصولات':'پلورنځي ته ننوتل او محصولات لیدل',
     'فروشگاه خودت را بساز':'خپل مسلکي پلورنځی جوړ کړئ','خرید / فعال‌سازی':'پېرود / فعالول','فعالول':'فعالول',
@@ -581,6 +605,10 @@ String _localizeStaticText(String value, String lang) {
     if (storeAds != null) return '${storeAds.group(1)}’s Ads';
     final products = RegExp(r'^محصولات فروشگاه\s*\((\d+)\)$').firstMatch(value);
     if (products != null) return 'Store Products (${products.group(1)})';
+    final productCount = RegExp(r'^(\d+)\s+محصول(?:\s+فروشگاه)?$').firstMatch(value);
+    if (productCount != null) return '${productCount.group(1)} Store Product${productCount.group(1) == '1' ? '' : 's'}';
+    final adCount = RegExp(r'^(\d+)\s+آگهی$').firstMatch(value);
+    if (adCount != null) return '${adCount.group(1)} Ad${adCount.group(1) == '1' ? '' : 's'}';
     final adsWithCount = RegExp(r'^آگهی‌های\s+(.+?)\s*\((\d+)\)$').firstMatch(value);
     if (adsWithCount != null) return '${adsWithCount.group(1)}’s Ads (${adsWithCount.group(2)})';
     final reply = RegExp(r'^پاسخ شما:\s*(.*)$').firstMatch(value);
@@ -592,6 +620,10 @@ String _localizeStaticText(String value, String lang) {
     if (storeAds != null) return 'د ${storeAds.group(1)} اعلانونه';
     final products = RegExp(r'^محصولات فروشگاه\s*\((\d+)\)$').firstMatch(value);
     if (products != null) return 'د پلورنځي محصولات (${products.group(1)})';
+    final productCount = RegExp(r'^(\d+)\s+محصول(?:\s+فروشگاه)?$').firstMatch(value);
+    if (productCount != null) return '${productCount.group(1)} د پلورنځي محصول';
+    final adCount = RegExp(r'^(\d+)\s+آگهی$').firstMatch(value);
+    if (adCount != null) return '${adCount.group(1)} اعلانونه';
     final adsWithCount = RegExp(r'^آگهی‌های\s+(.+?)\s*\((\d+)\)$').firstMatch(value);
     if (adsWithCount != null) return 'د ${adsWithCount.group(1)} اعلانونه (${adsWithCount.group(2)})';
     final reply = RegExp(r'^پاسخ شما:\s*(.*)$').firstMatch(value);
