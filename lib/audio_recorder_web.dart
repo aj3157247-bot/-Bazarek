@@ -12,13 +12,18 @@ Future<bool> start() async {
   try {
     _stream = await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
     _chunks.clear();
-    _recorder = html.MediaRecorder(_stream!, {'mimeType': 'audio/webm'});
+    String mimeType = 'audio/webm';
+    try {
+      if (!html.MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/ogg';
+      }
+    } catch (_) {}
+    _recorder = html.MediaRecorder(_stream!, {'mimeType': mimeType});
     _recorder!.on['dataavailable'].listen((event) {
-      final blobEvent = event as html.BlobEvent;
-      final data = blobEvent.data;
+      final data = (event as html.BlobEvent).data;
       if (data != null && data.size > 0) _chunks.add(data);
     });
-    _recorder!.start();
+    _recorder!.start(250);
     isRecording = true;
     return true;
   } catch (_) {
