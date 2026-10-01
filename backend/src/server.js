@@ -110,7 +110,7 @@ function requireConfig(res) {
 
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
 app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
-app.get('/api/version', (_, res) => res.json({ version: '2.5.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone'] }));
+app.get('/api/version', (_, res) => res.json({ version: '2.6.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone','voice-audio','english-us'] }));
 
 // Phone numbers are stored as a private, deterministic Supabase email alias so
 // phone registration/login works without enabling Supabase SMS/OTP. Gmail/email
@@ -233,36 +233,6 @@ app.post('/api/upload-images', requireUser, upload.array('images', 20), async (r
   }
 });
 
-app.post('/api/upload-audio', requireUser, upload.single('audio'), async (req, res) => {
-  try {
-    const file = req.file;
-    if (!file) return res.status(400).json({ error: 'فایل صوتی انتخاب نشده است.' });
-    if (file.size > 5 * 1024 * 1024) return res.status(400).json({ error: 'فایل صوتی بیش از حد مجاز است.' });
-    const ext = (file.originalname.split('.').pop() || 'wav').toLowerCase();
-    if (ext !== 'wav' || !['audio/wav','audio/x-wav','audio/wave','application/octet-stream'].includes(String(file.mimetype || '').toLowerCase())) {
-      return res.status(400).json({ error: 'فقط فایل صوتی WAV مجاز است.' });
-    }
-    const db = getSupabaseAdmin();
-    const buckets = await db.storage.listBuckets();
-    if (!buckets.data?.some(b => b.name === AUDIO_BUCKET)) {
-      const { error: bucketError } = await db.storage.createBucket(AUDIO_BUCKET, { public: true, fileSizeLimit: '5MB', allowedMimeTypes: ['audio/wav','audio/x-wav','audio/wave'] });
-      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
-    } else {
-      const { error: bucketUpdateError } = await db.storage.updateBucket(AUDIO_BUCKET, { public: true, fileSizeLimit: '5MB', allowedMimeTypes: ['audio/wav','audio/x-wav','audio/wave'] });
-      if (bucketUpdateError) console.warn('Could not update audio bucket settings:', bucketUpdateError.message);
-    }
-    const path = `${req.user.id}/${crypto.randomUUID()}.wav`;
-    const { error } = await db.storage.from(AUDIO_BUCKET).upload(path, file.buffer, { contentType: 'audio/wav', cacheControl: '31536000', upsert: false });
-    if (error) throw error;
-    const { data } = db.storage.from(AUDIO_BUCKET).getPublicUrl(path);
-    res.status(201).json({ url: data.publicUrl });
-  } catch (e) {
-    console.error('Listing audio upload error:', e);
-    const detail = String(e?.message || '').trim();
-    res.status(500).json({ error: detail ? `خطا در آپلود توضیحات صوتی: ${detail}` : 'خطا در آپلود توضیحات صوتی.' });
-  }
-});
-
 app.post('/api/auth/login', async (req, res) => {
   try {
     if (!requireConfig(res)) return;
@@ -341,6 +311,35 @@ app.patch('/api/me', requireUser, async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
+});
+
+app.post('/api/upload-audio', requireUser, upload.single('audio'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: 'فایل صوتی انتخاب نشده است.' });
+    if (!file.mimetype.startsWith('audio/')) return res.status(400).json({ error: 'فقط فایل صوتی مجاز است.' });
+    if (file.size > 8 * 1024 * 1024) return res.status(400).json({ error: 'فایل صوتی نباید بیشتر از ۸ مگابایت باشد.' });
+    const db = getSupabaseAdmin();
+    const buckets = await db.storage.listBuckets();
+    const allowed = ['audio/webm','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/aac','audio/mp4'];
+    if (!buckets.data?.some(b => b.name === AUDIO_BUCKET)) {
+      const { error: bucketError } = await db.storage.createBucket(AUDIO_BUCKET, { public: true, fileSizeLimit: '8MB', allowedMimeTypes: allowed });
+      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
+    } else {
+      const { error: bucketUpdateError } = await db.storage.updateBucket(AUDIO_BUCKET, { public: true, fileSizeLimit: '8MB', allowedMimeTypes: allowed });
+      if (bucketUpdateError) console.warn('Could not update audio bucket settings:', bucketUpdateError.message);
+    }
+    const originalExt = (file.originalname.split('.').pop() || 'webm').toLowerCase().replace(/[^a-z0-9]/g, '') || 'webm';
+    const path = `${req.user.id}/${crypto.randomUUID()}.${originalExt}`;
+    const { error } = await db.storage.from(AUDIO_BUCKET).upload(path, file.buffer, { contentType: file.mimetype, cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(AUDIO_BUCKET).getPublicUrl(path);
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) {
+    console.error('Listing audio upload error:', e);
+    const detail = String(e?.message || '').trim();
+    res.status(500).json({ error: detail ? `خطا در آپلود صدا: ${detail}` : 'خطا در آپلود صدا.' });
+  }
 });
 
 app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req, res) => {
@@ -556,7 +555,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at,currency').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,audio_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at,currency').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -611,10 +610,10 @@ app.get('/api/translate', async (req, res) => {
     const text = String(req.query.text || '').trim().slice(0, 1200);
     const target = String(req.query.target || 'ps').trim();
     if (!text) return res.json({ text: '' });
-    if (target !== 'ps') return res.json({ text });
+    if (!['ps','en'].includes(target)) return res.json({ text });
     const url = new URL('https://api.mymemory.translated.net/get');
     url.searchParams.set('q', text);
-    url.searchParams.set('langpair', 'fa|ps');
+    url.searchParams.set('langpair', target === 'en' ? 'fa|en' : 'fa|ps');
     const r = await fetch(url);
     if (!r.ok) return res.json({ text });
     const d = await r.json();
@@ -626,7 +625,7 @@ app.get('/api/translate', async (req, res) => {
 app.get('/api/listings', async (req, res) => {
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,description_audio_url,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,audio_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -738,9 +737,8 @@ app.get('/api/listings/:id', async (req,res)=>{
 });
 
 app.post('/api/listings/:id/view', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.rpc('bazarek_increment_listing_view',{p_listing_id:req.params.id});if(error)throw error;res.json({views_count:Number(data||0)});}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت بازدید.'});}});
-app.get('/api/favorites', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('favorites').select('listing_id,created_at,products(id,title,description,price,currency,image_url,category,subcategory,province,is_featured,is_pinned,is_store_product,description_audio_url)').eq('user_id',req.user.id).order('created_at',{ascending:false});if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت علاقه‌مندی‌ها.'});}});
+app.get('/api/favorites', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('favorites').select('listing_id,created_at,products(id,title,price,image_url,category,is_featured,is_pinned)').eq('user_id',req.user.id).order('created_at',{ascending:false});if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت علاقه‌مندی‌ها.'});}});
 app.post('/api/favorites/:id', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data:existing}=await db.from('favorites').select('listing_id').eq('user_id',req.user.id).eq('listing_id',req.params.id).maybeSingle();if(existing){await db.from('favorites').delete().eq('user_id',req.user.id).eq('listing_id',req.params.id);return res.json({favorite:false});}const {error}=await db.from('favorites').insert([{user_id:req.user.id,listing_id:req.params.id}]);if(error)throw error;res.status(201).json({favorite:true});}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر علاقه‌مندی.'});}});
-app.get('/api/favorites/:id/status', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('favorites').select('listing_id').eq('user_id',req.user.id).eq('listing_id',req.params.id).maybeSingle();if(error)throw error;res.json({favorite:Boolean(data)});}catch(e){console.error(e);res.status(500).json({error:'خطا در بررسی علاقه‌مندی.'});}});
 
 app.post('/api/admin/users/:id/warnings', requireAdmin, async (req,res)=>{try{const message=String(req.body?.message||'').trim().slice(0,1000);if(!message)return res.status(400).json({error:'متن هشدار الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').insert([{user_id:req.params.id,message}]).select().single();if(error)throw error;await db.from('user_notifications').insert([{user_id:req.params.id,type:'warning',title:'هشدار مدیریت بازارک',message}]);res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت هشدار.'});}});
 app.get('/api/admin/warnings', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('user_warnings').select('*').order('created_at',{ascending:false}).limit(200);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت هشدارها.'});}});
@@ -830,7 +828,7 @@ app.get('/api/sellers/:id', async (req,res)=>{
 app.get('/api/sellers/:id/ads', async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const sellerId=String(req.params.id);
-  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,description_audio_url,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',false).order('created_at',{ascending:false}).limit(100);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',false).order('created_at',{ascending:false}).limit(100);
   if(error)throw error;
   res.json(data||[]);
 }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آگهی‌های فروشنده.'});}});
@@ -838,15 +836,12 @@ app.get('/api/sellers/:id/ads', async (req,res)=>{try{
 app.get('/api/sellers/:id/listings', async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const sellerId=String(req.params.id);
-  // A store product is public only while the seller has an active store.
-  // Check the subscription first so an expired store never leaks products.
-  const storeSub=await getActiveStoreSubscription(db,sellerId);
-  if(!storeSub) return res.json([]);
-  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,description_audio_url,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
   if(error)throw error;
-  res.set('Cache-Control','no-store');
-  res.json((data||[]).map(x=>({...x,store_active:true,store_plan:storeSub.plan||null,store_starts_at:storeSub.starts_at||null,store_until:storeSub.ends_at||null})));
-}catch(e){console.error('seller store products error:',e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
+  const storeSub=await getActiveStoreSubscription(db,sellerId);
+  const storeActive=Boolean(storeSub);
+  res.json((data||[]).map(x=>({...x,store_active:storeActive,store_plan:storeSub?.plan||null,store_starts_at:storeSub?.starts_at||null,store_until:storeSub?.ends_at||null})));
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
 
 // Public directory of active professional stores. Product counts are strictly store-product counts.
 app.get('/api/stores/active', async (req,res)=>{try{
@@ -887,8 +882,7 @@ app.patch('/api/store-products/:id/claim', requireUser, async (req,res)=>{try{
   res.json(data);
 }catch(e){
   console.error('store product claim error:',e);
-  const detail=String(e?.message||'').trim();
-  res.status(500).json({error:detail ? `انتقال محصول به فروشگاه ناموفق بود: ${detail}` : 'انتقال محصول به فروشگاه ناموفق بود.'});
+  res.status(500).json({error:`انتقال محصول به فروشگاه ناموفق بود${e?.message ? `: ${e.message}` : '.'}`});
 }});
 
 
@@ -905,22 +899,16 @@ app.post('/api/sellers/:id/rating', requireUser, async (req,res)=>{try{const rat
 
 // Professional store reviews and saved stores.
 async function getActiveStoreSubscription(db, sellerId) {
-  const now = new Date().toISOString();
   const { data, error } = await db.from('seller_subscriptions')
     .select('plan,starts_at,ends_at,status')
-    .eq('user_id', String(sellerId))
+    .eq('user_id', sellerId)
     .eq('status', 'active')
     .in('plan', ['store_monthly','store_yearly'])
-    .gt('ends_at', now)
     .order('ends_at', { ascending: false })
-    .limit(20);
+    .limit(10);
   if (error) throw error;
-  const nowMs = Date.now();
-  return (data || []).find(s => {
-    const end = s?.ends_at ? new Date(s.ends_at).getTime() : 0;
-    const start = s?.starts_at ? new Date(s.starts_at).getTime() : 0;
-    return end > nowMs && (!start || start <= nowMs);
-  }) || null;
+  const now = Date.now();
+  return (data || []).find(s => new Date(s.ends_at || 0).getTime() > now && (!s.starts_at || new Date(s.starts_at).getTime() <= now)) || null;
 }
 
 app.get('/api/products/:id/reviews', async (req,res)=>{
@@ -1032,61 +1020,20 @@ app.delete('/api/stores/:id/save', requireUser, async (req,res)=>{
 app.get('/api/me/saved-stores', requireUser, async (req,res)=>{
   try {
     const db=getSupabaseAdmin();
-    const {data:saved,error}=await db.from('saved_stores')
-      .select('seller_id,created_at')
-      .eq('user_id',req.user.id)
-      .order('created_at',{ascending:false})
-      .limit(500);
+    const {data,error}=await db.from('saved_stores').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
     if(error) throw error;
-    const rows=saved||[];
-    const ids=[...new Set(rows.map(x=>x.seller_id).filter(Boolean))];
+    const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
     if(!ids.length) return res.json([]);
-
-    // Batch-load profiles and active store subscriptions. This avoids one
-    // failing subscription lookup aborting the whole saved-stores request.
-    const now=new Date().toISOString();
-    const [{data:profiles,error:pe},{data:subs,error:se}]=await Promise.all([
-      db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids),
-      db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status')
-        .in('user_id',ids)
-        .in('plan',['store_monthly','store_yearly'])
-        .eq('status','active')
-        .gt('ends_at',now)
-        .order('ends_at',{ascending:false})
-        .limit(1000)
-    ]);
+    const {data:profiles,error:pe}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids);
     if(pe) throw pe;
-    if(se) throw se;
-
     const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
-    const bestSub={};
-    for(const sub of (subs||[])) {
-      const startOk=!sub.starts_at || new Date(sub.starts_at).getTime()<=Date.now();
-      if(!startOk) continue;
-      if(!bestSub[sub.user_id] || new Date(sub.ends_at||0).getTime()>new Date(bestSub[sub.user_id].ends_at||0).getTime()) {
-        bestSub[sub.user_id]=sub;
-      }
+    const rows=[];
+    for(const x of (data||[])) {
+      const sub=await getActiveStoreSubscription(db,x.seller_id);
+      if(sub) rows.push({...pm[x.seller_id],seller_id:x.seller_id,store_plan:sub.plan,store_until:sub.ends_at,saved_at:x.created_at});
     }
-    const result=rows
-      .map(x=>{
-        const sub=bestSub[x.seller_id];
-        if(!sub) return null;
-        const profile=pm[x.seller_id]||{};
-        return {
-          ...profile,
-          seller_id:x.seller_id,
-          store_plan:sub.plan,
-          store_until:sub.ends_at,
-          saved_at:x.created_at
-        };
-      })
-      .filter(Boolean);
-    res.set('Cache-Control','no-store');
-    res.json(result);
-  } catch(e) {
-    console.error('saved stores error:',e);
-    res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'});
-  }
+    res.json(rows);
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'}); }
 });
 
 app.get('/api/me/social/:type', requireUser, async (req,res)=>{
@@ -1333,7 +1280,7 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false, description_audio_url = '' } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
     const forceStoreProduct = String(req.headers['x-bazarek-store-product'] || '').toLowerCase() === 'true';
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
@@ -1349,7 +1296,7 @@ app.post('/api/products', requireUser, async (req, res) => {
       const storeSub = await getActiveStoreSubscription(db, req.user.id);
       if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
     }
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, description_audio_url: String(description_audio_url || '').trim().slice(0,1000), is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     try {
@@ -1367,7 +1314,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/store-products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, description_audio_url = '' } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت محصول الزامی است.' });
     const db = getSupabaseAdmin();
@@ -1382,7 +1329,7 @@ app.post('/api/store-products', requireUser, async (req, res) => {
       price: Math.max(0, Number(price) || 0),
       cost_price: Math.max(0, Number(cost_price) || 0),
       description: String(description).slice(0,10000),
-      category: String(category), subcategory: String(subcategory), image_url: String(image_url),
+      category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000),
       allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone),
       contact_phone: String(contact_phone).trim().slice(0,30),
       location_text: String(location_text).trim().slice(0,160),
@@ -1395,7 +1342,7 @@ app.post('/api/store-products', requireUser, async (req, res) => {
       sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300),
       material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120),
       product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000),
-      discount_percent: discount, description_audio_url: String(description_audio_url || '').trim().slice(0,1000),
+      discount_percent: discount,
       is_store_product: true,
       is_featured: false, is_pinned: false, featured_until: null, pinned_until: null,
       boost_level: 0, boost_until: null,
@@ -1414,7 +1361,7 @@ app.get('/api/my/store-products', requireUser, async (req, res) => {
     const db = getSupabaseAdmin();
     const storeSub = await getActiveStoreSubscription(db, req.user.id);
     if (!storeSub) return res.json([]);
-    const { data, error } = await db.from('products').select('id,title,description,price,currency,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,description_audio_url,is_store_product,is_active').eq('vendor_id', req.user.id).eq('is_active', true).eq('is_store_product', true).order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await db.from('products').select('id,title,description,price,currency,image_url,audio_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id', req.user.id).eq('is_active', true).eq('is_store_product', true).order('created_at', { ascending: false }).limit(100);
     if (error) throw error;
     res.json(data || []);
   } catch (e) {
