@@ -365,7 +365,7 @@ String localizedCategoryTitle(BuildContext context, String id, String fallback) 
 String localizedSubcategoryTitle(BuildContext context, String categoryId, String id, String fallback) {
   final lang = Localizations.localeOf(context).languageCode;
   if (lang == 'en') {
-    const en = {'house_rent':'House for Rent','house_mortgage':'House for Mortgage','house_sale':'House for Sale','apartment':'Apartment','land_sale':'Land for Sale','land_rent':'Land for Rent','shop':'Shop','office':'Office','garden':'Garden','car':'Car','motorcycle':'Motorcycle','rickshaw':'Rickshaw','parts':'Parts','mobile':'Mobile Phone','laptop':'Laptop','computer':'Computer','tv':'TV','camera':'Camera','furniture':'Furniture','appliances':'Appliances','kitchen':'Kitchen','mens':'Men\'s Clothing','womens':'Women\'s Clothing','kids':"Kids' Clothing",'shoes':'Shoes','full_time':'Full-time Job','part_time':'Part-time Job','remote':'Remote Job','repair':'Repair Services','transport':'Transport','education':'Education','other':'Other Personal Items','youtube':'YouTube','tiktok':'TikTok','instagram':'Instagram','facebook_page':'Facebook Page','telegram':'Telegram Channel','snapchat':'Snapchat','x_page':'X Page','other_social':'Other Social Pages','cats':'Cats','dogs':'Dogs','birds':'Birds','ornamental_fish':'Ornamental Fish','pet_supplies':'Pet Supplies','cattle':'Cattle','sheep_goats':'Sheep & Goats','horses':'Horses','poultry':'Poultry & Birds','farm_equipment':'Farm Equipment','grocery':'Grocery','fruit_vegetables':'Fruits & Vegetables','water_drinks':'Water & Drinks','bakery':'Bakery & Sweets','pharmacy':'Pharmacy & Health','medical_equipment':'Medical Equipment','fitness_wellness':'Fitness & Wellness','courses':'Courses','books':'Books','school_supplies':'School Supplies','tutoring':'Private Tutoring','baby_gear':'Baby Gear','toys':'Toys','strollers':'Strollers','kids_furniture':'Kids Furniture','building_materials':'Building Materials','tools':'Tools & Machinery','generators':'Generators','solar':'Solar Systems','wedding_dresses':'Wedding Dresses','wedding_services':'Wedding Services','halls':'Halls & Venues','photography':'Photography & Video','air_tickets':'Air Tickets','bus_tickets':'Bus Tickets','hotels':'Hotels & Accommodation','tours':'Tours & Travel','lost_items':'Lost Items','found_items':'Found Items','documents':'Found Documents','sports_equipment':'Sports Equipment','gaming':'Gaming & Consoles','bicycles':'Bicycles','music':'Musical Instruments'};
+    const en = {'house_rent':'House for Rent','house_mortgage':'House for Mortgage','house_sale':'House for Sale','apartment':'Apartment','land_sale':'Land for Sale','land_rent':'Land for Rent','shop':'Shop','office':'Office','garden':'Garden','car':'Car','motorcycle':'Motorcycle','rickshaw':'Rickshaw','parts':'Parts','mobile':'Mobile Phone','laptop':'Laptop','computer':'Computer','tv':'TV','camera':'Camera','furniture':'Furniture','appliances':'Appliances','kitchen':'Kitchen','mens':'Men's Clothing','womens':'Women's Clothing','kids':'Kids' Clothing','shoes':'Shoes','full_time':'Full-time Job','part_time':'Part-time Job','remote':'Remote Job','repair':'Repair Services','transport':'Transport','education':'Education','other':'Other Personal Items','youtube':'YouTube','tiktok':'TikTok','instagram':'Instagram','facebook_page':'Facebook Page','telegram':'Telegram Channel','snapchat':'Snapchat','x_page':'X Page','other_social':'Other Social Pages','cats':'Cats','dogs':'Dogs','birds':'Birds','ornamental_fish':'Ornamental Fish','pet_supplies':'Pet Supplies','cattle':'Cattle','sheep_goats':'Sheep & Goats','horses':'Horses','poultry':'Poultry & Birds','farm_equipment':'Farm Equipment','grocery':'Grocery','fruit_vegetables':'Fruits & Vegetables','water_drinks':'Water & Drinks','bakery':'Bakery & Sweets','pharmacy':'Pharmacy & Health','medical_equipment':'Medical Equipment','fitness_wellness':'Fitness & Wellness','courses':'Courses','books':'Books','school_supplies':'School Supplies','tutoring':'Private Tutoring','baby_gear':'Baby Gear','toys':'Toys','strollers':'Strollers','kids_furniture':'Kids Furniture','building_materials':'Building Materials','tools':'Tools & Machinery','generators':'Generators','solar':'Solar Systems','wedding_dresses':'Wedding Dresses','wedding_services':'Wedding Services','halls':'Halls & Venues','photography':'Photography & Video','air_tickets':'Air Tickets','bus_tickets':'Bus Tickets','hotels':'Hotels & Accommodation','tours':'Tours & Travel','lost_items':'Lost Items','found_items':'Found Items','documents':'Found Documents','sports_equipment':'Sports Equipment','gaming':'Gaming & Consoles','bicycles':'Bicycles','music':'Musical Instruments'};
     return en[id] ?? fallback;
   }
   if (lang != 'ps') return fallback;
@@ -655,7 +655,7 @@ const Map<String, String> _enMap = {
   'location': 'Location', 'details': 'Ad Details', 'description': 'Description', 'seller_info': 'Seller Information',
   'price_negotiable': 'Negotiable', 'vip_badge': 'Featured (VIP)', 'full_name': 'Full Name',
   'phone_or_email': 'Phone number or valid email', 'password': 'Password (minimum 6 characters)',
-  'no_account': "Don't have an account? Sign up", 'have_account': 'Already registered? Log in',
+  'no_account': 'Don't have an account? Sign up', 'have_account': 'Already registered? Log in',
   'categories': 'Categories', 'retry': 'Retry', 'boost': 'Boost Ads', 'boost_short': 'Short-term Boost — One Ad',
   'boost_global': 'Featured Boost — All Your Ads',
   'boost_week_desc': '7 days; all your active ads receive higher visibility.',
@@ -9071,9 +9071,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickAudioFile() async {
-    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp3','wav','ogg','m4a','webm','aac']);
-    if (files.isEmpty) return;
-    final file = files.first;
+    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp3','wav','ogg','m4a','webm','aac']);
+    if (result.isEmpty) return;
+    final file = result.files.first;
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) return;
     if (bytes.length > 8 * 1024 * 1024) { _msg(tr(context, 'audio_too_large')); return; }
@@ -9268,7 +9268,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
               const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
             ]),
           ),
-          section('۴. مشخصات هوشمند', professional ? 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.' : 'مشخصات تکمیلی (اختیاری)', Icons.tune_rounded,
+          if (professional) section('۴. مشخصات هوشمند', 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.', Icons.tune_rounded,
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               field(brand, 'برند', hint: isElectronics ? 'مثلاً Samsung' : 'مثلاً Nike'),
               field(model, 'مدل', hint: isFootwear ? 'مثلاً Air Max 2026' : 'مثلاً X100'),
@@ -9279,10 +9279,10 @@ class _AddProductSheetState extends State<AddProductSheet> {
               field(material, 'جنس / جنس بدنه', hint: isFootwear ? 'چرم، پارچه،...' : 'مثلاً چرم، فلز، پلاستیک'),
               field(condition, 'وضعیت', hint: 'نو، کارکرده، در حد نو'),
               field(productCode, 'کد محصول (SKU)', hint: 'خالی بگذارید تا خودکار ساخته شود'),
-              field(specifications, 'مشخصات فنی', hint: professional ? 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.' : 'مشخصات بیشتر', maxLines: 4),
+              field(specifications, 'مشخصات فنی', hint: 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.', maxLines: 4),
             ]),
           ),
-          section('۵. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
+          section(professional ? '۵. ارتباط و انتشار' : '۴. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
             Column(children: [
               field(contactPhone, 'شماره تماس', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
               field(locationText, 'آدرس / محل', hint: 'شهر، منطقه یا آدرس فروشگاه'),
