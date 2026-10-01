@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1048,17 +1050,6 @@ class ApiService {
     return data is Map ? Map<String,dynamic>.from(data) : <String,dynamic>{};
   }
 
-  static Future<Map<String,dynamic>> toggleListingLike(String listingId, bool like) async {
-    Future<http.Response> request() => like
-      ? http.post(Uri.parse('${ApiConfig.baseUrl}/listings/$listingId/like'), headers: headers)
-      : http.delete(Uri.parse('${ApiConfig.baseUrl}/listings/$listingId/like'), headers: headers);
-    var res = await request();
-    if (res.statusCode == 401 && await refreshSession()) res = await request();
-    dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
-    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'تغییر پسندیدن ناموفق بود.') : 'تغییر پسندیدن ناموفق بود.');
-    return data is Map ? Map<String,dynamic>.from(data) : <String,dynamic>{};
-  }
-
   static Future<List<dynamic>> getSellerComments(String sellerId) async {
     final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId/comments'), headers: headers).timeout(const Duration(seconds: 15));
     dynamic data; try { data=jsonDecode(res.body); } catch (_) { data=null; }
@@ -1149,7 +1140,7 @@ class ApiService {
   }
 
   static Future<List<dynamic>> getMySocialList(String type) async {
-    final allowed = {'followers','following','ratings','comments','likes'};
+    final allowed = {'followers','following','ratings','comments'};
     if (!allowed.contains(type)) throw Exception('نوع فهرست نامعتبر است.');
     Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/me/social/$type'), headers: headers).timeout(const Duration(seconds: 15));
     var res = await request();
@@ -1209,6 +1200,36 @@ class ApiService {
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
     if (res.statusCode == 200 && data is Map<String, dynamic>) return data;
     throw Exception(data is Map ? (data['error'] ?? 'آگهی پیدا نشد.') : 'آگهی پیدا نشد.');
+  }
+
+  static Future<List<dynamic>> getFavorites() async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/favorites'), headers: headers).timeout(const Duration(seconds: 20));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/favorites'), headers: headers).timeout(const Duration(seconds: 20));
+    }
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت علاقه‌مندی‌ها.') : 'خطا در دریافت علاقه‌مندی‌ها.');
+    return data is List ? data : <dynamic>[];
+  }
+
+  static Future<bool> getFavoriteStatus(String listingId) async {
+    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/favorites/${Uri.encodeComponent(listingId)}/status'), headers: headers).timeout(const Duration(seconds: 12));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/favorites/${Uri.encodeComponent(listingId)}/status'), headers: headers).timeout(const Duration(seconds: 12));
+    }
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در بررسی ذخیره آگهی.') : 'خطا در بررسی ذخیره آگهی.');
+    return data is Map && data['favorite'] == true;
+  }
+
+  static Future<bool> toggleFavorite(String listingId) async {
+    var res = await http.post(Uri.parse('${ApiConfig.baseUrl}/favorites/${Uri.encodeComponent(listingId)}'), headers: headers).timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401 && await refreshSession()) {
+      res = await http.post(Uri.parse('${ApiConfig.baseUrl}/favorites/${Uri.encodeComponent(listingId)}'), headers: headers).timeout(const Duration(seconds: 15));
+    }
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ذخیره آگهی ناموفق بود.') : 'ذخیره آگهی ناموفق بود.');
+    return data is Map && data['favorite'] == true;
   }
 
   static Future<Map<String, dynamic>> submitReport({required String listingId, required String reason}) async {
@@ -1557,9 +1578,11 @@ class SavedAdsScreen extends StatefulWidget {
 }
 
 class _SavedAdsScreenState extends State<SavedAdsScreen> {
-  List<dynamic> _saved = [];
+  List<dynamic> _ads = [];
+  List<dynamic> _products = [];
   bool _loading = true;
   String? _error;
+  int _tab = 0;
 
   @override
   void initState() {
@@ -1568,136 +1591,93 @@ class _SavedAdsScreenState extends State<SavedAdsScreen> {
   }
 
   Future<void> _loadSaved() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (!AuthService.isLoggedIn) {
+      if (mounted) setState(() { _loading = false; _error = 'برای مشاهده علاقه‌مندی‌ها ابتدا وارد حساب شوید.'; });
+      return;
+    }
+    setState(() { _loading = true; _error = null; });
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final ids = prefs.getStringList('saved_ad_ids') ?? <String>[];
-      if (ids.isEmpty) {
-        if (mounted) setState(() { _saved = []; _loading = false; });
-        return;
+      var rows = await ApiService.getFavorites();
+      // Migrate old device-only saved ads into the account-based favorites once.
+      if (rows.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        final legacyIds = prefs.getStringList('saved_ad_ids') ?? <String>[];
+        if (legacyIds.isNotEmpty) {
+          for (final id in legacyIds) {
+            try { await ApiService.toggleFavorite(id); } catch (_) {}
+          }
+          await prefs.remove('saved_ad_ids');
+          rows = await ApiService.getFavorites();
+        }
       }
-
-      final all = await ApiService.getProducts();
-      final wanted = ids.toSet();
-      final result = all.where((item) => wanted.contains(item['id']?.toString())).toList();
-
-      // Keep the user's saved order where possible and remove listings that no longer exist.
-      final byId = <String, dynamic>{
-        for (final item in result) item['id'].toString(): item,
-      };
-      final ordered = <dynamic>[];
-      for (final id in ids) {
-        final item = byId[id];
-        if (item != null) ordered.add(item);
+      final ads = <dynamic>[];
+      final products = <dynamic>[];
+      for (final row in rows) {
+        if (row is! Map || row['products'] is! Map) continue;
+        final item = Map<String, dynamic>.from(row['products'] as Map);
+        final isStore = item['is_store_product'] == true || item['is_store_product']?.toString().toLowerCase() == 'true' || item['is_store_product']?.toString() == '1';
+        if (isStore) {
+          products.add(item);
+        } else {
+          ads.add(item);
+        }
       }
-      final existingIds = ordered.map((e) => e['id'].toString()).toSet();
-      await prefs.setStringList('saved_ad_ids', ids.where(existingIds.contains).toList());
-
-      if (mounted) setState(() { _saved = ordered; _loading = false; });
+      if (mounted) setState(() { _ads = ads; _products = products; _loading = false; });
     } catch (e) {
-      if (mounted) setState(() {
-        _error = friendlyNetworkError(context, e);
-        _loading = false;
-      });
+      if (mounted) setState(() { _error = friendlyNetworkError(context, e); _loading = false; });
     }
   }
 
   Future<void> _remove(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final ids = prefs.getStringList('saved_ad_ids') ?? <String>[];
-    ids.remove(id);
-    await prefs.setStringList('saved_ad_ids', ids);
-    if (mounted) {
-      setState(() {
-        _saved.removeWhere((item) => item['id']?.toString() == id);
-      });
+    try {
+      await ApiService.toggleFavorite(id);
+      await _loadSaved();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isPs = Localizations.localeOf(context).languageCode == 'ps';
+    final items = _tab == 0 ? _ads : _products;
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr(context, 'saved')),
-        actions: [
-          IconButton(onPressed: _loadSaved, icon: const Icon(Icons.refresh_rounded)),
-        ],
+        title: Text(isPs ? 'خوندي شوي' : 'علاقه‌مندی‌ها'),
+        actions: [IconButton(onPressed: _loadSaved, icon: const Icon(Icons.refresh_rounded))],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_off_rounded, size: 52),
-                        const SizedBox(height: 12),
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 14),
-                        FilledButton.icon(
-                          onPressed: _loadSaved,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: Text(tr(context, 'retry')),
-                        ),
-                      ],
+              ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.cloud_off_rounded, size: 52), const SizedBox(height: 12), Text(_error!, textAlign: TextAlign.center), const SizedBox(height: 14), FilledButton.icon(onPressed: _loadSaved, icon: const Icon(Icons.refresh_rounded), label: Text(tr(context, 'retry')))])))
+              : Column(children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(color: const Color(0xFFF1F4F8), borderRadius: BorderRadius.circular(15)),
+                      child: Row(children: [
+                        Expanded(child: ChoiceChip(label: Text(isPs ? 'اعلانونه (${_ads.length})' : 'آگهی‌ها (${_ads.length})'), selected: _tab == 0, onSelected: (_) => setState(() => _tab = 0), selectedColor: const Color(0xFF4F659B), labelStyle: TextStyle(color: _tab == 0 ? Colors.white : const Color(0xFF243B53), fontWeight: FontWeight.w900))),
+                        Expanded(child: ChoiceChip(label: Text(isPs ? 'محصولات (${_products.length})' : 'محصولات (${_products.length})'), selected: _tab == 1, onSelected: (_) => setState(() => _tab = 1), selectedColor: const Color(0xFF007185), labelStyle: TextStyle(color: _tab == 1 ? Colors.white : const Color(0xFF243B53), fontWeight: FontWeight.w900))),
+                      ]),
                     ),
                   ),
-                )
-              : _saved.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.favorite_border_rounded,
-                                size: 64, color: Theme.of(context).colorScheme.primary),
-                            const SizedBox(height: 14),
-                            Text(
-                              tr(context, 'saved_empty'),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadSaved,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 28),
-                        itemCount: _saved.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final item = _saved[index];
-                          final id = item['id']?.toString() ?? '';
-                          return Stack(
-                            children: [
+                  Expanded(
+                    child: items.isEmpty
+                        ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(_tab == 0 ? Icons.bookmark_border_rounded : Icons.shopping_bag_outlined, size: 64, color: Theme.of(context).colorScheme.primary), const SizedBox(height: 14), Text(_tab == 0 ? (isPs ? 'تر اوسه کوم اعلان نه دی خوندي شوی.' : 'هنوز آگهی‌ای ذخیره نکرده‌اید.') : (isPs ? 'تر اوسه کوم محصول نه دی خوندي شوی.' : 'هنوز محصولی ذخیره نکرده‌اید.'), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))])))
+                        : RefreshIndicator(onRefresh: _loadSaved, child: ListView.separated(padding: const EdgeInsets.fromLTRB(14, 10, 14, 28), itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
+                            final item = items[index];
+                            final id = item['id']?.toString() ?? '';
+                            return Stack(children: [
                               _DivarStyleListing(item: item),
-                              Positioned(
-                                left: 0,
-                                top: 8,
-                                child: IconButton(
-                                  tooltip: isPs ? 'لرې کول' : 'حذف از علاقه‌مندی‌ها',
-                                  onPressed: id.isEmpty ? null : () => _remove(id),
-                                  icon: const Icon(Icons.favorite_rounded, color: Colors.red),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
+                              Positioned(left: 0, top: 8, child: IconButton(tooltip: isPs ? 'لرې کول' : 'حذف از علاقه‌مندی‌ها', onPressed: id.isEmpty ? null : () => _remove(id), icon: const Icon(Icons.bookmark_rounded, color: Color(0xFF007185)))),
+                            ]);
+                          })),
+                  ),
+                ]),
     );
   }
 }
-
 
 class WebDeepLinkEntry extends StatefulWidget {
   const WebDeepLinkEntry({super.key});
@@ -4154,11 +4134,28 @@ class _SaveButton extends StatefulWidget {
 }
 class _SaveButtonState extends State<_SaveButton> {
   bool saved = false;
+  bool busy = false;
   @override void initState() { super.initState(); _read(); }
-  Future<void> _read() async { final p = await SharedPreferences.getInstance(); final id = widget.item['id']?.toString(); if (mounted) setState(() => saved = id != null && (p.getStringList('saved_ad_ids') ?? []).contains(id)); }
-  Future<void> _toggle() async { final id = widget.item['id']?.toString(); if (id == null) return; final p = await SharedPreferences.getInstance(); final ids = p.getStringList('saved_ad_ids') ?? []; if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; } await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {}); }
-  @override Widget build(BuildContext context) => IconButton(onPressed: _toggle, visualDensity: VisualDensity.compact, icon: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: saved ? Colors.red : Colors.black45, size: 21));
+  Future<void> _read() async {
+    final id = widget.item['id']?.toString();
+    if (id == null || id.isEmpty || !AuthService.isLoggedIn) return;
+    try { final value = await ApiService.getFavoriteStatus(id); if (mounted) setState(() => saved = value); } catch (_) {}
+  }
+  Future<void> _toggle() async {
+    if (busy) return;
+    if (!await requireAccount(context)) return;
+    final id = widget.item['id']?.toString(); if (id == null || id.isEmpty) return;
+    setState(() => busy = true);
+    try {
+      final value = await ApiService.toggleFavorite(id);
+      if (mounted) setState(() { saved = value; busy = false; });
+    } catch (e) {
+      if (mounted) { setState(() => busy = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
+    }
+  }
+  @override Widget build(BuildContext context) => IconButton(onPressed: busy ? null : _toggle, visualDensity: VisualDensity.compact, tooltip: saved ? 'حذف از علاقه‌مندی‌ها' : 'ذخیره', icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: saved ? const Color(0xFF007185) : Colors.black45, size: 21));
 }
+
 
 
 class _ProfessionalProductReviews extends StatefulWidget {
@@ -4676,23 +4673,12 @@ class _ProductCard extends StatelessWidget {
 }
 
 
-class _SaveAdButton extends StatefulWidget {
+class _SaveAdButton extends StatelessWidget {
   final dynamic item;
   const _SaveAdButton({required this.item});
-  @override State<_SaveAdButton> createState() => _SaveAdButtonState();
+  @override Widget build(BuildContext context) => _SaveButton(item: item);
 }
-class _SaveAdButtonState extends State<_SaveAdButton> {
-  bool saved = false;
-  @override void initState() { super.initState(); _read(); }
-  Future<void> _read() async { final p = await SharedPreferences.getInstance(); final id = widget.item['id']?.toString(); if (mounted) setState(() => saved = id != null && (p.getStringList('saved_ad_ids') ?? []).contains(id)); }
-  Future<void> _toggle() async {
-    final id = widget.item['id']?.toString(); if (id == null) return;
-    final p = await SharedPreferences.getInstance(); final ids = p.getStringList('saved_ad_ids') ?? [];
-    if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; }
-    await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {});
-  }
-  @override Widget build(BuildContext context) => Material(child: InkWell(onTap: _toggle, borderRadius: BorderRadius.circular(20), child: Container(width: 31, height: 31, decoration: BoxDecoration(color: Colors.white.withOpacity(.92), shape: BoxShape.circle), child: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 18, color: saved ? Colors.red : null))));
-}
+
 
 class NumberFormatHelper {
   static String format(dynamic value) {
@@ -4766,6 +4752,60 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
       ),
     );
   }
+}
+
+class _DescriptionAudioPlayer extends StatefulWidget {
+  final String url;
+  const _DescriptionAudioPlayer({required this.url});
+  @override State<_DescriptionAudioPlayer> createState() => _DescriptionAudioPlayerState();
+}
+
+class _DescriptionAudioPlayerState extends State<_DescriptionAudioPlayer> {
+  final AudioPlayer _player = AudioPlayer();
+  bool playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() => playing = state == PlayerState.playing);
+    });
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => playing = false);
+    });
+  }
+
+  Future<void> _toggle() async {
+    try {
+      if (playing) {
+        await _player.pause();
+      } else {
+        await _player.play(UrlSource(widget.url));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('پخش توضیحات صوتی ناموفق بود.')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 12),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFD9E2F2))),
+    child: Row(children: [
+      IconButton(onPressed: _toggle, icon: Icon(playing ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded, size: 36, color: const Color(0xFF4F659B))),
+      const SizedBox(width: 4),
+      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('توضیحات صوتی فروشنده', style: TextStyle(fontWeight: FontWeight.w900)), SizedBox(height: 2), Text('برای شنیدن توضیحات آگهی پخش کنید.', style: TextStyle(fontSize: 11, color: Colors.black54))])),
+    ]),
+  );
+
 }
 
 class ProductDetailScreen extends StatelessWidget {
@@ -4946,7 +4986,7 @@ class ProductDetailScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   _SellerCard(product: product),
                   const SizedBox(height: 10),
-                  _ListingLikeBar(listingId: product['id']?.toString() ?? ''),
+                  Align(alignment: Alignment.centerRight, child: _SaveButton(item: product)),
                   _ProfessionalProductReviews(product: product is Map ? Map<String,dynamic>.from(product) : <String,dynamic>{}),
                   const Divider(height: 32),
                   Text(
@@ -4954,7 +4994,14 @@ class ProductDetailScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  LocalizedText(product['description']?.toString() ?? 'بدون توضیحات'),
+                  if ((product['description']?.toString().trim().isNotEmpty ?? false))
+                    LocalizedText(product['description']?.toString() ?? ''),
+                  if ((product['description']?.toString().trim().isEmpty ?? true) && (product['description_audio_url']?.toString().trim().isNotEmpty ?? false))
+                    const Padding(padding: EdgeInsets.only(top: 2), child: Text('این آگهی توضیحات متنی ندارد؛ توضیحات صوتی را پخش کنید.', style: TextStyle(color: Colors.black54))),
+                  if (product['description_audio_url']?.toString().trim().isNotEmpty ?? false)
+                    _DescriptionAudioPlayer(url: product['description_audio_url'].toString().trim()),
+                  if ((product['description']?.toString().trim().isEmpty ?? true) && (product['description_audio_url']?.toString().trim().isEmpty ?? true))
+                    const Text('بدون توضیحات'),
                   const Divider(height: 32),
                   ListTile(
                     leading: const Icon(Icons.location_on),
@@ -5098,33 +5145,6 @@ class _SellerCard extends StatelessWidget {
     );
   }
 }
-
-class _ListingLikeBar extends StatefulWidget {
-  final String listingId;
-  const _ListingLikeBar({required this.listingId});
-  @override State<_ListingLikeBar> createState() => _ListingLikeBarState();
-}
-class _ListingLikeBarState extends State<_ListingLikeBar> {
-  bool liked = false;
-  int count = 0;
-  bool loading = false;
-  @override
-  void initState() { super.initState(); }
-  Future<void> _toggle() async {
-    if (widget.listingId.isEmpty || loading) return;
-    if (!AuthService.isLoggedIn) { await requireAccount(context); return; }
-    setState(() { loading = true; });
-    try {
-      final result = await ApiService.toggleListingLike(widget.listingId, !liked);
-      if (mounted) setState(() { liked = result['liked'] == true; count = int.tryParse('${result['likes_count'] ?? count}') ?? count; loading = false; });
-    } catch (e) {
-      if (mounted) { setState(() => loading = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e)))); }
-    }
-  }
-  @override Widget build(BuildContext context) => Card(child: ListTile(onTap: _toggle, leading: Icon(liked ? Icons.thumb_up : Icons.thumb_up_outlined), title: Text(liked ? 'پسندیده شد' : 'پسندیدن آگهی'), trailing: Text('$count پسند', style: const TextStyle(fontWeight: FontWeight.w800))));
-}
-
-
 
 String _professionalCategoryId(dynamic item) {
   final parts = <String>[];
@@ -6263,6 +6283,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                             ),
                           ),
                         ),
+                        Positioned(top: 7, left: 7, child: _SaveButton(item: m)),
                       ],
                     ),
                   ),
@@ -8284,7 +8305,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Card(child: Column(children: [
             menuTile(Icons.inventory_2_outlined, 'آگهی‌های من', '$totalAds آگهی ثبت شده', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProductsScreen()))),
             const Divider(height: 1),
-            menuTile(Icons.favorite_border_rounded, 'علاقه‌مندی‌ها', 'آگهی‌های ذخیره‌شده شما', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAdsScreen())), color: Colors.redAccent),
+            menuTile(Icons.favorite_border_rounded, 'علاقه‌مندی‌ها', 'آگهی‌ها و محصولات ذخیره‌شده شما', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedAdsScreen())), color: Colors.redAccent),
             const Divider(height: 1),
             menuTile(Icons.storefront_outlined, 'فروشگاه‌های ذخیره‌شده', 'فروشگاه‌های حرفه‌ای مورد علاقه شما', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedStoresScreen())), color: const Color(0xFF007185)),
             if (phone.isNotEmpty) ...[const Divider(height: 1), menuTile(Icons.phone_outlined, 'شماره تلفن', phone, () {}, color: const Color(0xFF067D62))],
@@ -8391,7 +8412,7 @@ class _SocialStatDialogState extends State<_SocialStatDialog> {
                           return ListTile(
                             leading: CircleAvatar(backgroundImage: avatar.isNotEmpty ? NetworkImage(_originalImageUrl(avatar)) : null, child: avatar.isEmpty ? const Icon(Icons.person) : null),
                             title: Text(_name(m), style: const TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'likes' && listingTitle.isNotEmpty ? listingTitle : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
+                            subtitle: Text(widget.type == 'comments' && comment.isNotEmpty ? comment : widget.type == 'ratings' && rating != null ? 'امتیاز: $rating از ۵' : (m['city']?.toString() ?? '')),
                             trailing: widget.type == 'followers' || widget.type == 'following' ? const Icon(Icons.person_outline) : (widget.type == 'ratings' ? const Icon(Icons.star, color: Colors.amber) : null),
                           );
                         },
@@ -8807,6 +8828,13 @@ class _AddProductSheetState extends State<AddProductSheet> {
   List<String> imageNames = [];
   List<String> imageUrls = [];
   bool publishing = false;
+  AudioRecorder? _voiceRecorder;
+  StreamSubscription<Uint8List>? _voiceSubscription;
+  final List<int> _voicePcm = [];
+  Uint8List? voiceBytes;
+  bool recordingVoice = false;
+  int voiceSeconds = 0;
+  Timer? _voiceTimer;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -8894,6 +8922,129 @@ class _AddProductSheetState extends State<AddProductSheet> {
     }
   }
 
+  Future<void> _startVoiceRecording() async {
+    if (recordingVoice) return;
+    try {
+      final recorder = AudioRecorder();
+      if (!await recorder.hasPermission()) {
+        _msg('برای ضبط توضیحات، اجازه دسترسی به میکروفون را بدهید.');
+        await recorder.dispose();
+        return;
+      }
+      _voicePcm.clear();
+      final stream = await recorder.startStream(const RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+      ));
+      _voiceRecorder = recorder;
+      _voiceSubscription = stream.listen((chunk) => _voicePcm.addAll(chunk));
+      _voiceTimer?.cancel();
+      voiceSeconds = 0;
+      _voiceTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+        if (!mounted || !recordingVoice) return;
+        setState(() => voiceSeconds++);
+        if (voiceSeconds >= 60) await _stopVoiceRecording();
+      });
+      if (mounted) setState(() => recordingVoice = true);
+    } catch (e) {
+      _msg('شروع ضبط صدا ناموفق بود: ${e.toString().replaceFirst('Exception: ', '')}');
+    }
+  }
+
+  Uint8List _pcmToWav(List<int> pcm, {int sampleRate = 16000, int channels = 1}) {
+    final dataLength = pcm.length;
+    final bytes = ByteData(44 + dataLength);
+    void ascii(int offset, String value) {
+      for (var i = 0; i < value.length; i++) bytes.setUint8(offset + i, value.codeUnitAt(i));
+    }
+    ascii(0, 'RIFF');
+    bytes.setUint32(4, 36 + dataLength, Endian.little);
+    ascii(8, 'WAVE');
+    ascii(12, 'fmt ');
+    bytes.setUint32(16, 16, Endian.little);
+    bytes.setUint16(20, 1, Endian.little);
+    bytes.setUint16(22, channels, Endian.little);
+    bytes.setUint32(24, sampleRate, Endian.little);
+    bytes.setUint32(28, sampleRate * channels * 2, Endian.little);
+    bytes.setUint16(32, channels * 2, Endian.little);
+    bytes.setUint16(34, 16, Endian.little);
+    ascii(36, 'data');
+    bytes.setUint32(40, dataLength, Endian.little);
+    final out = bytes.buffer.asUint8List();
+    out.setRange(44, 44 + dataLength, pcm);
+    return out;
+  }
+
+  Future<void> _stopVoiceRecording() async {
+    if (!recordingVoice) return;
+    _voiceTimer?.cancel();
+    _voiceTimer = null;
+    try { await _voiceRecorder?.stop(); } catch (_) {}
+    await _voiceSubscription?.cancel();
+    _voiceSubscription = null;
+    final pcm = List<int>.from(_voicePcm);
+    _voiceRecorder?.dispose();
+    _voiceRecorder = null;
+    if (pcm.isEmpty) {
+      if (mounted) setState(() => recordingVoice = false);
+      _msg('صدایی ضبط نشد.');
+      return;
+    }
+    final wav = _pcmToWav(pcm);
+    if (mounted) setState(() { voiceBytes = wav; recordingVoice = false; voiceSeconds = 0; });
+  }
+
+  void _clearVoiceRecording() {
+    _voiceTimer?.cancel();
+    _voiceTimer = null;
+    _voicePcm.clear();
+    voiceBytes = null;
+    if (mounted) setState(() { recordingVoice = false; voiceSeconds = 0; });
+  }
+
+  Future<String?> _uploadVoice() async {
+    if (voiceBytes == null || voiceBytes!.isEmpty) return null;
+    final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/upload-audio'));
+    req.headers['Accept'] = 'application/json';
+    if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+    req.files.add(http.MultipartFile.fromBytes('audio', voiceBytes!, filename: 'description.wav', contentType: MediaType('audio', 'wav')));
+    var response = await req.send().timeout(const Duration(seconds: 90));
+    var body = await response.stream.bytesToString();
+    if (response.statusCode == 401 && await ApiService.refreshSession()) {
+      final retry = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/upload-audio'));
+      retry.headers['Accept'] = 'application/json';
+      retry.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      retry.files.add(http.MultipartFile.fromBytes('audio', voiceBytes!, filename: 'description.wav', contentType: MediaType('audio', 'wav')));
+      response = await retry.send().timeout(const Duration(seconds: 90));
+      body = await response.stream.bytesToString();
+    }
+    dynamic data; try { data = jsonDecode(body); } catch (_) { data = null; }
+    if (response.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'آپلود توضیحات صوتی ناموفق بود.') : 'آپلود توضیحات صوتی ناموفق بود.');
+    return data is Map ? data['url']?.toString() : null;
+  }
+
+  Widget _voiceDescriptionBox() {
+    final hasVoice = voiceBytes != null && voiceBytes!.isNotEmpty;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 11),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFE1E6EA))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.mic_none_rounded, color: Color(0xFF4F659B)), const SizedBox(width: 8), const Expanded(child: Text('توضیحات صوتی (اختیاری)', style: TextStyle(fontWeight: FontWeight.w900))), if (recordingVoice) Text('$voiceSeconds ثانیه', style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.redAccent))]),
+        const SizedBox(height: 6),
+        const Text('می‌توانید توضیحات را با صدا بگویید؛ خریدار بعداً می‌تواند آن را گوش بدهد. متن توضیحات اختیاری است و می‌توانید فقط صدا، فقط متن یا هر دو را ثبت کنید.', style: TextStyle(fontSize: 11.5, height: 1.5, color: Colors.black54)),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: FilledButton.icon(onPressed: recordingVoice ? _stopVoiceRecording : _startVoiceRecording, icon: Icon(recordingVoice ? Icons.stop_circle_outlined : Icons.mic_rounded), label: Text(recordingVoice ? 'پایان ضبط' : (hasVoice ? 'ضبط دوباره' : 'ضبط توضیحات')))),
+          if (hasVoice && !recordingVoice) ...[const SizedBox(width: 8), IconButton(tooltip: 'حذف توضیحات صوتی', onPressed: _clearVoiceRecording, icon: const Icon(Icons.delete_outline_rounded))],
+        ]),
+        if (recordingVoice) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+        if (hasVoice && !recordingVoice) const Padding(padding: EdgeInsets.only(top: 6), child: Text('توضیحات صوتی آماده انتشار است.', style: TextStyle(fontSize: 11, color: Color(0xFF067D62), fontWeight: FontWeight.w800))),
+      ]),
+    );
+  }
+
   Future<bool> _ensureAuthenticated() async {
     if (AuthService.isLoggedIn) {
       // اگر access token فعلی معتبر نیست، refresh token را امتحان می‌کنیم.
@@ -8928,6 +9079,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
     if (subcategory.isEmpty && (subcategories[category]?.isNotEmpty ?? false)) { _msg('زیر‌دسته را انتخاب کنید.'); return; }
     if (province.isEmpty) { _msg('ولایت آگهی را انتخاب کنید.'); return; }
     if (imageBytes.isEmpty) { _msg('حداقل یک عکس برای آگهی انتخاب کنید.'); return; }
+    if (!widget.professional && desc.text.trim().isEmpty && (voiceBytes == null || voiceBytes!.isEmpty)) { _msg('توضیحات را به صورت متن یا صوتی وارد کنید.'); return; }
 
     // انتشار و آپلود عکس‌ها نیاز به حساب کاربری دارد. اگر وارد نشده،
     // ابتدا صفحه ورود را باز می‌کنیم و پس از ورود ادامه می‌دهیم.
@@ -8940,11 +9092,12 @@ class _AddProductSheetState extends State<AddProductSheet> {
     try {
       await _uploadImages();
       if (imageUrls.isEmpty) throw Exception('عکس‌ها آپلود نشدند.');
+      final voiceUrl = voiceBytes != null && voiceBytes!.isNotEmpty ? await _uploadVoice() : null;
       final payload = jsonEncode({
         'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
         'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
-        'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls),
+        'description': desc.text.trim(), 'description_audio_url': voiceUrl ?? '', 'image_url': jsonEncode(imageUrls),
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
         'brand': brand.text.trim(), 'model': model.text.trim(), 'sizes': sizes.text.trim(), 'colors': colors.text.trim(),
@@ -8976,6 +9129,16 @@ class _AddProductSheetState extends State<AddProductSheet> {
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
     } finally { if (mounted) setState(() => publishing = false); }
+  }
+
+  @override
+  void dispose() {
+    _voiceTimer?.cancel();
+    _voiceSubscription?.cancel();
+    _voiceRecorder?.dispose();
+    title.dispose(); price.dispose(); stock.dispose(); desc.dispose(); contactPhone.dispose(); locationText.dispose(); socialLink.dispose();
+    brand.dispose(); model.dispose(); sizes.dispose(); colors.dispose(); material.dispose(); condition.dispose(); productCode.dispose(); specifications.dispose(); discountPercent.dispose();
+    super.dispose();
   }
 
   @override
@@ -9041,18 +9204,21 @@ class _AddProductSheetState extends State<AddProductSheet> {
               const SizedBox(height: 11),
               DropdownButtonFormField<String>(value: province.isEmpty ? null : province, decoration: InputDecoration(labelText: 'ولایت', filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(), onChanged: (val) => setState(() => province = val ?? '')),
               const SizedBox(height: 11),
-              field(desc, 'توضیحات محصول', hint: professional ? 'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...' : 'توضیحات کامل', maxLines: 5),
+              field(desc, professional ? 'توضیحات محصول' : 'توضیحات آگهی (اختیاری)', hint: professional ? 'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...' : 'توضیحات مهم آگهی را بنویسید...', maxLines: 5),
+              _voiceDescriptionBox(),
             ]),
           ),
-          section('۳. قیمت و تخفیف', professional ? 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.' : 'قیمت و واحد پول را مشخص کنید.', Icons.sell_rounded,
+          section('۳. قیمت', professional ? 'قیمت محصول و تخفیف را وارد کنید.' : 'قیمت آگهی را مشخص کنید؛ در صورت نیاز قیمت توافقی را انتخاب کنید.', Icons.sell_rounded,
             Column(children: [
-              Row(children: [Expanded(child: field(price, 'قیمت اصلی', hint: 'مثلاً 120000', keyboard: TextInputType.number)), const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]),
-              if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
+              Row(children: [Expanded(child: field(price, 'قیمت', hint: 'مثلاً 120000', keyboard: TextInputType.number)), if (professional) ...[const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]]),
+              if (professional && salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
               Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: const Text('افغانی (AFN)'), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: const Text('دلار (USD)'), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
-              const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
+              if (professional) ...[const SizedBox(height: 11), field(stock, 'موجودی', hint: 'مثلاً 10', keyboard: TextInputType.number)],
+              if (!professional) ...[const SizedBox(height: 8), SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v))],
             ]),
           ),
-          section('۴. مشخصات هوشمند', professional ? 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.' : 'مشخصات تکمیلی (اختیاری)', Icons.tune_rounded,
+          if (professional) ...[
+            section('۴. مشخصات هوشمند', professional ? 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.' : 'مشخصات تکمیلی (اختیاری)', Icons.tune_rounded,
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               field(brand, 'برند', hint: isElectronics ? 'مثلاً Samsung' : 'مثلاً Nike'),
               field(model, 'مدل', hint: isFootwear ? 'مثلاً Air Max 2026' : 'مثلاً X100'),
@@ -9066,6 +9232,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
               field(specifications, 'مشخصات فنی', hint: professional ? 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.' : 'مشخصات بیشتر', maxLines: 4),
             ]),
           ),
+          ],
           section('۵. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
             Column(children: [
               field(contactPhone, 'شماره تماس', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
@@ -9073,7 +9240,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
               if (category == 'social_pages') field(socialLink, 'لینک صفحه', hint: 'https://...'),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('امکان چت مستقیم'), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
+              if (professional) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
             ]),
           ),
           SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? 'در حال انتشار...' : (professional ? 'انتشار در فروشگاه' : 'ثبت و انتشار آگهی')), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
