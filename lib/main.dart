@@ -662,7 +662,6 @@ String _localizeStaticText(String value, String lang) {
     'نظر شما':'ستاسو نظر',
     'تجربه خود را درباره این محصول بنویسید...':'د دې محصول په اړه خپله تجربه ولیکئ...',
     'پاسخ حرفه\u200cای خود را بنویسید...':'خپل مسلکي ځواب ولیکئ...',
-    'انصراف':'لغوه',
     'ثبت دیدگاه':'نظر ثبت کړئ',
     'دیدگاه شما':'ستاسو نظر',
     'نظر خود را بنویسید...':'خپل نظر ولیکئ...',
@@ -764,7 +763,6 @@ String _localizeStaticText(String value, String lang) {
     'تلیفوني اړیکه پرانیستل شوې نه':'Could not open the phone dialer.',
     'گفتگو ایجاد نشد.':'Could not start the conversation.',
     'فروشنده بازارک':'Bazarek Seller',
-    'کد کالا $code کپی شد.':'Product code $code copied.',
     'دسته‌بندی محصولات فروشگاه':'Store Product Categories',
     'افغانی':'Afghani',
     'هر محصول با عکس، قیمت و کد اختصاصی نمایش داده می‌شود.':'Each product is shown with its photo, price and unique code.',
@@ -783,11 +781,9 @@ String _localizeStaticText(String value, String lang) {
     'همه ابزارهای مهم فروشگاه در یکجا':'All important store tools in one place',
     'آخرین محصولات شما':'Your Latest Products',
     'مشاهده همه':'View All',
-    'فعال تا $storeEnd':'Active until $storeEnd',
     'فروشگاه هنوز فعال نشده است':'Your store is not active yet',
     'مشاهده فروشگاه':'View Store',
     'زمان فروشگاه شما رو به پایان است':'Your store is nearing expiration',
-    'فقط ${storeDaysLeft} روز باقی مانده؛ تمدید کنید یا پلن سالانه بخرید.':'Only ${storeDaysLeft} days left; renew or buy an annual plan.',
     'فروشگاه شما موقتاً غیرفعال و پنهان است':'Your store is temporarily inactive and hidden',
     'فروشگاه و محصولات حذف نشده‌اند؛ برای نمایش دوباره، اشتراک را تمدید کنید.':'Your store and products have not been deleted; renew your subscription to display them again.',
     'فروشگاه هنوز فعال نیست':'Your store is not active yet',
@@ -806,7 +802,6 @@ String _localizeStaticText(String value, String lang) {
     'هنوز محصولی در فروشگاه ندارید':'You have no products in your store yet',
     'اولین محصول خود را اضافه کنید تا مشتری‌ها آن را در فروشگاه ببینند.':'Add your first product so customers can see it in your store.',
     'هنوز فروشگاه حرفه‌ای فعالی پیدا نشد.':'No active professional store was found.',
-    'شروع قیمت از ${NumberFormatHelper.format(minPrice)} افغانی':'Starting from ${NumberFormatHelper.format(minPrice)} AFN',
     'مشاهده فروشگاه →':'View Store →',
     'شماره کارت / حساب':'Card / Account Number',
     'مبلغ را انتقال دهید، شماره رسید یا پیگیری را وارد کنید و منتظر تأیید مدیریت بمانید.':'Transfer the amount, enter the receipt or reference number, and wait for management approval.',
@@ -839,7 +834,6 @@ String _localizeStaticText(String value, String lang) {
     'برای ثبت آگهی، ابتدا حساب خود را بسازید یا وارد حساب شوید.':'Create an account or log in before posting an ad.',
     'این آگهی':'This Ad',
     'حذف دائمی آگهی':'Permanently Delete Ad',
-    'آیا مطمئن هستید «$title» را حذف کنید؟ این آگهی برای همیشه حذف خواهد شد. بعد از تأیید، ۵ ثانیه برای بازگردانی فرصت دارید.':'Are you sure you want to delete “$title”? This ad will be permanently deleted. After confirmation, you have 5 seconds to restore it.',
     'حذف':'Delete',
     'آگهی برای همیشه حذف شد.':'Ad permanently deleted.',
     'آگهی حذف می‌شود؛ ۵ ثانیه برای بازگردانی فرصت دارید.':'The ad is being deleted; you have 5 seconds to restore it.',
@@ -882,7 +876,6 @@ String _localizeStaticText(String value, String lang) {
     '۳۶۵ روز؛ فروشگاه حرفه‌ای برای یک سال.':'365 days; a professional store for one year.',
     '💡 هر سه پلان بعد از تأیید روی تمام آگهی‌های فعال شما اثر می‌گذارد. زمان تأیید مدیریت همان زمان شروع توربو است؛ پس از پایان، توربو خودکار غیرفعال می‌شود.':'💡 All three plans apply to your active ads after approval. The approval time is the Turbo start time; Turbo deactivates automatically when it ends.',
     'همه دسته‌بندی‌ها':'All Categories',
-    'در «${widget.categoryTitle}» هنوز آگهی فعالی پیدا نشد.':'No active ads were found in “${widget.categoryTitle}”.',
     'عکس پروفایل با موفقیت تغییر کرد.':'Profile photo updated successfully.',
     'پروفایل با موفقیت ذخیره شد.':'Profile saved successfully.',
     'آگهی‌های ذخیره‌شده شما':'Your Saved Ads',
@@ -1105,6 +1098,22 @@ String _localizeStaticText(String value, String lang) {
 
   // Dynamic UI strings: these contain runtime values and must not be placed
   // inside const translation maps.
+  final productCode = RegExp(r'^کد کالا\s+(.+?)\s+کپی شد\.$').firstMatch(value);
+  if (productCode != null) return lang == 'en' ? 'Product code ${productCode.group(1)} copied.' : 'د محصول کوډ ${productCode.group(1)} کاپي شو.';
+  final activeUntil = RegExp(r'^فعال تا\s+(.+)$').firstMatch(value);
+  if (activeUntil != null) return lang == 'en' ? 'Active until ${activeUntil.group(1)}' : 'تر ${activeUntil.group(1)} فعال دی';
+  final daysLeft = RegExp(r'^فقط\s+(\d+)\s+روز باقی مانده؛').firstMatch(value);
+  if (daysLeft != null) return lang == 'en' ? 'Only ${daysLeft.group(1)} days left; renew or buy an annual plan.' : 'یوازې ${daysLeft.group(1)} ورځې پاتې دي؛ تمدید وکړئ یا کلنی پلان واخلئ.';
+  final startingPrice = RegExp(r'^شروع قیمت از\s+(.+?)\s+افغانی$').firstMatch(value);
+  if (startingPrice != null) return lang == 'en' ? 'Starting from ${startingPrice.group(1)} AFN' : 'بیه له ${startingPrice.group(1)} افغانۍ څخه پیل کېږي';
+  final deleteConfirm = RegExp(r'^آیا مطمئن هستید «(.+)» را حذف کنید؟').firstMatch(value);
+  if (deleteConfirm != null) return lang == 'en'
+      ? 'Are you sure you want to delete “${deleteConfirm.group(1)}”? This ad will be permanently deleted. After confirmation, you have 5 seconds to restore it.'
+      : 'ایا ډاډه یاست چې «${deleteConfirm.group(1)}» حذف کړئ؟ دا اعلان به د تل لپاره حذف شي. له تایید وروسته ۵ ثانیې د بېرته راوستلو فرصت لرئ.';
+  final categoryEmpty = RegExp(r'^در «(.+)» هنوز آگهی فعالی پیدا نشد\.$').firstMatch(value);
+  if (categoryEmpty != null) return lang == 'en'
+      ? 'No active ads were found in “${categoryEmpty.group(1)}”.'
+      : 'په «${categoryEmpty.group(1)}» کې تر اوسه کوم فعال اعلان ونه موندل شو.';
   if (lang == 'en') {
     final storeAds = RegExp(r'^آگهی‌های\s+(.+)$').firstMatch(value);
     if (storeAds != null) return '${storeAds.group(1)}’s Ads';
