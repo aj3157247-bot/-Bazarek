@@ -507,7 +507,6 @@ String _localizeStaticText(String value, String lang) {
     'دیدگاه فروشگاه':'Store Review',
     'پروفایل کاربر':'User Profile',
     '🏪 فروشگاه حرفه‌ای':'🏪 Professional Store',
-    'محصولات فروشگاه':'Store Products',
     'هنوز آگهی فعالی وجود ندارد.':'There are no active ads yet.',
     'هنوز دیدگاهی ثبت نشده است.':'No reviews have been posted yet.',
     'دنبال کردن':'Follow',
