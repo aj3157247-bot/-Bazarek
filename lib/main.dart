@@ -50,6 +50,10 @@ class Text extends StatelessWidget {
     if ((lang != 'en' && lang != 'ps') || !_needsTranslation(data)) {
       return m.Text(data, style: style, strutStyle: strutStyle, textAlign: textAlign, textDirection: textDirection, locale: locale, softWrap: softWrap, overflow: overflow, textScaleFactor: textScaleFactor, textScaler: textScaler, maxLines: maxLines, semanticsLabel: semanticsLabel, textWidthBasis: textWidthBasis, textHeightBehavior: textHeightBehavior, selectionColor: selectionColor);
     }
+    final local = _localizeStaticText(data, lang);
+    if (local != data) {
+      return m.Text(local, style: style, strutStyle: strutStyle, textAlign: textAlign, textDirection: textDirection, locale: locale, softWrap: softWrap, overflow: overflow, textScaleFactor: textScaleFactor, textScaler: textScaler, maxLines: maxLines, semanticsLabel: semanticsLabel, textWidthBasis: textWidthBasis, textHeightBehavior: textHeightBehavior, selectionColor: selectionColor);
+    }
     return FutureBuilder<String>(
       future: ApiService.translateText(data, lang),
       builder: (_, snap) => m.Text(snap.data ?? data, style: style, strutStyle: strutStyle, textAlign: textAlign, textDirection: textDirection, locale: locale, softWrap: softWrap, overflow: overflow, textScaleFactor: textScaleFactor, textScaler: textScaler, maxLines: maxLines, semanticsLabel: semanticsLabel, textWidthBasis: textWidthBasis, textHeightBehavior: textHeightBehavior, selectionColor: selectionColor),
@@ -393,34 +397,6 @@ String localizedSubcategoryTitle(BuildContext context, String categoryId, String
   return ps[id] ?? fallback;
 }
 
-String pairText(BuildContext context, String fa, String ps) {
-  final lang = Localizations.localeOf(context).languageCode;
-  if (lang == 'ps') return ps;
-  if (lang == 'en') {
-    const en = <String, String>{
-      'لرې کول':'Remove from Saved', 'حذف از علاقه‌مندی‌ها':'Remove from Saved',
-      'د اعلانونو پایلې':'Search Results','نتایج جستجو':'Search Results','تحویل به':'Deliver to','موقعیت':'Location',
-      'حساب من':'My Account','نوم لیکنه / ننوتل':'Sign Up / Log In','ثبت‌نام / ورود':'Sign Up / Log In',
-      'خوندي شوي':'Saved','علاقه‌مندی‌ها':'Saved','اعلان درج کول':'Post Ad','ثبت آگهی':'Post Ad','خبرې':'Chat','گفتگو':'Chat',
-      'ژبه بدلول':'Change Language','انتخاب زبان':'Change Language','ټولې ډلې':'All Categories','همه دسته‌ها':'All Categories',
-      'ټول':'All','همه':'All','د افغانستان لوی بازار':'Afghanistan Online Marketplace','بازار افغانستان، همه‌چیز یک‌جا':'Afghanistan Marketplace — Everything in One Place',
-      'پېر او پلور په اسانۍ؛ اعلانونه، پلورنځي او خدمتونه.':'Buy and sell easily — ads, stores and services.','خرید و فروش آسان؛ از خانه و موتر تا موبایل و خدمات.':'Buy and sell easily — homes, vehicles, phones and services.',
-      'ټول اعلانونه':'All Ads','دیدن همه آگهی‌ها':'View All Ads','کټګورۍ':'Categories','دسته‌بندی‌ها':'Categories',
-      'د بازارک مسلکي پلورنځي':'Professional Stores','فروشگاه‌های حرفه‌ای':'Professional Stores',
-      'یوازې فعال او تایید شوي مسلکي پلورنځي':'Browse active and verified professional stores','فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'Browse active and verified professional stores',
-      'اوس مهال کوم فعال مسلکي پلورنځی نشته.':'No active professional stores are available right now.','فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.':'No active professional stores are available right now.',
-      'محصول':'Product','محصول فروشگاه':'Store Product','دا پلورنځي محصولات، معلومات او خدمتونه وګورئ.':'View this store’s products, information and services.','محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'View this store’s products and information.',
-      'ننوتل به پلورنځي':'Enter Store','ورود به فروشگاه و مشاهده محصولات':'Enter Store & View Products','مخکینی پلورنځی':'Previous Store','فروشگاه قبلی':'Previous Store','راتلونکی پلورنځی':'Next Store','فروشگاه بعدی':'Next Store',
-      'د چپ او راست په کش کولو پلورنځي بدل کړئ • هر ۴ ثانیې اتومات بدلېږي':'Swipe left or right to change stores • changes automatically every 4 seconds','با کشیدن چپ و راست فروشگاه را عوض کنید • هر ۴ ثانیه خودکار تغییر می‌کند':'Swipe left or right to change stores • changes automatically every 4 seconds',
-      'خپل مسلکي پلورنځی جوړ کړئ':'Create Your Professional Store','فروشگاه حرفه‌ای خودت را بساز':'Create Your Professional Store',
-      'محصولات، تخفیف او د مشتریانو نظرونه':'Products, discounts and customer reviews','ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان':'Your own storefront, products, discounts and customer reviews',
-      'فعالول':'Activate','خرید / فعال‌سازی':'Buy / Activate','اعلان':'Ad','آگهی':'Ad','حساب':'Account',,
-    };
-    return en[fa] ?? en[ps] ?? fa;
-  }
-  return fa;
-}
-
 String psText(BuildContext context, String fa, String ps) {
   final lang = Localizations.localeOf(context).languageCode;
   if (lang == 'ps') return ps;
@@ -430,17 +406,6 @@ String psText(BuildContext context, String fa, String ps) {
       'باز کردن تماس تلفنی ناموفق بود.':'Could not open the phone dialer.','امکان تماس با':'Unable to call',
       'زبان':'Language','ژبه':'Language','فعال':'Active','غیرفعال':'Inactive','آگهی فعال است':'Ad is active','آگهی غیرفعال است':'Ad is inactive',
       'قیمت توافقی':'Negotiable price','امکان چت مستقیم':'Direct chat','نمایش شماره تماس':'Show phone number',
-      'انتخاب ولایت':'Select Province','خرید و فروش در سراسر افغانستان':'Buy and sell across Afghanistan','آگهی‌ات را ویژه کن و بیشتر دیده شو.':'Boost your ad and get more visibility.','ویژه‌سازی':'Boost',
-      'لینک آگهی کپی شد؛ می‌توانید آن را ارسال کنید.':'Ad link copied; you can share it.',
-      'برای ارسال و دریافت پیام، ابتدا حساب خود را بسازید یا وارد حساب شوید.':'Create an account or log in to send and receive messages.','ورود / ثبت‌نام':'Log In / Sign Up',
-      'هنوز گفتگویی ندارید. از داخل یک آگهی روی «چت با فروشنده» بزنید.':'No conversations yet. Open an ad and tap “Chat with Seller”.','گفتگو را شروع کنید.':'Start a conversation.','پیام خود را بنویسید...':'Write your message...',
-      'برای ثبت آگهی، ابتدا حساب خود را بسازید یا وارد حساب شوید.':'Create an account or log in to post an ad.','این آگهی':'This Ad','حذف دائمی آگهی':'Permanently Delete Ad',
-      'انصراف':'Cancel','حذف':'Delete','آگهی برای همیشه حذف شد.':'Ad permanently deleted.','آگهی حذف می‌شود؛ ۵ ثانیه برای بازگردانی فرصت دارید.':'Ad is being deleted; you have 5 seconds to restore it.','بازگردانی':'Restore','آگهی بازگردانی شد.':'Ad restored.',
-      'برای دیدن آگهی‌های خود، ابتدا وارد حساب شوید.':'Log in to view your ads.','شما هنوز هیچ آگهی ثبت نکرده‌اید.':'You have not posted any ads yet.',
-      'این آگهی توسط مدیریت بازارک به دلیل بررسی قوانین غیرفعال شده است.':'This ad was disabled by Bazarek administration for policy review.',
-      'این آگهی توسط مدیریت محدود شده و تا رفع محدودیت قابل فعال‌سازی نیست.':'This ad has been restricted by administration and cannot be activated until the restriction is removed.','هر زمان خواستید می‌توانید نمایش آگهی را متوقف یا دوباره فعال کنید.':'You can pause or reactivate your ad at any time.','آگهی فعال شد.':'Ad activated.','آگهی غیرفعال شد.':'Ad deactivated.',
-      '🚀 بوست آگهی':'🚀 Boost Ad','🚀 تقویت بوست':'🚀 Boost Upgrade','همه دسته‌بندی‌ها':'All Categories','🐞 گزارش اشکال':'🐞 Bug Report','💡 پیشنهاد':'💡 Suggestion','📢 گزارش آگهی یا کاربر':'📢 Report Ad or User','💬 پیام به پشتیبانی':'💬 Message Support',
-      'در حال بررسی':'Under Review','پاسخ داده شد':'Replied','حل شد':'Resolved','جدید':'New','ارتباط با تیم بازارک':'Contact Bazarek Team','موضوع':'Subject','💡 پیشنهاد برای بهتر شدن بازارک':'💡 Suggestion to Improve Bazarek','عنوان':'Title','توضیح':'Description','مشکل یا پیشنهاد خود را بنویسید...':'Describe your issue or suggestion...','در حال ارسال...':'Sending...','ارسال':'Send','درخواست شما ثبت شد.':'Your request has been submitted.','وضعیت':'Status','پاسخ پشتیبانی':'Support Reply','بستن':'Close','پشتیبانی و ارتباط با ما':'Support & Contact Us','درخواست جدید':'New Request','پشتیبانی بازارک':'Bazarek Support','اگر مشکل یا پیشنهادی دارید، از همین‌جا برای تیم بازارک بفرستید.':'If you have a problem or suggestion, send it to the Bazarek team here.','هنوز درخواستی ندارید.':'You have no requests yet.','پاسخ دارد':'Has Reply','اعلان‌ها':'Notifications',
     };
     return en[fa] ?? fa;
   }
@@ -449,19 +414,7 @@ String psText(BuildContext context, String fa, String ps) {
 
 String uiText(BuildContext context, String fa, [String? ps]) {
   final lang = Localizations.localeOf(context).languageCode;
-  if (lang == 'ps') {
-    const psMap = <String,String>{
-      'ثبت محصول حرفه‌ای':'مسلکي محصول ثبت کړئ','محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.':'ستاسو محصول به د پلورنځي په ویترین کې د اندازې، رنګ، تخفیف او د همدې کټګورۍ ځانګړو معلوماتو سره ښکاره شي.',
-      '۱. تصاویر محصول':'۱. د محصول انځورونه','عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.':'اصلي انځور روښانه وټاکئ؛ پېرودونکی لومړی انځور ویني.','حداقل یک عکس واضح انتخاب کنید.':'لږ تر لږه یو روښانه انځور وټاکئ.','عکس‌ها':'انځورونه',
-      '۲. معرفی محصول':'۲. د محصول پېژندنه','دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.':'کټګوري وټاکئ څو د محصول اړوند ځانګړي انتخابونه ښکاره شي.','اطلاعات اصلی آگهی را وارد کنید.':'د اعلان اصلي معلومات ولیکئ.','نام محصول':'د محصول نوم','عنوان آگهی':'د اعلان سرلیک','دسته‌بندی':'کټګوري','زیر‌دسته':'فرعي کټګوري','ولایت':'ولایت','توضیحات محصول':'د محصول توضیحات','توضیحات کامل':'بشپړ توضیحات',
-      '۳. قیمت و تخفیف':'۳. بیه او تخفیف','قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.':'اصلي بیه او د تخفیف سلنه ولیکئ؛ وروستۍ بیه به په اوتومات ډول محاسبه شي.','قیمت و واحد پول را مشخص کنید.':'بیه او اسعار مشخص کړئ.','قیمت اصلی':'اصلي بیه','تخفیف (%)':'تخفیف (%)','قیمت بعد از تخفیف':'له تخفیف وروسته بیه','افغانی (AFN)':'افغانۍ (AFN)','دلار (USD)':'ډالر (USD)','موجودی':'ذخیره','تعداد':'شمېر',
-      '۴. مشخصات هوشمند':'۴. هوښیار مشخصات','فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.':'یوازې هغه مشخصات ډک کړئ چې ستاسو د محصول لپاره اړین وي.','مشخصات تکمیلی (اختیاری)':'اضافي مشخصات (اختیاري)','برند':'برانډ','مدل':'موډل','سایزهای کفش':'د بوټانو سایزونه','سایزهای لباس':'د جامو سایزونه','سایزهای انتخاب‌شده':'ټاکل شوي سایزونه','اندازه / ظرفیت / سایز':'اندازه / ظرفیت / سایز','رنگ‌ها':'رنګونه','رنگ‌های انتخاب‌شده':'ټاکل شوي رنګونه','جنس / جنس بدنه':'جنس / د بدنې جنس','وضعیت':'حالت','کد محصول (SKU)':'د محصول کوډ (SKU)','مشخصات فنی':'تخنیکي مشخصات','مشخصات بیشتر':'نور مشخصات',
-      '۵. ارتباط و انتشار':'۵. اړیکه او خپرول','۴. ارتباط و انتشار':'۴. اړیکه او خپرول','اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'د اړیکې معلومات او له پېرودونکي سره د اړیکې طریقه تنظیم کړئ.','شماره تماس':'د اړیکې شمېره','آدرس / محل':'پته / ځای','لینک صفحه':'د پاڼې لینک','امکان چت مستقیم':'مستقیم چټ فعالول','نمایش شماره تماس':'د اړیکې شمېره ښکاره کول','قیمت توافقی':'د بیې خبرې کېدای شي','در حال انتشار...':'د خپرولو په حال کې...','انتشار در فروشگاه':'په پلورنځي کې خپرول','ثبت و انتشار آگهی':'اعلان ثبت او خپور کړئ',
-      'پیام صوتی':'غږیز پیغام','اختیاری؛ یک پیام صوتی کوتاه برای معرفی محصول یا آگهی اضافه کنید.':'اختیاري؛ د محصول یا اعلان لپاره لنډ غږیز پیغام اضافه کړئ.','ضبط پیام صوتی':'غږیز پیغام ثبتول','توقف ضبط':'ثبت بندول','انتخاب فایل صوتی':'غږیز فایل غوره کول','حذف صدا':'غږ لرې کول','در حال ضبط...':'ثبت روان دی...','ضبط پیام صوتی ناموفق بود.':'غږیز ثبت ناکام شو.','دسترسی به میکروفون داده نشد.':'د مایکروفون اجازه ورکړل نه شوه.',
-      'افغانی':'افغانۍ','دلار':'ډالر',
-    };
-    return psMap[fa] ?? ps ?? fa;
-  }
+  if (lang == 'ps') return ps ?? fa;
   if (lang == 'en') {
     const en = <String,String>{
       'نظر شما':'Your Review','تجربه خود را درباره این محصول بنویسید...':'Share your experience with this product...',
@@ -479,18 +432,145 @@ String uiText(BuildContext context, String fa, [String? ps]) {
       'حداقل یک عکس برای آگهی انتخاب کنید.':'Choose at least one photo for the ad.','برای انتشار آگهی ابتدا وارد حساب خود شوید.':'Log in before publishing an ad.',
       'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.':'Choose a clear main photo; customers see the photo first.',
       'اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.','اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.',
-      'ثبت محصول حرفه‌ای':'Post Professional Product','محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.':'Your product will appear in your store with size, color, discount and category-specific details.',
-      '۱. تصاویر محصول':'1. Product Images','عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.':'Choose a clear main photo; customers see the photo before the text.','حداقل یک عکس واضح انتخاب کنید.':'Choose at least one clear photo.','عکس‌ها':'Photos',
-      '۲. معرفی محصول':'2. Product Information','دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.':'Choose a category to show options specific to the product.','اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.','نام محصول':'Product Name','عنوان آگهی':'Ad Title','دسته‌بندی':'Category','زیر‌دسته':'Subcategory','ولایت':'Province','توضیحات محصول':'Product Description','توضیحات کامل':'Full Description',
-      '۳. قیمت و تخفیف':'3. Price & Discount','قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.':'Enter the original price and discount; the final price is calculated automatically.','قیمت و واحد پول را مشخص کنید.':'Set the price and currency.','قیمت اصلی':'Original Price','تخفیف (%)':'Discount (%)','قیمت بعد از تخفیف':'Price After Discount','افغانی (AFN)':'Afghani (AFN)','دلار (USD)':'US Dollar (USD)','موجودی':'Stock','تعداد':'Quantity',
-      '۴. مشخصات هوشمند':'4. Smart Specifications','فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.':'Fill only the specifications relevant to your product category.','مشخصات تکمیلی (اختیاری)':'Additional Specifications','برند':'Brand','مدل':'Model','سایزهای کفش':'Shoe Sizes','سایزهای لباس':'Clothing Sizes','سایزهای انتخاب‌شده':'Selected Sizes','اندازه / ظرفیت / سایز':'Size / Capacity','رنگ‌ها':'Colors','رنگ‌های انتخاب‌شده':'Selected Colors','جنس / جنس بدنه':'Material','وضعیت':'Condition','کد محصول (SKU)':'Product Code (SKU)','مشخصات فنی':'Technical Specifications','مشخصات بیشتر':'Additional Specifications',
-      '۵. ارتباط و انتشار':'5. Contact & Publish','۴. ارتباط و انتشار':'4. Contact & Publish','اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.','شماره تماس':'Phone Number','آدرس / محل':'Address / Location','لینک صفحه':'Page Link','امکان چت مستقیم':'Allow Direct Chat','نمایش شماره تماس':'Show Phone Number','قیمت توافقی':'Negotiable Price','در حال انتشار...':'Publishing...','انتشار در فروشگاه':'Publish to Store','ثبت و انتشار آگهی':'Publish Ad',
-      'پیام صوتی':'Voice Message','اختیاری؛ یک پیام صوتی کوتاه برای معرفی محصول یا آگهی اضافه کنید.':'Optional; add a short voice message to introduce the product or ad.','ضبط پیام صوتی':'Record Voice Message','توقف ضبط':'Stop Recording','انتخاب فایل صوتی':'Choose Audio File','حذف صدا':'Remove Audio','در حال ضبط...':'Recording...','ضبط پیام صوتی ناموفق بود.':'Voice recording failed.','دسترسی به میکروفون داده نشد.':'Microphone permission was not granted.',
-      'افغانی':'Afghani','دلار':'US Dollar',
     };
     return en[fa] ?? fa;
   }
   return fa;
+}
+
+String _localizeStaticText(String value, String lang) {
+  if (lang != 'en' && lang != 'ps') return value;
+  // First use the main app dictionaries so fixed UI text never depends on
+  // the translation API being online.
+  final maps = lang == 'en' ? _enMap : _psMap;
+  for (final entry in _faMap.entries) {
+    if (entry.value == value) return maps[entry.key] ?? value;
+  }
+
+  const enExtra = <String, String>{
+    'فروشگاه‌های حرفه‌ای':'Professional Stores',
+    'فروشگاه حرفه‌ای':'Professional Store',
+    'فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.':'Store, products, ratings and customer reviews in one place.',
+    'ورود به فروشگاه':'Visit Store',
+    'ورود به فروشگاه و مشاهده محصولات':'Visit Store & View Products',
+    'فروشگاه خودت را بساز':'Create Your Professional Store',
+    'خرید / فعال‌سازی':'Buy / Activate',
+    'فعالول':'Activate',
+    'محصولات فروشگاه':'Store Products',
+    'ثبت محصول حرفه‌ای':'Add Professional Product',
+    'محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.':'Your product will appear in the store showcase with size, color, discount and category-specific details.',
+    '۱. تصاویر محصول':'1. Product Images',
+    '۲. معرفی محصول':'2. Product Information',
+    '۳. قیمت و تخفیف':'3. Price & Discount',
+    '۴. ارتباط و انتشار':'4. Contact & Publish',
+    '۵. ارتباط و انتشار':'5. Contact & Publish',
+    '۴. مشخصات هوشمند':'4. Smart Specifications',
+    'اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.',
+    'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.':'Choose a category to show options specific to the product.',
+    'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.':'Enter the original price and discount percentage; the final price is calculated automatically.',
+    'قیمت و واحد پول را مشخص کنید.':'Set the price and currency.',
+    'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.':'Fill in only the specifications that apply to your product category.',
+    'مشخصات تکمیلی (اختیاری)':'Additional specifications (optional)',
+    'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.',
+    'امکان چت مستقیم':'Direct Chat',
+    'نمایش شماره تماس':'Show Phone Number',
+    'قیمت توافقی':'Negotiable Price',
+    'نظر و امتیاز محصول':'Product Reviews & Ratings',
+    'این محصول را چگونه ارزیابی می‌کنید؟':'How would you rate this product?',
+    'نظرات و امتیازهای محصول':'Product Reviews & Ratings',
+    'نظر بده و امتیاز بده':'Write a Review & Rate',
+    'هنوز نظری برای این محصول ثبت نشده است.':'No reviews have been posted for this product yet.',
+    'پاسخ به نظر مشتری':'Reply to Customer Review',
+    'ارسال پاسخ':'Send Reply',
+    'پاسخ فروشگاه ثبت شد.':'Store reply posted.',
+    'نظرات مشتریان':'Customer Reviews',
+    'هنوز نظری برای محصولات فروشگاه شما ثبت نشده است.':'No reviews for your store products yet.',
+    'پاسخ به مشتری':'Reply to Customer',
+    'ویرایش پاسخ':'Edit Reply',
+    'فروشگاه‌های ذخیره‌شده':'Saved Stores',
+    'هنوز فروشگاهی ذخیره نکرده‌اید.':'You have not saved any stores yet.',
+    'آگهی‌های ویژه و بوست‌شده':'Featured & Boosted Ads',
+    'بوست آگهی':'Boost Ad',
+    'آگهی خودت را با بوست در این بخش برجسته کن.':'Boost your ad to feature it here.',
+    'آگهی‌های برجسته برای دیده‌شدن سریع‌تر.':'Featured ads for faster visibility.',
+    'هنوز آگهی ویژه‌ای اینجا نیست. اولین آگهی ویژه بازارک را تو بساز!':'There are no featured ads here yet. Create the first featured Bazarek ad!',
+    'شروع':'Get Started',
+    'بیشتر':'More',
+    'آگهی رایگان':'Free Ad',
+    'پسندیدن آگهی':'Like Ad',
+    'پسندیده شد':'Liked',
+    'گفتگو با فروشنده':'Chat with Seller',
+    'مشاهده پروفایل فروشنده، آگهی‌ها و امتیاز':'View seller profile, ads and ratings',
+    'لینک فروشگاه کپی شد.':'Store link copied.',
+    'امتیاز به فروشنده':'Rate Seller',
+    'امتیاز فروشگاه':'Rate Store',
+    'دیدگاه فروشگاه':'Store Review',
+    'پروفایل کاربر':'User Profile',
+    '🏪 فروشگاه حرفه‌ای':'🏪 Professional Store',
+    'محصولات فروشگاه':'Store Products',
+    'هنوز آگهی فعالی وجود ندارد.':'There are no active ads yet.',
+    'هنوز دیدگاهی ثبت نشده است.':'No reviews have been posted yet.',
+    'دنبال کردن':'Follow',
+    'دنبال می‌کنم':'Following',
+    'افزودن محصول فروشگاه':'Add Store Product',
+    'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.':'A Professional Store must be active before adding a store product.',
+    'مدیریت فروشگاه':'Manage Store',
+    'حساب من':'My Account',
+    'ویرایش پروفایل':'Edit Profile',
+    'ذخیره':'Save',
+    'حذف همیشگی حساب':'Delete Account Permanently',
+    'بله، حسابم را برای همیشه حذف کن':'Yes, permanently delete my account',
+    'پروفایل و اطلاعات حساب برای همیشه حذف می‌شود':'Your profile and account information will be permanently deleted',
+    'حساب شما برای همیشه حذف شد.':'Your account has been permanently deleted.',
+    'خروج از حساب':'Log Out',
+    'تلاش دوباره':'Retry',
+    'هنوز موردی وجود ندارد.':'Nothing here yet.',
+    'بستن':'Close',
+    'در حال ارسال...':'Sending...',
+    'ارسال':'Send',
+    'ثبت':'Submit',
+    'انصراف':'Cancel',
+    'باز کردن لینک ممکن نشد.':'Could not open the link.',
+    'لینک صفحه معتبر نیست.':'The page link is not valid.',
+    'ثبت‌نام با موفقیت انجام شد':'Registration successful',
+    'با موفقیت وارد شدید':'Login successful',
+    'خطا در ثبت یا ورود':'Registration or login failed',
+    'لطفاً نام کامل خود را وارد کنید':'Please enter your full name',
+    'لطفاً ایمیل یا شماره تلفن خود را وارد کنید':'Please enter your email or phone number',
+    'فرمت ایمیل (مثل name@gmail.com) یا شماره تلفن معتبر نیست':'The email format or phone number is not valid',
+    'حداکثر ۲۰ عکس مجاز است.':'Up to 20 photos are allowed.',
+    'حداقل یک عکس انتخاب کنید.':'Choose at least one photo.',
+    'عنوان آگهی را وارد کنید.':'Enter the ad title.',
+    'دسته‌بندی را انتخاب کنید.':'Choose a category.',
+    'زیر‌دسته را انتخاب کنید.':'Choose a subcategory.',
+    'ولایت آگهی را انتخاب کنید.':'Choose the ad province.',
+    'عکس‌ها آپلود نشدند.':'Photos were not uploaded.',
+    'آپلود عکس‌ها ناموفق بود.':'Photo upload failed.',
+    'محصول با موفقیت در فروشگاه ثبت شد.':'Product added to the store successfully.',
+    'مشکی':'Black','سفید':'White','آبی':'Blue','قرمز':'Red','سبز':'Green','خاکستری':'Gray',
+  };
+  const psExtra = <String, String>{
+    'فروشگاه‌های حرفه‌ای':'مسلکي پلورنځي','فروشگاه حرفه‌ای':'مسلکي پلورنځی',
+    'فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.':'پلورنځی، محصولات، درجه بندۍ او د مشتریانو نظرونه په یوه پاڼه کې.',
+    'ورود به فروشگاه':'پلورنځي ته ننوتل','ورود به فروشگاه و مشاهده محصولات':'پلورنځي ته ننوتل او محصولات لیدل',
+    'فروشگاه خودت را بساز':'خپل مسلکي پلورنځی جوړ کړئ','خرید / فعال‌سازی':'پېرود / فعالول','فعالول':'فعالول',
+    'ثبت محصول حرفه‌ای':'مسلکي محصول ثبتول','محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.':'ستاسو محصول به د پلورنځي په ویترین کې د اندازې، رنګ، تخفیف او د کټګورۍ ځانګړو معلوماتو سره ښکاره شي.',
+    '۱. تصاویر محصول':'۱. د محصول انځورونه','۲. معرفی محصول':'۲. د محصول معلومات','۳. قیمت و تخفیف':'۳. بیه او تخفیف','۴. ارتباط و انتشار':'۴. اړیکه او خپرول','۵. ارتباط و انتشار':'۵. اړیکه او خپرول',
+    '۴. مشخصات هوشمند':'۴. هوښیار مشخصات','اطلاعات اصلی آگهی را وارد کنید.':'د اعلان اصلي معلومات ولیکئ.','دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.':'کټګوري وټاکئ څو د محصول ځانګړي انتخابونه ښکاره شي.',
+    'قیمت و واحد پول را مشخص کنید.':'بیه او د پیسو واحد وټاکئ.','مشخصات تکمیلی (اختیاری)':'اضافي مشخصات (اختیاري)','امکان چت مستقیم':'مستقیمې خبرې','نمایش شماره تماس':'د اړیکې شمېره ښکاره کول','قیمت توافقی':'د هوکړې بیه',
+    'نظر و امتیاز محصول':'د محصول نظرونه او درجه بندي','این محصول را چگونه ارزیابی می‌کنید؟':'دا محصول څنګه ارزوئ؟','نظرات و امتیازهای محصول':'د محصول نظرونه او درجه بندي','نظر بده و امتیاز بده':'نظر ورکړئ او درجه بندي وکړئ','هنوز نظری برای این محصول ثبت نشده است.':'تر اوسه د دې محصول لپاره نظر نشته.',
+    'پاسخ به نظر مشتری':'د مشتری نظر ته ځواب','ارسال پاسخ':'ځواب ولېږئ','پاسخ فروشگاه ثبت شد.':'د پلورنځي ځواب ثبت شو.','نظرات مشتریان':'د مشتریانو نظرونه','هنوز نظری برای محصولات فروشگاه شما ثبت نشده است.':'تر اوسه ستاسو د پلورنځي د محصولاتو لپاره نظر نشته.',
+    'پاسخ به مشتری':'مشتري ته ځواب','ویرایش پاسخ':'ځواب سمول','فروشگاه‌های ذخیره‌شده':'خوندي شوي پلورنځي','هنوز فروشگاهی ذخیره نکرده‌اید.':'تر اوسه مو کوم پلورنځی نه دی خوندي کړی.',
+    'آگهی‌های ویژه و بوست‌شده':'ځانګړي او Boost شوي اعلانونه','بوست آگهی':'اعلان Boost','شروع':'پیل','بیشتر':'نور','آگهی رایگان':'وړیا اعلان','پسندیدن آگهی':'اعلان خوښول','پسندیده شد':'خوښ شو',
+    'گفتگو با فروشنده':'له پلورونکي سره خبرې','امتیاز به فروشنده':'پلورونکي ته درجه ورکړئ','امتیاز فروشگاه':'پلورنځي ته درجه ورکړئ','دیدگاه فروشگاه':'د پلورنځي نظر','پروفایل کاربر':'د کارونکي پروفایل','🏪 فروشگاه حرفه‌ای':'🏪 مسلکي پلورنځی',
+    'دنبال کردن':'تعقیبول','دنبال می‌کنم':'تعقیبوم','افزودن محصول فروشگاه':'د پلورنځي محصول زیاتول','مدیریت فروشگاه':'د پلورنځي مدیریت','ویرایش پروفایل':'پروفایل سمول','ذخیره':'خوندي کول','بستن':'تړل','در حال ارسال...':'لېږل کېږي...','ارسال':'لېږل','ثبت':'ثبتول','انصراف':'لغوه',
+    'تلاش دوباره':'بیا هڅه','هنوز موردی وجود ندارد.':'تر اوسه څه نشته.','ثبت‌نام با موفقیت انجام شد':'نوم لیکنه بریالۍ شوه','با موفقیت وارد شدید':'په بریالیتوب ننوتل','خطا در ثبت یا ورود':'د نوم لیکنې یا ننوتلو ستونزه',
+    'مشکی':'تور','سفید':'سپین','آبی':'آبي','قرمز':'سور','سبز':'شنه','خاکستری':'خړ',
+  };
+  final extras = lang == 'en' ? enExtra : psExtra;
+  final direct = extras[value];
+  if (direct != null) return direct;
+  return value;
 }
 
 String friendlyNetworkError(BuildContext context, Object error) {
@@ -522,8 +602,7 @@ class OfflineErrorView extends StatelessWidget {
   const OfflineErrorView({super.key, required this.onRetry, this.message});
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -715,7 +794,7 @@ const Map<String, String> _enMap = {
   'location': 'Location', 'details': 'Ad Details', 'description': 'Description', 'seller_info': 'Seller Information',
   'price_negotiable': 'Negotiable', 'vip_badge': 'Featured (VIP)', 'full_name': 'Full Name',
   'phone_or_email': 'Phone number or valid email', 'password': 'Password (minimum 6 characters)',
-  'no_account': "Don't have an account? Sign up", 'have_account': 'Already registered? Log in',
+  'no_account': "Don't have an account? Sign up", 'have_account': "Already registered? Log in",
   'categories': 'Categories', 'retry': 'Retry', 'boost': 'Boost Ads', 'boost_short': 'Short-term Boost — One Ad',
   'boost_global': 'Featured Boost — All Your Ads',
   'boost_week_desc': '7 days; all your active ads receive higher visibility.',
@@ -1888,7 +1967,7 @@ class _SavedAdsScreenState extends State<SavedAdsScreen> {
                                 left: 0,
                                 top: 8,
                                 child: IconButton(
-                                  tooltip: pairText(context, 'حذف از علاقه‌مندی‌ها', 'لرې کول'),
+                                  tooltip: isPs ? 'لرې کول' : 'حذف از علاقه‌مندی‌ها',
                                   onPressed: id.isEmpty ? null : () => _remove(id),
                                   icon: const Icon(Icons.favorite_rounded, color: Colors.red),
                                 ),
@@ -2684,7 +2763,7 @@ class _HomeScreenState extends State<HomeScreen> {
             selectedProvince.isEmpty &&
             searchQuery.trim().isEmpty
         ? tr(context, 'fresh_ads')
-        : (pairText(context, 'نتایج جستجو', 'د اعلانونو پایلې'));
+        : (isPs ? 'د اعلانونو پایلې' : 'نتایج جستجو');
 
     Widget categoryTile(Map<String, dynamic> category) {
       final id = category['id'] as String;
@@ -3060,7 +3139,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              pairText(context, 'موقعیت', 'تحویل به'),
+                                              isPs ? 'تحویل به' : 'موقعیت',
                                               style: const TextStyle(
                                                 color: Color(0xFFCCCCCC),
                                                 fontSize: 10,
@@ -3114,8 +3193,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                         icon: const Icon(Icons.person_outline, color: Colors.white, size: 20),
                                         label: Text(
                                           AuthService.isLoggedIn
-                                              ? (pairText(context, 'حساب من', 'حساب من'))
-                                              : (pairText(context, 'ثبت‌نام / ورود', 'نوم لیکنه / ننوتل')),
+                                              ? (isPs ? 'حساب من' : 'حساب من')
+                                              : (isPs ? 'نوم لیکنه / ننوتل' : 'ثبت‌نام / ورود'),
                                           style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
                                         ),
                                       );
@@ -3162,7 +3241,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  pairText(context, 'علاقه‌مندی‌ها', 'خوندي شوي'),
+                                  isPs ? 'خوندي شوي' : 'علاقه‌مندی‌ها',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -3182,7 +3261,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   );
                                 },
                                 child: Text(
-                                  pairText(context, 'ثبت آگهی', 'اعلان درج کول'),
+                                  isPs ? 'اعلان درج کول' : 'ثبت آگهی',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -3202,7 +3281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   );
                                 },
                                 child: Text(
-                                  pairText(context, 'گفتگو', 'خبرې'),
+                                  isPs ? 'خبرې' : 'گفتگو',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -3213,7 +3292,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                             // One account icon only. The old duplicate person icon is removed.
                             IconButton(
-                              tooltip: pairText(context, 'انتخاب زبان', 'ژبه بدلول'),
+                              tooltip: isPs ? 'ژبه بدلول' : 'انتخاب زبان',
                               onPressed: _showLanguagePicker,
                               icon: const Icon(
                                 Icons.language_rounded,
@@ -3260,7 +3339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       DropdownMenuItem(
                                         value: '',
                                         child: Text(
-                                          pairText(context, 'همه دسته‌ها', 'ټولې ډلې'),
+                                          isPs ? 'ټولې ډلې' : 'همه دسته‌ها',
                                         ),
                                       ),
                                     ],
@@ -3412,7 +3491,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           child: Text(
-                            pairText(context, 'همه', 'ټول'),
+                            isPs ? 'ټول' : 'همه',
                             style: const TextStyle(
                               color: Color(0xFFFFD814),
                               fontWeight: FontWeight.w900,
@@ -3456,7 +3535,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    pairText(context, 'بازار افغانستان، همه‌چیز یک‌جا', 'د افغانستان لوی بازار'),
+                                    isPs
+                                        ? 'د افغانستان لوی بازار'
+                                        : 'بازار افغانستان، همه‌چیز یک‌جا',
                                     maxLines: 2,
                                     style: TextStyle(
                                       color: Colors.white,
@@ -3467,7 +3548,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                   const SizedBox(height: 9),
                                   Text(
-                                    pairText(context, 'خرید و فروش آسان؛ از خانه و موتر تا موبایل و خدمات.', 'پېر او پلور په اسانۍ؛ اعلانونه، پلورنځي او خدمتونه.'),
+                                    isPs
+                                        ? 'پېر او پلور په اسانۍ؛ اعلانونه، پلورنځي او خدمتونه.'
+                                        : 'خرید و فروش آسان؛ از خانه و موتر تا موبایل و خدمات.',
                                     maxLines: 2,
                                     style: TextStyle(
                                       color: const Color(0xFFE7EDF5),
@@ -3481,7 +3564,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                     runSpacing: 8,
                                     children: [
                                       _WebHeroAction(
-                                        label: pairText(context, 'دیدن همه آگهی‌ها', 'ټول اعلانونه'),
+                                        label: isPs
+                                            ? 'ټول اعلانونه'
+                                            : 'دیدن همه آگهی‌ها',
                                         onTap: () {
                                           setState(() {
                                             selectedCategory = '';
@@ -3494,7 +3579,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       if (!isMobile)
                                         _WebHeroAction(
-                                          label: pairText(context, 'دسته‌بندی‌ها', 'کټګورۍ'),
+                                          label: isPs
+                                              ? 'کټګورۍ'
+                                              : 'دسته‌بندی‌ها',
                                           outlined: true,
                                           onTap: () => Navigator.push(
                                             context,
@@ -3562,12 +3649,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      pairText(context, 'فروشگاه‌های حرفه‌ای', 'د بازارک مسلکي پلورنځي'),
+                      isPs ? 'د بازارک مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای',
                       style: TextStyle(fontSize: isMobile ? 20 : 26, fontWeight: FontWeight.w900, color: const Color(0xFF131921)),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      pairText(context, 'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید', 'یوازې فعال او تایید شوي مسلکي پلورنځي'),
+                      isPs ? 'یوازې فعال او تایید شوي مسلکي پلورنځي' : 'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید',
                       style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.35),
                     ),
                   ],
@@ -3591,7 +3678,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      pairText(context, 'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.', 'اوس مهال کوم فعال مسلکي پلورنځی نشته.'),
+                      isPs ? 'اوس مهال کوم فعال مسلکي پلورنځی نشته.' : 'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.black87),
                     ),
                   ),
@@ -3665,7 +3752,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         const SizedBox(height: 5),
                                         Text(
-                                          '$count ${pairText(context, 'محصول فروشگاه', 'محصول')}',
+                                          '$count ${isPs ? 'محصول' : 'محصول فروشگاه'}',
                                           style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700),
                                         ),
                                       ],
@@ -3678,7 +3765,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Text(
                                   description.isNotEmpty
                                       ? description
-                                      : (pairText(context, 'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.', 'دا پلورنځي محصولات، معلومات او خدمتونه وګورئ.')),
+                                      : (isPs ? 'دا پلورنځي محصولات، معلومات او خدمتونه وګورئ.' : 'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.'),
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
@@ -3702,7 +3789,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                           ),
                                   icon: const Icon(Icons.storefront_rounded, size: 18),
-                                  label: Text(pairText(context, 'ورود به فروشگاه و مشاهده محصولات', 'ننوتل به پلورنځي'), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                  label: Text(isPs ? 'ننوتل به پلورنځي' : 'ورود به فروشگاه و مشاهده محصولات', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
                                 ),
                               ),
                             ],
@@ -3720,7 +3807,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         elevation: 3,
                         shape: const CircleBorder(),
                         child: IconButton(
-                          tooltip: pairText(context, 'فروشگاه قبلی', 'مخکینی پلورنځی'),
+                          tooltip: isPs ? 'مخکینی پلورنځی' : 'فروشگاه قبلی',
                           onPressed: () {
                             final previous = (_storePageIndex - 1 + professionalStores.length) % professionalStores.length;
                             _storePageController.animateToPage(previous, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
@@ -3737,7 +3824,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         elevation: 3,
                         shape: const CircleBorder(),
                         child: IconButton(
-                          tooltip: pairText(context, 'فروشگاه بعدی', 'راتلونکی پلورنځی'),
+                          tooltip: isPs ? 'راتلونکی پلورنځی' : 'فروشگاه بعدی',
                           onPressed: () {
                             final next = (_storePageIndex + 1) % professionalStores.length;
                             _storePageController.animateToPage(next, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
@@ -3771,7 +3858,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 4),
             Center(
               child: Text(
-                pairText(context, 'با کشیدن چپ و راست فروشگاه را عوض کنید • هر ۴ ثانیه خودکار تغییر می‌کند', 'د چپ او راست په کش کولو پلورنځي بدل کړئ • هر ۴ ثانیې اتومات بدلېږي'),
+                isPs ? 'د چپ او راست په کش کولو پلورنځي بدل کړئ • هر ۴ ثانیې اتومات بدلېږي' : 'با کشیدن چپ و راست فروشگاه را عوض کنید • هر ۴ ثانیه خودکار تغییر می‌کند',
                 style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
               ),
             ),
@@ -3806,12 +3893,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        pairText(context, 'فروشگاه حرفه‌ای خودت را بساز', 'خپل مسلکي پلورنځی جوړ کړئ'),
+                        isPs ? 'خپل مسلکي پلورنځی جوړ کړئ' : 'فروشگاه حرفه‌ای خودت را بساز',
                         style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        pairText(context, 'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان', 'محصولات، تخفیف او د مشتریانو نظرونه'),
+                        isPs ? 'محصولات، تخفیف او د مشتریانو نظرونه' : 'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70, fontSize: 10, height: 1.35),
@@ -3831,7 +3918,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!context.mounted) return;
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
                   },
-                  child: Text(pairText(context, 'خرید / فعال‌سازی', 'فعالول'), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                  child: Text(isPs ? 'فعالول' : 'خرید / فعال‌سازی', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
                 ),
               ],
             ),
@@ -3868,7 +3955,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               if (products.isNotEmpty)
                                 Text(
-                                  '${normalProducts.length} ${pairText(context, 'آگهی', 'اعلان')}',
+                                  '${normalProducts.length} ${isPs ? 'اعلان' : 'آگهی'}',
                                   style: const TextStyle(
                                     color: Colors.black54,
                                     fontWeight: FontWeight.w700,
@@ -3982,7 +4069,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             child: Text(
-                              pairText(context, 'دسته‌بندی‌ها', 'کټګورۍ'),
+                              isPs ? 'کټګورۍ' : 'دسته‌بندی‌ها',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -4001,7 +4088,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                             },
                             child: Text(
-                              pairText(context, 'ثبت آگهی', 'اعلان درج کول'),
+                              isPs ? 'اعلان درج کول' : 'ثبت آگهی',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -4016,7 +4103,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             child: Text(
-                              pairText(context, 'حساب من', 'حساب'),
+                              isPs ? 'حساب' : 'حساب من',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -4161,8 +4248,7 @@ class _HomeQuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Row(children: [
       _FilterChip(label: ps ? 'نوي' : 'جدیدترین', selected: sortMode == 'newest', onTap: () => onSort('newest')),
       const SizedBox(width: 6),
@@ -5008,8 +5094,7 @@ class ProductDetailScreen extends StatelessWidget {
     if (!await requireAccount(context)) return;
     if (!context.mounted) return;
 
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     final reasons = ps
         ? <String>['درغلي اعلان', 'جعلي/ناسم اعلان', 'نامناسب يا سپکاوی کوونکی محتوا', 'منع شوی توکی یا خدمت', 'سپیم یا تکراري اعلان', 'نور']
         : <String>['کلاهبرداری یا فریب', 'آگهی جعلی یا اطلاعات نادرست', 'محتوای نامناسب یا توهین‌آمیز', 'کالای یا خدمات ممنوع', 'اسپم یا آگهی تکراری', 'سایر'];
@@ -5355,8 +5440,7 @@ String _professionalCategoryId(dynamic item) {
 }
 
 String _professionalCategoryTitle(BuildContext context, String id) {
-  final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+  final ps = Localizations.localeOf(context).languageCode == 'ps';
   const fa = {
     'shoes': 'کفش', 'shirts': 'بلوز و پیراهن', 'pants': 'پتلون', 'phones': 'موبایل',
     'electronics': 'لوازم الکترونیکی', 'vehicles': 'وسایط نقلیه', 'home': 'خانه و فرنیچر',
@@ -5481,8 +5565,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
 
   Widget _categoryBar(BuildContext context) {
     final cats = _categories().values.toList();
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(8)),
@@ -5691,8 +5774,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     final width = MediaQuery.sizeOf(context).width;
     final columns = width >= 1150 ? 4 : (width >= 760 ? 3 : 2);
     return Scaffold(
@@ -5891,8 +5973,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     // /sellers/:id/listings already returns only active store products.
     // The old code expected an is_active field that this endpoint intentionally
     // does not expose, so an active store with products was incorrectly shown as 0.
@@ -6532,8 +6613,7 @@ class StoreDirectoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Scaffold(
       appBar: AppBar(title: Text(ps ? 'مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای')),
       backgroundColor: const Color(0xFFF4F6F8),
@@ -6637,8 +6717,7 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
             '')
         .toString();
     final instructions = (payment['instructions'] ?? '').toString();
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
 
     return showDialog<String>(
       context: context,
@@ -6881,8 +6960,7 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
@@ -7885,8 +7963,7 @@ class _BoostScreenState extends State<BoostScreen> {
     final bankName = (payment['bank_name'] ?? bank['name'] ?? '').toString();
     final accountName = (payment['account_name'] ?? bank['account_name'] ?? '').toString();
     final instructions = (payment['instructions'] ?? '').toString();
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     return showDialog<String>(
       context: context,
       builder: (_) => StatefulBuilder(
@@ -7985,8 +8062,7 @@ String _dateTimeForUser(dynamic value) {
   }
 
   String _boostPlanTitle(BuildContext context, String plan) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     switch (plan) {
       case 'boost_weekly': return ps ? '⚡ توربو اوونیز' : '⚡ توربو هفتگی';
       case 'boost_monthly': return ps ? '👑 توربو میاشتنی' : '👑 توربو ماهانه';
@@ -8008,8 +8084,7 @@ String _dateTimeForUser(dynamic value) {
 
   @override
   Widget build(BuildContext context) {
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     final globalActive = subscriptions.any((s) => ['boost_weekly','boost_monthly','boost_yearly'].contains(s['plan']) && s['status'] == 'active' && DateTime.tryParse('${s['ends_at']}')?.isAfter(DateTime.now()) == true);
 
     return Scaffold(
@@ -9137,7 +9212,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   Future<void> _pickAudioFile() async {
     final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp3','wav','ogg','m4a','webm','aac']);
     if (result.isEmpty) return;
-    final file = result.first;
+    final file = result.files.first;
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) return;
     if (bytes.length > 8 * 1024 * 1024) { _msg(tr(context, 'audio_too_large')); return; }
@@ -9237,7 +9312,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         data = Map<String,dynamic>.from(decoded as Map);
       }
       if (!mounted) return;
-      _msg(widget.professional ? uiText(context, 'محصول با موفقیت در فروشگاه ثبت شد.') : tr(context, 'publish_success'));
+      _msg(widget.professional ? 'محصول با موفقیت در فروشگاه ثبت شد.' : tr(context, 'publish_success'));
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
@@ -9247,8 +9322,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   @override
   Widget build(BuildContext context) {
     final professional = widget.professional;
-    final lang = Localizations.localeOf(context).languageCode;
-    final ps = lang == 'ps';
+    final ps = Localizations.localeOf(context).languageCode == 'ps';
     final cat = category;
     final isFootwear = cat.contains('shoe') || cat.contains('footwear');
     final isClothing = cat.contains('clothing') || cat.contains('fashion') || cat.contains('women') || cat.contains('men');
@@ -9288,11 +9362,11 @@ class _AddProductSheetState extends State<AddProductSheet> {
           if (professional) Container(
             margin: const EdgeInsets.only(bottom: 14), padding: const EdgeInsets.all(17),
             decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF101820), Color(0xFF007185)]), borderRadius: BorderRadius.circular(24)),
-            child: Row(children: [const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 38), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text(uiText(context, 'ثبت محصول حرفه‌ای'), style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(uiText(context, 'محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.'), style: const TextStyle(color: Colors.white70, height: 1.45, fontSize: 11.5))]))]),
+            child: Row(children: [const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 38), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('ثبت محصول حرفه‌ای', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('محصول شما در ویترین فروشگاه قرار می‌گیرد؛ با سایز، رنگ، تخفیف و مشخصات مخصوص همان دسته.', style: const TextStyle(color: Colors.white70, height: 1.45, fontSize: 11.5))]))]),
           ),
-          section(uiText(context, '۱. تصاویر محصول'), professional ? uiText(context, 'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.') : uiText(context, 'حداقل یک عکس واضح انتخاب کنید.'), Icons.photo_library_rounded,
+          section('۱. تصاویر محصول', professional ? 'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.' : 'حداقل یک عکس واضح انتخاب کنید.', Icons.photo_library_rounded,
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${pairText(context, 'عکس‌ها', 'انځورونه')}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text('${ps ? 'انځورونه' : 'عکس‌ها'}: ${imageBytes.length}/20', style: const TextStyle(fontWeight: FontWeight.w900)),
               const SizedBox(height: 9),
               Wrap(spacing: 9, runSpacing: 9, children: [
                 for (var i = 0; i < imageBytes.length; i++) Stack(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(imageBytes[i], width: 82, height: 82, fit: BoxFit.cover)), Positioned(top: 3, right: 3, child: InkWell(onTap: () => setState(() { imageBytes.removeAt(i); imageNames.removeAt(i); imageUrls.clear(); }), child: const CircleAvatar(radius: 12, child: Icon(Icons.close, size: 15))))]),
@@ -9314,7 +9388,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
               if (recordingAudio) ...[const SizedBox(height: 8), LinearProgressIndicator(), const SizedBox(height: 4), Text(tr(context, 'audio_recording'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
             ]),
           ),
-          section(uiText(context, '۲. معرفی محصول'), professional ? uiText(context, 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.') : uiText(context, 'اطلاعات اصلی آگهی را وارد کنید.'), Icons.inventory_2_rounded,
+          section('۲. معرفی محصول', professional ? 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.' : 'اطلاعات اصلی آگهی را وارد کنید.', Icons.inventory_2_rounded,
             Column(children: [
               field(title, 'نام محصول', hint: professional ? 'مثلاً کفش مردانه چرمی مدل ۲۰۲۶' : 'عنوان آگهی'),
               DropdownButtonFormField<String>(value: category.isEmpty ? null : category, decoration: InputDecoration(labelText: uiText(context, 'دسته‌بندی'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(), onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; })),
@@ -9325,41 +9399,39 @@ class _AddProductSheetState extends State<AddProductSheet> {
               field(desc, 'توضیحات محصول', hint: professional ? 'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...' : 'توضیحات کامل', maxLines: 5),
             ]),
           ),
-          section(uiText(context, '۳. قیمت و تخفیف'), professional ? uiText(context, 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.') : uiText(context, 'قیمت و واحد پول را مشخص کنید.'), Icons.sell_rounded,
+          section('۳. قیمت و تخفیف', professional ? 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.' : 'قیمت و واحد پول را مشخص کنید.', Icons.sell_rounded,
             Column(children: [
               Row(children: [Expanded(child: field(price, 'قیمت اصلی', hint: 'مثلاً 120000', keyboard: TextInputType.number)), const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]),
-              if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('${uiText(context, 'قیمت بعد از تخفیف')}: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? uiText(context, 'دلار') : uiText(context, 'افغانی')}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
-              Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: Text(uiText(context, 'افغانی (AFN)')), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: Text(uiText(context, 'دلار (USD)')), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
+              if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
+              Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: const Text('افغانی (AFN)'), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: const Text('دلار (USD)'), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
               const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
             ]),
           ),
-          if (professional) ...[
-          section(uiText(context, '۴. مشخصات هوشمند'), uiText(context, professional ? 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.' : 'مشخصات تکمیلی (اختیاری)'), Icons.tune_rounded,
+          if (professional) section('۴. مشخصات هوشمند', 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.', Icons.tune_rounded,
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               field(brand, 'برند', hint: isElectronics ? 'مثلاً Samsung' : 'مثلاً Nike'),
               field(model, 'مدل', hint: isFootwear ? 'مثلاً Air Max 2026' : 'مثلاً X100'),
-              if (isFootwear) ...[Text(uiText(context, 'سایزهای کفش'), style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً 41, 42, 43')]
-              else if (isClothing) ...[Text(uiText(context, 'سایزهای لباس'), style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً M, L, XL')]
+              if (isFootwear) ...[Text('سایزهای کفش', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً 41, 42, 43')]
+              else if (isClothing) ...[Text('سایزهای لباس', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً M, L, XL')]
               else field(sizes, 'اندازه / ظرفیت / سایز', hint: isElectronics ? 'مثلاً 128GB, 256GB' : 'در صورت نیاز وارد کنید'),
-              Text(uiText(context, 'رنگ‌ها'), style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(colorHints, colors), const SizedBox(height: 8), field(colors, 'رنگ‌های انتخاب‌شده', hint: 'مثلاً مشکی, سفید'),
+              Text('رنگ‌ها', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(colorHints, colors), const SizedBox(height: 8), field(colors, 'رنگ‌های انتخاب‌شده', hint: 'مثلاً مشکی, سفید'),
               field(material, 'جنس / جنس بدنه', hint: isFootwear ? 'چرم، پارچه،...' : 'مثلاً چرم، فلز، پلاستیک'),
               field(condition, 'وضعیت', hint: 'نو، کارکرده، در حد نو'),
               field(productCode, 'کد محصول (SKU)', hint: 'خالی بگذارید تا خودکار ساخته شود'),
-              field(specifications, 'مشخصات فنی', hint: professional ? 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.' : 'مشخصات بیشتر', maxLines: 4),
+              field(specifications, 'مشخصات فنی', hint: 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.', maxLines: 4),
             ]),
           ),
-          ],
-          section(uiText(context, professional ? '۵. ارتباط و انتشار' : '۴. ارتباط و انتشار'), uiText(context, 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.'), Icons.contact_phone_rounded,
+          section(professional ? '۵. ارتباط و انتشار' : '۴. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
             Column(children: [
               field(contactPhone, 'شماره تماس', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
               field(locationText, 'آدرس / محل', hint: 'شهر، منطقه یا آدرس فروشگاه'),
               if (category == 'social_pages') field(socialLink, 'لینک صفحه', hint: 'https://...'),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(uiText(context, 'امکان چت مستقیم')), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(uiText(context, 'نمایش شماره تماس')), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(uiText(context, 'قیمت توافقی')), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('امکان چت مستقیم'), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
             ]),
           ),
-          SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? uiText(context, 'در حال انتشار...') : (professional ? uiText(context, 'انتشار در فروشگاه') : uiText(context, 'ثبت و انتشار آگهی'))), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
+          SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? 'در حال انتشار...' : (professional ? 'انتشار در فروشگاه' : 'ثبت و انتشار آگهی')), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
         ]),
       ),
     );
