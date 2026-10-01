@@ -9237,9 +9237,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
   }
 
   Future<void> _pickAudioFile() async {
-    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp3','wav','ogg','m4a','webm','aac']);
-    if (result.isEmpty) return;
-    final file = result.files.first;
+    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp3','wav','ogg','m4a','webm','aac']);
+    if (files.isEmpty) return;
+    final file = files.first;
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) return;
     if (bytes.length > 8 * 1024 * 1024) { _msg(tr(context, 'audio_too_large')); return; }
