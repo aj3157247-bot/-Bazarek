@@ -507,7 +507,6 @@ String _localizeStaticText(String value, String lang) {
     'دیدگاه فروشگاه':'Store Review',
     'پروفایل کاربر':'User Profile',
     '🏪 فروشگاه حرفه‌ای':'🏪 Professional Store',
-    'محصولات فروشگاه':'Store Products',
     'هنوز آگهی فعالی وجود ندارد.':'There are no active ads yet.',
     'هنوز دیدگاهی ثبت نشده است.':'No reviews have been posted yet.',
     'دنبال کردن':'Follow',
@@ -9212,7 +9211,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   Future<void> _pickAudioFile() async {
     final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp3','wav','ogg','m4a','webm','aac']);
     if (result.isEmpty) return;
-    final file = result.files.first;
+    final file = result.first;
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) return;
     if (bytes.length > 8 * 1024 * 1024) { _msg(tr(context, 'audio_too_large')); return; }
