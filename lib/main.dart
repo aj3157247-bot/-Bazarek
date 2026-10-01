@@ -414,7 +414,7 @@ String psText(BuildContext context, String fa, String ps) {
 
 String uiText(BuildContext context, String fa, [String? ps]) {
   final lang = Localizations.localeOf(context).languageCode;
-  if (lang == 'ps') return ps ?? fa;
+  if (lang == 'ps') return ps ?? _localizeStaticText(fa, 'ps');
   if (lang == 'en') {
     const en = <String,String>{
       'نظر شما':'Your Review','تجربه خود را درباره این محصول بنویسید...':'Share your experience with this product...',
@@ -433,7 +433,7 @@ String uiText(BuildContext context, String fa, [String? ps]) {
       'عکس اصلی را واضح انتخاب کنید؛ مشتری قبل از متن اول عکس را می‌بیند.':'Choose a clear main photo; customers see the photo first.',
       'اطلاعات اصلی آگهی را وارد کنید.':'Enter the main ad information.','اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.':'Set contact information and how customers can reach you.',
     };
-    return en[fa] ?? fa;
+    return en[fa] ?? _localizeStaticText(fa, 'en');
   }
   return fa;
 }
@@ -448,6 +448,43 @@ String _localizeStaticText(String value, String lang) {
   }
 
   const enExtra = <String, String>{
+    'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'Browse active and verified stores and visit their storefronts.',
+    'فروشگاه فعال و تأییدشده':'Active & Verified Store',
+    'فروشگاه فعال':'Active Store',
+    'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.':'There are no active professional stores to display right now.',
+    'هنوز هیچ فروشگاه حرفه‌ای فعالی ثبت نشده است.':'No active professional stores have been added yet.',
+    'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'View this store’s products and information on its storefront.',
+    'محصولات، تخفیف و نظر مشتریان':'Products, discounts and customer reviews',
+    'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان':'Dedicated storefront, products, discounts and customer reviews',
+    'با کشیدن چپ و راست فروشگاه را عوض کنید • هر ۴ ثانیه خودکار تغییر می‌کند':'Swipe left or right to change stores • changes automatically every 4 seconds',
+    'فروشگاه قبلی':'Previous Store','فروشگاه بعدی':'Next Store',
+    'انتخاب ولایت':'Select Province','خرید و فروش در سراسر افغانستان':'Buy and sell across Afghanistan',
+    'همه دسته‌ها':'All Categories','همه':'All','جدیدترین':'Newest','ارزان‌ترین':'Lowest Price','گران‌ترین':'Highest Price','ویژه‌سازی':'Boost','آگهی‌ها را ویژه کن و بیشتر دیده شو.':'Boost your ads and get more visibility.',
+    'در حال بارگذاری عکس...':'Loading image...',
+    'ثبت آگهی':'Post Ad','آگهی‌های من':'My Ads','حساب من':'My Account','انتخاب زبان':'Choose Language','زبان':'Language','موقعیت':'Location','بیشتر':'More',
+    'بازار آنلاین افغانستان':'Afghanistan Online Marketplace','تحویل به':'Deliver to','ثبت‌نام / ورود':'Sign Up / Log In',
+    'دیدن همه آگهی‌ها':'View All Ads','دسته‌بندی‌ها':'Categories','آگهی رایگان':'Free Ad','جدیدترین':'Newest','ارزان‌ترین':'Lowest Price','گران‌ترین':'Highest Price',
+    'جستجو در بین هزاران آگهی...':'Search thousands of ads...',
+    'بازار افغانستان، همه‌چیز یک‌جا':'Afghanistan marketplace, everything in one place',
+    'خرید و فروش آسان؛ از خانه و موتر تا موبایل و خدمات.':'Easy buying and selling — from homes and cars to phones and services.',
+    'فروشگاه‌های فعال و تأییدشده':'Active & Verified Stores',
+    'دسته‌بندی پیدا نشد.':'Category not found.','هنوز هیچ آگهی فعالی ثبت نشده است.':'No active ads have been posted yet.',
+    'نتایج جستجو':'Search Results','اعلان درج کول':'Post Ad','گفتگو':'Chat','ژبه بدلول':'Change Language',
+    'همه ولایت‌ها':'All Provinces','آگهی‌های ویژه':'Featured Ads','آگهی‌های ویژه و بوست‌شده':'Featured & Boosted Ads',
+    'مشاهده آگهی در بازارک:':'View ad on Bazarek:','لینک آگهی کپی شد؛ می‌توانید آن را ارسال کنید.':'Ad link copied; you can share it.',
+    'گزارش آگهی':'Report Ad','اشتراک‌گذاری آگهی':'Share Ad','دلیل گزارش را انتخاب کنید:':'Select a reason for the report:',
+    'توضیحات':'Details','لغو':'Cancel','ارسال گزارش':'Submit Report','گزارش شما ثبت شد و توسط مدیریت بررسی می‌شود.':'Your report was submitted and will be reviewed by the administrators.',
+    'بدون توضیحات':'No description','شماره تماس ثبت نشده است.':'Phone number is not available.','گفتگو ایجاد نشد.':'Could not start the chat.',
+    'فروشنده بازارک':'Bazarek Seller','پسندیدن آگهی':'Like Ad','پسندیده شد':'Liked','امتیاز فروشنده':'Seller Rating',
+    'پروفایل فروشنده':'Seller Profile','آگهی‌های فروشنده':'Seller Ads','مشاهده پروفایل فروشنده، آگهی‌ها و امتیاز':'View seller profile, ads and ratings',
+    'فروشگاه ذخیره شد':'Store saved','ذخیره فروشگاه':'Save Store','اشتراک‌گذاری فروشگاه':'Share Store','فروشگاه‌های ذخیره‌شده':'Saved Stores',
+    'آگهی‌های $name':'$name’s Ads','محصولات فروشگاه (${listings.length})':'Store Products (${listings.length})',
+    'دسته‌بندی محصولات فروشگاه':'Store Product Categories','محصولات':'Products','مشتری':'Customer','پاسخ شما: $reply':'Your reply: $reply',
+    'نمایش در بخش فروشگاه‌های حرفه‌ای بازارک':'Show in Bazarek Professional Stores','حضور در فروشگاه‌های حرفه‌ای بازارک':'Appear in Bazarek Professional Stores',
+    'مسلکي پلورنځي':'Professional Stores','فروشگاه حرفه‌ای خودت را بساز':'Create Your Professional Store',
+    'ویترین اختصاصی':'Dedicated Storefront','محصولات، تخفیف و نظر مشتریان':'Products, discounts and customer reviews',
+    'فعال':'Active','غیرفعال':'Inactive','حساب':'Account','آگهی':'Ad','اعلان':'Ad','محصول':'Product',
+    'خدمات':'Services','فروشگاه':'Store','فروشنده':'Seller','مشتری':'Customer','تأییدشده':'Verified',
     'فروشگاه‌های حرفه‌ای':'Professional Stores',
     'فروشگاه حرفه‌ای':'Professional Store',
     'فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.':'Store, products, ratings and customer reviews in one place.',
@@ -549,6 +586,24 @@ String _localizeStaticText(String value, String lang) {
     'مشکی':'Black','سفید':'White','آبی':'Blue','قرمز':'Red','سبز':'Green','خاکستری':'Gray',
   };
   const psExtra = <String, String>{
+    'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'فعال او تایید شوي مسلکي پلورنځي وګورئ او پلورنځي ته داخل شئ.',
+    'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.':'اوس مهال د ښودلو لپاره کوم فعال مسلکي پلورنځی نشته.',
+    'هنوز هیچ فروشگاه حرفه‌ای فعالی ثبت نشده است.':'تر اوسه کوم فعال مسلکي پلورنځی نه دی ثبت شوی.',
+    'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'د دې پلورنځي محصولات او معلومات په پلورنځي پاڼه کې وګورئ.',
+    'محصولات، تخفیف و نظر مشتریان':'محصولات، تخفیفونه او د مشتریانو نظرونه',
+    'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان':'ځانګړی ویترین، محصولات، تخفیفونه او د مشتریانو نظرونه',
+    'با کشیدن چپ و راست فروشگاه را عوض کنید • هر ۴ ثانیه خودکار تغییر می‌کند':'چپ او راست کش کړئ څو پلورنځی بدل شي • هر ۴ ثانیې په اوتومات ډول بدلېږي',
+    'فروشگاه قبلی':'مخکینی پلورنځی','فروشگاه بعدی':'راتلونکی پلورنځی','انتخاب ولایت':'ولایت وټاکئ','خرید و فروش در سراسر افغانستان':'په ټول افغانستان کې پېر او پلور',
+    'همه دسته‌ها':'ټولې ډلې','همه':'ټول','جدیدترین':'نوي','ارزان‌ترین':'ارزانه','گران‌ترین':'ګران','ویژه‌سازی':'ځانګړی کول','آگهی‌ها را ویژه کن و بیشتر دیده شو.':'خپل اعلانونه ځانګړي کړئ او ډېر لیدونکي ترلاسه کړئ.',
+    'در حال بارگذاری عکس...':'انځور پورته کېږي...','ثبت آگهی':'اعلان ثبتول','آگهی‌های من':'زما اعلانونه','حساب من':'زما حساب','انتخاب زبان':'ژبه وټاکئ','زبان':'ژبه','موقعیت':'ځای','بیشتر':'نور',
+    'بازار آنلاین افغانستان':'د افغانستان آنلاین بازار','تحویل به':'سپارل کېدل','ثبت‌نام / ورود':'نوم لیکنه / ننوتل','دیدن همه آگهی‌ها':'ټول اعلانونه وګورئ','دسته‌بندی‌ها':'کټګورۍ',
+    'آگهی رایگان':'وړیا اعلان','نتایج جستجو':'د لټون پایلې','گفتگو':'خبرې','انتخاب زبان':'ژبه وټاکئ','همه ولایت‌ها':'ټول ولایتونه','آگهی‌های ویژه':'ځانګړي اعلانونه',
+    'مشاهده آگهی در بازارک:':'اعلان په بازارک کې وګورئ:','لینک آگهی کپی شد؛ می‌توانید آن را ارسال کنید.':'د اعلان لینک کاپي شو؛ شریکولی یې شئ.',
+    'گزارش آگهی':'د اعلان راپور','اشتراک‌گذاری آگهی':'د اعلان شریکول','دلیل گزارش را انتخاب کنید:':'د راپور دلیل وټاکئ:','توضیحات':'تفصیل','لغو':'لغوه','ارسال گزارش':'راپور لېږل',
+    'گزارش شما ثبت شد و توسط مدیریت بررسی می‌شود.':'ستاسو راپور ثبت شو او مدیریت به یې وڅېړي.','بدون توضیحات':'پرته له تفصیل','شماره تماس ثبت نشده است.':'د اړیکې شمېره نه ده ثبت شوې.','گفتگو ایجاد نشد.':'خبرې پیل نه شوې.',
+    'فروشنده بازارک':'د بازارک پلورونکی','پسندیدن آگهی':'اعلان خوښول','پسندیده شد':'خوښ شو','پروفایل فروشنده':'د پلورونکي پروفایل','آگهی‌های فروشنده':'د پلورونکي اعلانونه',
+    'فروشگاه ذخیره شد':'پلورنځی خوندي شو','ذخیره فروشگاه':'پلورنځی خوندي کول','اشتراک‌گذاری فروشگاه':'پلورنځی شریکول','فروشگاه‌های ذخیره‌شده':'خوندي شوي پلورنځي',
+    'محصولات':'محصولات','مشتری':'مشتري','فعال':'فعال','غیرفعال':'غیرفعال','حساب':'حساب','آگهی':'اعلان','اعلان':'اعلان','محصول':'محصول','فروشگاه':'پلورنځی','فروشنده':'پلورونکی','تأییدشده':'تایید شوی',
     'فروشگاه‌های حرفه‌ای':'مسلکي پلورنځي','فروشگاه حرفه‌ای':'مسلکي پلورنځی',
     'فروشگاه، محصولات، امتیازها و نظرات مشتریان در یک صفحه.':'پلورنځی، محصولات، درجه بندۍ او د مشتریانو نظرونه په یوه پاڼه کې.',
     'ورود به فروشگاه':'پلورنځي ته ننوتل','ورود به فروشگاه و مشاهده محصولات':'پلورنځي ته ننوتل او محصولات لیدل',
