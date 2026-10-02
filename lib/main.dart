@@ -727,6 +727,7 @@ String _localizeStaticText(String value, String lang) {
 
   // Source-wide UI fallback translations for strings used outside the main dictionaries.
   const enUiFallback = <String,String>{
+    'فروشگاه حرفه‌ای من':'My Professional Store',
     'بازار آنلاین افغانستان':'Afghanistan Online Marketplace',
     'موقعیت':'Location',
     'ثبت‌نام / ورود':'Sign Up / Log In',
@@ -931,6 +932,7 @@ String _localizeStaticText(String value, String lang) {
     'شهر، منطقه یا آدرس فروشگاه':'City, district or store address',
   };
   const psUiFallback = <String,String>{
+    'فروشگاه حرفه‌ای من':'زما مسلکي پلورنځی',
     'بازار آنلاین افغانستان':'د افغانستان آنلاین بازار',
     'موقعیت':'ځای',
     'ثبت‌نام / ورود':'نوم لیکنه / ننوتل',
@@ -1095,6 +1097,12 @@ String _localizeStaticText(String value, String lang) {
 
   // Dynamic UI strings: these contain runtime values and must not be placed
   // inside const translation maps.
+  final postedAds = RegExp(r'^(.+?)\s+آگهی ثبت شده$').firstMatch(value);
+  if (postedAds != null) {
+    return lang == 'en'
+        ? '${postedAds.group(1)} ads posted'
+        : '${postedAds.group(1)} اعلانونه ثبت شوي';
+  }
   final productCode = RegExp(r'^کد کالا\s+(.+?)\s+کپی شد\.$').firstMatch(value);
   if (productCode != null) return lang == 'en' ? 'Product code ${productCode.group(1)} copied.' : 'د محصول کوډ ${productCode.group(1)} کاپي شو.';
   final activeUntil = RegExp(r'^فعال تا\s+(.+)$').firstMatch(value);
