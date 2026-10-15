@@ -5042,6 +5042,7 @@ class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews
   bool sending = false;
   List<dynamic> reviews = [];
   String? error;
+  bool storeActive = false;
 
   @override void initState() { super.initState(); _load(); }
 
@@ -5049,8 +5050,14 @@ class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews
     final id = widget.product['id']?.toString() ?? '';
     if (id.isEmpty) { if (mounted) setState(() => loading = false); return; }
     try {
-      // Reviews are part of the listing details for every ad, not only
-      // listings attached to a professional store.
+      storeActive = widget.product['store_active'] == true;
+      if (!storeActive) {
+        try {
+          final fresh = await ApiService.getListingById(id);
+          storeActive = fresh['store_active'] == true;
+        } catch (_) {}
+      }
+      if (!storeActive) { if (mounted) setState(() => loading = false); return; }
       final data = await ApiService.getProductReviews(id);
       if (mounted) setState(() { reviews = data; loading = false; error = null; });
     } catch (e) {
@@ -5095,6 +5102,7 @@ class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews
   }
 
   @override Widget build(BuildContext context) {
+    if (!storeActive && !loading) return const SizedBox.shrink();
     final values = reviews.map((x) => double.tryParse('${x['rating']}')).whereType<double>().toList();
     final average = values.isEmpty ? 0.0 : values.reduce((a,b) => a+b) / values.length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -5581,9 +5589,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   Widget build(BuildContext context) {
     final images = widget.images;
     final screenWidth = MediaQuery.sizeOf(context).width;
-    // Keep the details gallery compact like marketplace listings: show the full
-    // photo without cropping, with neutral space around images of other ratios.
-    final galleryHeight = (screenWidth * 0.72).clamp(280.0, 460.0);
+    final galleryHeight = (screenWidth * 1.05).clamp(320.0, 520.0);
     return SizedBox(
       width: double.infinity,
       height: galleryHeight,
