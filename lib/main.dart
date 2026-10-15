@@ -5589,7 +5589,9 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   Widget build(BuildContext context) {
     final images = widget.images;
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final galleryHeight = (screenWidth * 1.05).clamp(320.0, 520.0);
+    // Keep the details gallery compact like marketplace listings: show the full
+    // photo without cropping, with neutral space around images of other ratios.
+    final galleryHeight = (screenWidth * 0.72).clamp(280.0, 460.0);
     return SizedBox(
       width: double.infinity,
       height: galleryHeight,
