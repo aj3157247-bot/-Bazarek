@@ -137,35 +137,10 @@ Future<void> _openListing(BuildContext context, dynamic product) async {
   }
 }
 
-void _showComingSoonDialog(BuildContext context, {String? title}) {
-  final lang = Localizations.localeOf(context).languageCode;
-  final heading = lang == 'en' ? 'Coming soon' : (lang == 'ps' ? 'دا برخه ژر فعالېږي' : 'این بخش به‌زودی فعال می‌شود');
-  final message = lang == 'en'
-      ? 'We are preparing this section. For now, browse vehicle listings on Bazarek.'
-      : (lang == 'ps'
-          ? 'موږ دا برخه چمتو کوو. تر اوسه د بازارک د وسایطو اعلانونه وګورئ.'
-          : 'ما در حال آماده‌سازی این بخش هستیم. فعلاً آگهی‌های وسایط نقلیه را در بازارک ببینید.');
-  final button = lang == 'en' ? 'OK' : (lang == 'ps' ? 'سمه ده' : 'متوجه شدم');
-  showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      icon: const Icon(Icons.upcoming_rounded, size: 38),
-      title: Text(title == null || title.isEmpty ? heading : '$title — $heading'),
-      content: Text(message, textAlign: TextAlign.center),
-      actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(button))],
-    ),
-  );
-}
-
 void _openCategoryRoute(BuildContext context, Map<String, dynamic> category, {String? subcategoryId, String? subcategoryTitle}) {
+  final previousPath = kIsWeb ? currentWebPath() : '/';
   final categoryId = category['id']?.toString() ?? '';
   final title = subcategoryTitle ?? localizedCategoryTitle(context, categoryId, category['title']?.toString() ?? 'دسته‌بندی');
-  if (!isMarketplaceCategoryActive(categoryId) ||
-      (subcategoryId != null && !isMarketplaceSubcategoryActive(categoryId, subcategoryId))) {
-    _showComingSoonDialog(context, title: title);
-    return;
-  }
-  final previousPath = kIsWeb ? currentWebPath() : '/';
   final path = _categoryPath(categoryId, subcategoryId);
   if (kIsWeb) {
     setBrowserPath(path);
@@ -1423,20 +1398,9 @@ const List<String> provinces = [
   'بغلان', 'نورستان', 'کنر', 'لغمان',
 ];
 
-// Temporary launch focus: keep the marketplace focused on vehicles until
-// enough real listings have been collected in the other categories.
-const Set<String> activeMarketplaceCategories = {'vehicles'};
-const Set<String> activeVehicleSubcategories = {'car', 'motorcycle', 'rickshaw', 'bicycles'};
-
-bool isMarketplaceCategoryActive(String categoryId) =>
-    activeMarketplaceCategories.contains(categoryId);
-
-bool isMarketplaceSubcategoryActive(String categoryId, String subcategoryId) =>
-    categoryId == 'vehicles' && activeVehicleSubcategories.contains(subcategoryId);
-
 const List<Map<String, dynamic>> categories = [
-  {'id': 'vehicles', 'title': 'وسایط نقلیه', 'icon': Icons.directions_car},
   {'id': 'real_estate', 'title': 'املاک و خانه', 'icon': Icons.home},
+  {'id': 'vehicles', 'title': 'وسایط نقلیه', 'icon': Icons.directions_car},
   {'id': 'electronics', 'title': 'لوازم الکترونیکی', 'icon': Icons.smartphone},
   {'id': 'home_goods', 'title': 'لوازم خانه', 'icon': Icons.chair},
   {'id': 'fashion', 'title': 'لباس و پوشاک', 'icon': Icons.checkroom},
@@ -1472,11 +1436,7 @@ const Map<String, List<Map<String, String>>> subcategories = {
     {'id':'garden','title':'باغ'},
   ],
   'vehicles': [
-    {'id':'car','title':'موتر'},
-    {'id':'motorcycle','title':'موتورسایکل'},
-    {'id':'rickshaw','title':'رکشا'},
-    {'id':'bicycles','title':'بایسکل'},
-    {'id':'parts','title':'پرزه‌جات'},
+    {'id':'car','title':'موتر'}, {'id':'motorcycle','title':'موتورسایکل'}, {'id':'rickshaw','title':'رکشا'}, {'id':'parts','title':'پرزه‌جات'},
   ],
   'electronics': [
     {'id':'mobile','title':'موبایل'}, {'id':'laptop','title':'لپ‌تاپ'}, {'id':'computer','title':'کمپیوتر'}, {'id':'tv','title':'تلویزیون'}, {'id':'camera','title':'دوربین'},
@@ -4852,10 +4812,7 @@ class _CategoryStrip extends StatelessWidget {
       SizedBox(height: 86, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: categories.length + 1, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) {
         if (i == categories.length) return InkWell(onTap: onMore, child: Container(width: 92, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(17), border: Border.all(color: Colors.black.withOpacity(.06))), child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.apps_rounded, size: 28), SizedBox(height: 5), Text('بیشتر', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))])));
         final c = categories[i];
-        final active = isMarketplaceCategoryActive(c['id'] as String);
-        final lang = Localizations.localeOf(context).languageCode;
-        final soon = lang == 'en' ? 'Coming soon' : (lang == 'ps' ? 'ژر' : 'به‌زودی');
-        return InkWell(onTap: () => onCategory(c), borderRadius: BorderRadius.circular(17), child: Opacity(opacity: active ? 1 : .58, child: Container(width: 92, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(17), border: Border.all(color: active ? Theme.of(context).colorScheme.primary.withOpacity(.35) : Colors.black.withOpacity(.06))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, shape: BoxShape.circle), child: Icon(c['icon'] as IconData, color: Theme.of(context).colorScheme.primary, size: 20)), const SizedBox(height: 3), Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)), if (!active) Text(soon, maxLines: 1, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.deepOrange))]))));
+        return InkWell(onTap: () => onCategory(c), borderRadius: BorderRadius.circular(17), child: Container(width: 92, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(17), border: Border.all(color: Colors.black.withOpacity(.06))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, shape: BoxShape.circle), child: Icon(c['icon'] as IconData, color: Theme.of(context).colorScheme.primary, size: 21)), const SizedBox(height: 4), Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800))])));
       }))
     ]);
   }
@@ -5626,17 +5583,25 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   @override
   Widget build(BuildContext context) {
     final images = widget.images;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final galleryHeight = (screenWidth * 1.05).clamp(320.0, 520.0);
     return SizedBox(
-      height: 250,
-      child: Stack(
+      width: double.infinity,
+      height: galleryHeight,
+      child: ColoredBox(
+        color: const Color(0xFFF1F3F5),
+        child: Stack(
         fit: StackFit.expand,
         children: [
           PageView.builder(
             itemCount: images.length,
             onPageChanged: (index) => setState(() => currentPage = index),
             itemBuilder: (_, i) => Image.network(
-              _optimizedImageUrl(images[i].toString(), width: 1200, quality: 82),
-              fit: BoxFit.contain,
+              _optimizedImageUrl(images[i].toString(), width: 1400, quality: 88),
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
               loadingBuilder: _bazarekImageLoading,
               errorBuilder: (_, __, ___) => const ColoredBox(
                 color: Color(0xFFE9EDF3),
@@ -5673,6 +5638,7 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -5856,7 +5822,6 @@ class ProductDetailScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   _SellerCard(product: product),
                   const SizedBox(height: 10),
-                  _ListingLikeBar(listingId: product['id']?.toString() ?? ''),
                   _ProfessionalProductReviews(product: product is Map ? Map<String,dynamic>.from(product) : <String,dynamic>{}),
                   const Divider(height: 32),
                   Text(
@@ -8785,37 +8750,39 @@ class CategoriesScreen extends StatelessWidget {
               ? category['icon'] as IconData
               : Icons.category;
 
-          final active = isMarketplaceCategoryActive(id);
-          final lang = Localizations.localeOf(context).languageCode;
-          final soon = lang == 'en' ? 'Coming soon' : (lang == 'ps' ? 'ژر فعالېږي' : 'به‌زودی');
           return Card(
             elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: () => _openCategoryRoute(context, category),
-              child: Opacity(
-                opacity: active ? 1 : .58,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 27,
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 28),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 27,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer,
+                      child: Icon(
+                        icon,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 28,
                       ),
-                      const SizedBox(height: 10),
-                      Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-                      if (!active) ...[
-                        const SizedBox(height: 5),
-                        Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(color: const Color(0xFFFFF0E6), borderRadius: BorderRadius.circular(20)),
-                          child: Text(soon, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFFB45309)))),
-                      ],
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -8851,17 +8818,11 @@ class SubcategoryScreen extends StatelessWidget {
           final c = list[i];
           final subcategoryId = c['id']?.toString() ?? '';
           final subcategoryTitle = localizedSubcategoryTitle(context, categoryId, c['id']?.toString() ?? '', c['title']?.toString() ?? '');
-          final active = isMarketplaceSubcategoryActive(categoryId, subcategoryId);
-          final lang = Localizations.localeOf(context).languageCode;
-          final soon = lang == 'en' ? 'Coming soon' : (lang == 'ps' ? 'ژر' : 'به‌زودی');
-          return Opacity(
-            opacity: active ? 1 : .58,
-            child: ListTile(
-              leading: CircleAvatar(child: Icon(categoryIcon)),
-              title: Text(subcategoryTitle),
-              trailing: active ? const Icon(Icons.chevron_left) : Text(soon, style: const TextStyle(fontSize: 11, color: Colors.deepOrange, fontWeight: FontWeight.w800)),
-              onTap: () => _openCategoryRoute(context, {'id': categoryId, 'title': categoryTitle, 'icon': categoryIcon}, subcategoryId: subcategoryId, subcategoryTitle: subcategoryTitle),
-            ),
+          return ListTile(
+            leading: CircleAvatar(child: Icon(categoryIcon)),
+            title: Text(subcategoryTitle),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => _openCategoryRoute(context, {'id': categoryId, 'title': categoryTitle, 'icon': categoryIcon}, subcategoryId: subcategoryId, subcategoryTitle: subcategoryTitle),
           );
         },
       ),
@@ -9886,11 +9847,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
     if (publishing) return;
     if (title.text.trim().isEmpty) { _msg('عنوان آگهی را وارد کنید.'); return; }
     if (category.isEmpty) { _msg('دسته‌بندی را انتخاب کنید.'); return; }
-    if (!widget.professional &&
-        (!isMarketplaceCategoryActive(category) || (subcategory.isNotEmpty && !isMarketplaceSubcategoryActive(category, subcategory)))) {
-      _msg('فعلاً فقط ثبت آگهی وسایط نقلیه فعال است.');
-      return;
-    }
     if (subcategory.isEmpty && (subcategories[category]?.isNotEmpty ?? false)) { _msg('زیر‌دسته را انتخاب کنید.'); return; }
     if (province.isEmpty) { _msg('ولایت آگهی را انتخاب کنید.'); return; }
     if (imageBytes.isEmpty) { _msg('حداقل یک عکس برای آگهی انتخاب کنید.'); return; }
@@ -9953,12 +9909,6 @@ class _AddProductSheetState extends State<AddProductSheet> {
   Widget build(BuildContext context) {
     final professional = widget.professional;
     final ps = Localizations.localeOf(context).languageCode == 'ps';
-    final categoryOptions = professional
-        ? categories
-        : categories.where((c) => isMarketplaceCategoryActive(c['id'] as String)).toList();
-    final subcategoryOptions = (subcategories[category] ?? [])
-        .where((c) => professional || isMarketplaceSubcategoryActive(category, c['id']!))
-        .toList();
     final cat = category;
     final isFootwear = cat.contains('shoe') || cat.contains('footwear');
     final isClothing = cat.contains('clothing') || cat.contains('fashion') || cat.contains('women') || cat.contains('men');
@@ -10027,8 +9977,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
           section('۲. معرفی محصول', professional ? 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.' : 'اطلاعات اصلی آگهی را وارد کنید.', Icons.inventory_2_rounded,
             Column(children: [
               field(title, 'نام محصول', hint: professional ? 'مثلاً کفش مردانه چرمی مدل ۲۰۲۶' : 'عنوان آگهی'),
-              DropdownButtonFormField<String>(value: category.isEmpty ? null : category, decoration: InputDecoration(labelText: uiText(context, 'دسته‌بندی'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: categoryOptions.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(), onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; })),
-              if (subcategoryOptions.isNotEmpty) ...[const SizedBox(height: 11), DropdownButtonFormField<String>(value: subcategory.isEmpty ? null : subcategory, decoration: InputDecoration(labelText: uiText(context, 'زیر‌دسته'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: subcategoryOptions.map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(), onChanged: (val) => setState(() => subcategory = val ?? ''))],
+              DropdownButtonFormField<String>(value: category.isEmpty ? null : category, decoration: InputDecoration(labelText: uiText(context, 'دسته‌بندی'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(), onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; })),
+              if ((subcategories[category] ?? []).isNotEmpty) ...[const SizedBox(height: 11), DropdownButtonFormField<String>(value: subcategory.isEmpty ? null : subcategory, decoration: InputDecoration(labelText: uiText(context, 'زیر‌دسته'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(), onChanged: (val) => setState(() => subcategory = val ?? ''))],
               const SizedBox(height: 11),
               DropdownButtonFormField<String>(value: province.isEmpty ? null : province, decoration: InputDecoration(labelText: uiText(context, 'ولایت'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(), onChanged: (val) => setState(() => province = val ?? '')),
               const SizedBox(height: 11),
