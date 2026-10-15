@@ -5042,7 +5042,6 @@ class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews
   bool sending = false;
   List<dynamic> reviews = [];
   String? error;
-  bool storeActive = false;
 
   @override void initState() { super.initState(); _load(); }
 
@@ -5050,14 +5049,8 @@ class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews
     final id = widget.product['id']?.toString() ?? '';
     if (id.isEmpty) { if (mounted) setState(() => loading = false); return; }
     try {
-      storeActive = widget.product['store_active'] == true;
-      if (!storeActive) {
-        try {
-          final fresh = await ApiService.getListingById(id);
-          storeActive = fresh['store_active'] == true;
-        } catch (_) {}
-      }
-      if (!storeActive) { if (mounted) setState(() => loading = false); return; }
+      // Reviews are part of the listing details for every ad, not only
+      // listings attached to a professional store.
       final data = await ApiService.getProductReviews(id);
       if (mounted) setState(() { reviews = data; loading = false; error = null; });
     } catch (e) {
@@ -5102,7 +5095,6 @@ class _ProfessionalProductReviewsState extends State<_ProfessionalProductReviews
   }
 
   @override Widget build(BuildContext context) {
-    if (!storeActive && !loading) return const SizedBox.shrink();
     final values = reviews.map((x) => double.tryParse('${x['rating']}')).whereType<double>().toList();
     final average = values.isEmpty ? 0.0 : values.reduce((a,b) => a+b) / values.length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
