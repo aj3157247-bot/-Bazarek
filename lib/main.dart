@@ -3454,10 +3454,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: imageUrl.isNotEmpty
                           ? Image.network(
-                              _optimizedImageUrl(imageUrl, width: 900, quality: 82),
+                              _optimizedImageUrl(imageUrl, width: 900, quality: 82, resize: 'contain'),
                               width: double.infinity,
                               height: double.infinity,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               alignment: Alignment.center,
                               loadingBuilder: _bazarekImageLoading,
                               errorBuilder: (_, __, ___) =>
@@ -4896,7 +4896,7 @@ String _originalImageUrl(String url) {
   return u.split('?').first;
 }
 
-String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
+String _optimizedImageUrl(String url, {int width = 720, int quality = 78, String resize = 'cover'}) {
   final u = url.trim();
   if (u.isEmpty) return u;
   // Supabase Storage Image Transformations keep original files intact while
@@ -4905,7 +4905,7 @@ String _optimizedImageUrl(String url, {int width = 720, int quality = 78}) {
   if (!u.contains(marker)) return u;
   final transformed = u.replaceFirst(marker, '/storage/v1/render/image/public/');
   final separator = transformed.contains('?') ? '&' : '?';
-  return '$transformed${separator}width=$width&quality=$quality';
+  return '$transformed${separator}width=$width&quality=$quality&resize=$resize';
 }
 
 String _displayListingPrice(BuildContext context, dynamic item) {
@@ -4947,7 +4947,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? ColoredBox(color: const Color(0xFFF3F5F7), child: Image.network(_optimizedImageUrl(imageUrl, width: 500, quality: 80), width: double.infinity, height: double.infinity, fit: BoxFit.contain, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFF3F5F7), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? ColoredBox(color: const Color(0xFFF3F5F7), child: Image.network(_optimizedImageUrl(imageUrl, width: 500, quality: 80, resize: 'contain'), width: double.infinity, height: double.infinity, fit: BoxFit.contain, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFF3F5F7), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -5471,7 +5471,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => _openListing(context, item),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, resize: 'contain'), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -5518,7 +5518,7 @@ class _ProductCard extends StatelessWidget {
             child: Stack(fit: StackFit.expand, children: [
               const ColoredBox(color: Color(0xFFF3F5F7)),
               if (imageUrl.isNotEmpty)
-                Image.network(_optimizedImageUrl(imageUrl, width: 900, quality: 82), width: double.infinity, height: double.infinity, fit: BoxFit.contain, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+                Image.network(_optimizedImageUrl(imageUrl, width: 900, quality: 82, resize: 'contain'), width: double.infinity, height: double.infinity, fit: BoxFit.contain, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
               else
                 const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
@@ -5601,19 +5601,16 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
           PageView.builder(
             itemCount: images.length,
             onPageChanged: (index) => setState(() => currentPage = index),
-            itemBuilder: (_, i) => ColoredBox(
-              color: const Color(0xFFF1F3F5),
-              child: Image.network(
-                _optimizedImageUrl(images[i].toString(), width: 1400, quality: 88),
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.contain,
-                alignment: Alignment.center,
-                loadingBuilder: _bazarekImageLoading,
-                errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: Color(0xFFE9EDF3),
-                  child: Center(child: Icon(Icons.image_not_supported_outlined, size: 52)),
-                ),
+            itemBuilder: (_, i) => Image.network(
+              _optimizedImageUrl(images[i].toString(), width: 1400, quality: 88),
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              loadingBuilder: _bazarekImageLoading,
+              errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xFFE9EDF3),
+                child: Center(child: Icon(Icons.image_not_supported_outlined, size: 52)),
               ),
             ),
           ),
@@ -7915,7 +7912,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                         child: Container(
                           decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(12)),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                            Expanded(child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 45))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 45))),
+                            Expanded(child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, resize: 'contain'), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 45))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 45))),
                             Padding(padding: const EdgeInsets.fromLTRB(11, 9, 11, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.3)),
                               const SizedBox(height: 6),
