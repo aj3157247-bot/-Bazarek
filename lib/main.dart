@@ -4947,7 +4947,7 @@ class _DivarStyleListing extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 126, height: 112, child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Stack(fit: StackFit.expand, children: [
-            imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 500, quality: 80), width: double.infinity, height: double.infinity, fit: BoxFit.cover, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFE9EDF3), child: Icon(Icons.image_outlined, size: 34)),
+            imageUrl.isNotEmpty ? ColoredBox(color: const Color(0xFFF3F5F7), child: Image.network(_optimizedImageUrl(imageUrl, width: 500, quality: 80), width: double.infinity, height: double.infinity, fit: BoxFit.contain, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 34))) : const ColoredBox(color: Color(0xFFF3F5F7), child: Icon(Icons.image_outlined, size: 34)),
             if (count > 1) Positioned(left: 7, top: 7, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(.62), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.photo_library_outlined, color: Colors.white, size: 13), const SizedBox(width: 3), Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]))),
             if (boost.isNotEmpty)
   Positioned(
@@ -5516,9 +5516,11 @@ class _ProductCard extends StatelessWidget {
           Expanded(
             flex: 7,
             child: Stack(fit: StackFit.expand, children: [
-              imageUrl.isNotEmpty
-                  ? Image.network(_optimizedImageUrl(imageUrl, width: 900, quality: 82), width: double.infinity, height: double.infinity, fit: BoxFit.cover, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
-                  : const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
+              const ColoredBox(color: Color(0xFFF3F5F7)),
+              if (imageUrl.isNotEmpty)
+                Image.network(_optimizedImageUrl(imageUrl, width: 900, quality: 82), width: double.infinity, height: double.infinity, fit: BoxFit.contain, alignment: Alignment.center, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_not_supported_outlined, size: 36)))
+              else
+                const ColoredBox(color: Color(0xFFE9EDF4), child: Icon(Icons.image_outlined, size: 36)),
               if (boostLabel.isNotEmpty)
                 Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(9)), child: Text(boostLabel, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)))),
               if (item['turbo_active'] == true)
