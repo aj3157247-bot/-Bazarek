@@ -5589,12 +5589,12 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
   Widget build(BuildContext context) {
     final images = widget.images;
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final galleryHeight = (screenWidth * 1.05).clamp(320.0, 520.0);
+    final galleryHeight = (screenWidth * 0.95).clamp(300.0, 500.0);
     return SizedBox(
       width: double.infinity,
       height: galleryHeight,
       child: ColoredBox(
-        color: const Color(0xFFF1F3F5),
+        color: const Color(0xFFF7F7F7),
         child: Stack(
         fit: StackFit.expand,
         children: [
@@ -5602,10 +5602,10 @@ class _ProductImageGalleryState extends State<_ProductImageGallery> {
             itemCount: images.length,
             onPageChanged: (index) => setState(() => currentPage = index),
             itemBuilder: (_, i) => Image.network(
-              _optimizedImageUrl(images[i].toString(), width: 1400, quality: 88),
+              _optimizedImageUrl(images[i].toString(), width: 1400, quality: 88, resize: 'contain'),
               width: double.infinity,
               height: double.infinity,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               alignment: Alignment.center,
               loadingBuilder: _bazarekImageLoading,
               errorBuilder: (_, __, ___) => const ColoredBox(
