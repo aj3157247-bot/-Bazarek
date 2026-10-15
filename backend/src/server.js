@@ -1285,6 +1285,12 @@ app.post('/api/products', requireUser, async (req, res) => {
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
+    // Temporary public-marketplace launch focus. Existing listings remain intact;
+    // only creation of new non-store ads is limited to active vehicle types.
+    const activeVehicleSubcategories = new Set(['car', 'motorcycle', 'rickshaw', 'bicycles']);
+    if (!forceStoreProduct && (String(category) !== 'vehicles' || !activeVehicleSubcategories.has(String(subcategory)))) {
+      return res.status(400).json({ error: 'فعلاً فقط ثبت آگهی موتر، موترسایکل، بایسکل و ریکشا فعال است.' });
+    }
     const cleanCode = String(product_code || '').trim().slice(0,80);
     const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
     const discount = Math.min(99, Math.max(0, Number(discount_percent) || 0));
