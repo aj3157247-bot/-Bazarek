@@ -1,3 +1,5 @@
+import { idFromSegment, listingPath, applyIdFilter } from "../_listing_url.js";
+
 function escHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -103,9 +105,12 @@ async function getProduct(env, id) {
 
   if (!supabaseUrl || !key) return null;
 
-  const endpoint =
-    `${supabaseUrl}/rest/v1/products?select=*` +
-    `&id=eq.${encodeURIComponent(id)}&is_active=eq.true&limit=1`;
+  const endpointUrl = new URL(`${supabaseUrl}/rest/v1/products`);
+  endpointUrl.searchParams.set("select", "*");
+  applyIdFilter(endpointUrl, id);
+  endpointUrl.searchParams.set("is_active", "eq.true");
+  endpointUrl.searchParams.set("limit", "1");
+  const endpoint = endpointUrl.toString();
 
   // Timeout جلوگیری می‌کند که یک Supabase کند، اجرای Function را تا حد
   // Cloudflare timeout بکشاند و باعث 500 شود.
@@ -138,7 +143,8 @@ function buildSeo(shell, product, requestUrl) {
   const description =
     cleanText(product.description, 180) ||
     `آگهی ${title} در بازار آنلاین افغانستان، بازارک.`;
-  const canonical = requestUrl.toString().split("?")[0].split("#")[0];
+  // آدرس canonical همیشه لینک کوتاه استاندارد است (لینک‌های قدیمی با UUID هم به همین اشاره می‌کنند).
+  const canonical = `${requestUrl.origin}${listingPath(product)}`;
   const image = firstImage(product.image_url);
   const location =
     cleanText(product.location_text, 120) ||
@@ -191,7 +197,7 @@ function buildSeo(shell, product, requestUrl) {
 }
 
 export async function onRequestGet(context) {
-  const id = String(context.params?.id || "").trim();
+  const id = idFromSegment(context.params?.id);
 
   // Most important rule: never make a listing URL fail just because SEO fails.
   let shell = null;
@@ -237,9 +243,18 @@ export async function onRequestGet(context) {
       });
     }
 
+    // لینک قدیمی (UUID کامل) یا slug نادرست ← ریدایرکت دائم به لینک استاندارد کوتاه.
+    const reqUrl = new URL(context.request.url);
+    const wantedPath = listingPath(product);
+    let currentPath = reqUrl.pathname;
+    try { currentPath = decodeURIComponent(currentPath); } catch (_) {}
+    if (currentPath.replace(/\/+$/, "") !== wantedPath) {
+      return Response.redirect(`${reqUrl.origin}${wantedPath}${reqUrl.search}`, 301);
+    }
+
     let html = shell;
     try {
-      html = buildSeo(shell, product, new URL(context.request.url));
+      html = buildSeo(shell, product, reqUrl);
     } catch (_) {
       // Keep the normal Flutter page if metadata generation fails.
     }
@@ -249,7 +264,7 @@ export async function onRequestGet(context) {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "public, max-age=60, s-maxage=300",
-        "x-bazarek-seo": html === shell ? "listing-shell" : "listing-v5"
+        "x-bazarek-seo": html === shell ? "listing-shell" : "listing-v6"
       }
     });
   } catch (_) {
