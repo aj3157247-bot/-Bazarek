@@ -67,3 +67,33 @@ export function applyIdFilter(url, id) {
     url.searchParams.append("id", `eq.${id}`);
   }
 }
+
+// پشتیبان: اگر فیلتر بازه‌ای روی ستون id جواب نداد (مثلاً نوع ستون uuid نبود)،
+// آگهی‌های فعال اخیر را می‌خوانیم و شناسه کامل را از روی پیشوند پیدا می‌کنیم.
+export async function resolveFullId(supabaseUrl, key, short) {
+  if (!/^[0-9a-f]{12}$/.test(short)) return null;
+  const base = String(supabaseUrl || "").replace(/\/+$/, "");
+  const head = `${short.slice(0, 8)}-${short.slice(8, 12)}`;
+  for (let page = 0; page < 5; page++) {
+    const url = new URL(`${base}/rest/v1/products`);
+    url.searchParams.set("select", "id");
+    url.searchParams.set("is_active", "eq.true");
+    url.searchParams.set("order", "created_at.desc,id.asc");
+    url.searchParams.set("limit", "1000");
+    url.searchParams.set("offset", String(page * 1000));
+    try {
+      const r = await fetch(url, {
+        headers: { apikey: String(key), Authorization: `Bearer ${String(key)}`, Accept: "application/json" },
+      });
+      if (!r.ok) return null;
+      const rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      const hit = rows.find((x) => String(x.id || "").toLowerCase().startsWith(head));
+      if (hit) return String(hit.id);
+      if (rows.length < 1000) return null;
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
