@@ -1,3 +1,5 @@
+import { idFromSegment, applyIdFilter } from '../../_listing_url.js';
+
 function json(data, status = 200) {
   return Response.json(data, {
     status,
@@ -21,7 +23,7 @@ export async function onRequestOptions() {
 }
 
 export async function onRequestGet({ params, env }) {
-  const id = String(params.id || '').trim();
+  const id = idFromSegment(params.id);
   if (!id) return json({ error: 'شناسه آگهی نامعتبر است.' }, 400);
 
   const supabaseUrl = String(env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -45,7 +47,7 @@ export async function onRequestGet({ params, env }) {
   try {
     const url = new URL(`${supabaseUrl}/rest/v1/products`);
     url.searchParams.set('select', columns);
-    url.searchParams.set('id', `eq.${id}`);
+    applyIdFilter(url, id);
     url.searchParams.set('limit', '1');
 
     const r = await fetch(url, {
