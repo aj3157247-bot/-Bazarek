@@ -1,4 +1,4 @@
-import { idFromSegment, applyIdFilter } from '../../_listing_url.js';
+import { idFromSegment, applyIdFilter, resolveFullId } from '../../_listing_url.js';
 
 function json(data, status = 200) {
   return Response.json(data, {
@@ -64,7 +64,23 @@ export async function onRequestGet({ params, env }) {
       return json({ error: 'خطا در ارتباط با پایگاه‌داده آگهی.', code: 'SUPABASE_QUERY_FAILED' }, 502);
     }
 
-    const product = Array.isArray(rows) ? rows[0] : null;
+    let product = Array.isArray(rows) ? rows[0] : null;
+
+    // پشتیبان شناسه کوتاه: اگر فیلتر بازه‌ای جواب نداد، شناسه کامل را از پیشوند پیدا کن.
+    if (!product && /^[0-9a-f]{12}$/.test(id)) {
+      const full = await resolveFullId(supabaseUrl, supabaseKey, id);
+      if (full) {
+        const retry = new URL(`${supabaseUrl}/rest/v1/products`);
+        retry.searchParams.set('select', columns);
+        retry.searchParams.set('id', `eq.${full}`);
+        retry.searchParams.set('limit', '1');
+        const rr = await fetch(retry, {
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, Accept: 'application/json' },
+        });
+        const again = await rr.json().catch(() => []);
+        product = Array.isArray(again) ? again[0] : null;
+      }
+    }
     if (!product) return json({ error: 'آگهی پیدا نشد.', code: 'LISTING_NOT_FOUND' }, 404);
 
     // Do not expose an inactive listing through a shared public URL.
