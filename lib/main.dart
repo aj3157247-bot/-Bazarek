@@ -83,9 +83,60 @@ String _seoSlug(String value) {
   return slug.isEmpty ? 'listing' : slug;
 }
 
+// لینک کوتاه آگهی: /listing/<کلمات-انگلیسی-عنوان یا دسته>-<۱۲ کاراکتر اول شناسه>
+// مثال: /listing/lexus-2022-791c521b9bd9  یا  /listing/vehicles-791c521b9bd9
+// فقط حروف ASCII دارد تا هنگام کپی/اشتراک‌گذاری طولانی و درهم (percent-encoded) نشود.
+// منطق ساخت slug باید دقیقاً با functions/_listing_url.js یکی باشد.
+String _shortListingId(String id) {
+  final hex = id.replaceAll('-', '').toLowerCase();
+  return hex.length >= 12 ? hex.substring(0, 12) : hex;
+}
+
+String _asciiSlugPart(String value) {
+  var v = value.toLowerCase();
+  const fa = '۰۱۲۳۴۵۶۷۸۹';
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  const en = '0123456789';
+  for (var i = 0; i < 10; i++) {
+    v = v.replaceAll(fa[i], en[i]).replaceAll(ar[i], en[i]);
+  }
+  return v;
+}
+
+String _listingSlug(dynamic product) {
+  final title = _asciiSlugPart(product['title']?.toString() ?? '');
+  var tokens = RegExp(r'[a-z0-9]+').allMatches(title).map((m) => m.group(0)!).toList();
+  // اگر عنوان فقط عدد است (مثلاً "2022")، معنای کافی ندارد.
+  if (!tokens.any((t) => RegExp(r'[a-z]').hasMatch(t))) tokens = [];
+  if (tokens.length > 4) tokens = tokens.sublist(0, 4);
+  var slug = tokens.join('-');
+  if (slug.isEmpty) {
+    String part(dynamic v) {
+      final t = (v?.toString() ?? '').toLowerCase().trim();
+      return RegExp(r'^[a-z0-9_]+$').hasMatch(t) ? t.replaceAll('_', '-') : '';
+    }
+    slug = [part(product['category']), part(product['subcategory'])].where((e) => e.isNotEmpty).join('-');
+  }
+  if (slug.length > 40) slug = slug.substring(0, 40).replaceAll(RegExp(r'-+$'), '');
+  return slug;
+}
+
 String _listingPath(dynamic product) {
   final id = product['id']?.toString().trim() ?? '';
-  return '/listing/${Uri.encodeComponent(id.isEmpty ? 'unknown' : id)}';
+  if (id.isEmpty) return '/listing/unknown';
+  final slug = _listingSlug(product);
+  final short = _shortListingId(id);
+  return '/listing/${slug.isEmpty ? '' : '$slug-'}$short';
+}
+
+/// از آخر بخش مسیر، شناسه کامل (UUID) یا شناسه کوتاه ۱۲ کاراکتری را بیرون می‌کشد.
+String _listingIdFromSegment(String raw) {
+  final seg = Uri.decodeComponent(raw).toLowerCase();
+  final full = RegExp(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$').firstMatch(seg);
+  if (full != null) return full.group(1)!;
+  final short = RegExp(r'([0-9a-f]{12})$').firstMatch(seg);
+  if (short != null) return short.group(1)!;
+  return seg;
 }
 
 String _categoryPath(String categoryId, [String? subcategoryId]) {
@@ -2064,7 +2115,11 @@ class ApiService {
   static Future<Map<String, dynamic>> getListingById(String id) async {
     final cleanId = id.trim();
     if (cleanId.isEmpty) throw Exception('شناسه آگهی نامعتبر است.');
-    final uri = Uri.parse('${ApiConfig.baseUrl}/listings/$cleanId');
+    // شناسه کوتاه (۱۲ کاراکتر) فقط توسط Cloudflare Function قابل تبدیل به آگهی است.
+    final isShort = RegExp(r'^[0-9a-fA-F]{12}$').hasMatch(cleanId);
+    final uri = isShort
+        ? Uri.parse('${kIsWeb ? Uri.base.origin : 'https://bazarek.pages.dev'}/api/listings/$cleanId')
+        : Uri.parse('${ApiConfig.baseUrl}/listings/$cleanId');
     final res = await http.get(uri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 15));
     dynamic data;
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
@@ -2647,10 +2702,7 @@ class _WebDeepLinkEntryState extends State<WebDeepLinkEntry> {
       }
 
       if (parts.isNotEmpty && parts.first == 'listing' && parts.length >= 2) {
-        final raw = parts[1];
-        final id = RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(raw)
-            ? raw
-            : (RegExp(r'([0-9a-fA-F-]{36})$').firstMatch(raw)?.group(1) ?? raw);
+        final id = _listingIdFromSegment(parts[1]);
         final product = await ApiService.getListingById(id);
         if (!mounted) return;
         String imageUrl = '';
@@ -3500,8 +3552,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     Positioned(
-                      top: 5,
-                      left: 5,
+                      top: 6,
+                      left: 6,
                       child: _SaveButton(item: item),
                     ),
                   ],
@@ -3512,15 +3564,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    LocalizedText(
-                      item['title']?.toString() ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111111),
-                        height: 1.28,
+                    SizedBox(
+                      height: 37,
+                      child: LocalizedText(
+                        item['title']?.toString() ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF111111),
+                          height: 1.28,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 7),
@@ -3535,19 +3590,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 5),
-                    if (province.isNotEmpty || location.isNotEmpty)
-                      Text(
-                        [province, location]
-                            .where((x) => x.isNotEmpty)
-                            .join(' • '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.black54,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                    SizedBox(
+                      height: 14,
+                      child: (province.isNotEmpty || location.isNotEmpty)
+                          ? Text(
+                              [province, location]
+                                  .where((x) => x.isNotEmpty)
+                                  .join(' • '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.black54,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : null,
+                    ),
                     const SizedBox(height: 5),
                     Row(
                       children: [
@@ -4613,6 +4672,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     ? 3
                                                     : 2);
                                         final gap = 10.0;
+                                        // ارتفاع کارت = ارتفاع تصویر + ارتفاع ثابت متن؛ بدون فضای خالی زیر کارت.
+                                        final cardWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
+                                        final cardExtent = cardWidth / (isMobile ? 1.12 : 1.28) + 138;
                                         return GridView.builder(
                                           shrinkWrap: true,
                                           physics:
@@ -4623,8 +4685,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             crossAxisCount: columns,
                                             crossAxisSpacing: gap,
                                             mainAxisSpacing: gap,
-                                            mainAxisExtent:
-                                                isMobile ? 330 : 390,
+                                            mainAxisExtent: cardExtent,
                                           ),
                                           itemBuilder: (context, index) =>
                                               productCard(normalProducts[index]),
@@ -5172,7 +5233,7 @@ class _ProfessionalStoreActionsState extends State<_ProfessionalStoreActions> {
   }
   Future<void> _share() async {
     final url = 'https://bazarek.pages.dev/store/${widget.sellerId}';
-    final text = '🏪 ${widget.sellerName}\nفروشگاه حرفه‌ای در بازارک\n\nمشاهده فروشگاه:\n$url';
+    final text = '🏪 ${widget.sellerName}\nفروشگاه حرفه‌ای در بازارک';
     final ok = await shareWeb(title: widget.sellerName, text: text, url: url);
     if (!ok) { await Clipboard.setData(ClipboardData(text: url)); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لینک فروشگاه کپی شد.'))); }
   }
@@ -5563,7 +5624,28 @@ class _SaveAdButtonState extends State<_SaveAdButton> {
     if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; }
     await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {});
   }
-  @override Widget build(BuildContext context) => Material(child: InkWell(onTap: _toggle, borderRadius: BorderRadius.circular(20), child: Container(width: 31, height: 31, decoration: BoxDecoration(color: Colors.white.withOpacity(.92), shape: BoxShape.circle), child: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 18, color: saved ? Colors.red : null))));
+  @override Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: _toggle,
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0x1F000000)),
+          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+        ),
+        child: Icon(
+          saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          size: 21,
+          color: saved ? const Color(0xFFE53935) : const Color(0xFF3C4043),
+        ),
+      ),
+    ),
+  );
 }
 
 class NumberFormatHelper {
@@ -5657,20 +5739,16 @@ class ProductDetailScreen extends StatelessWidget {
     final title = product['title']?.toString().trim().isNotEmpty == true
         ? product['title'].toString().trim()
         : 'آگهی در بازارک';
-    final url = kIsWeb
-        ? Uri.base.toString()
-        : 'https://bazarek.pages.dev${_listingPath(product)}';
+    final url = 'https://bazarek.pages.dev${_listingPath(product)}';
     final price = _displayListingPrice(context, product);
     final province = localizedProvince(context, product['province']?.toString() ?? '');
     final text = [
       '📌 $title',
       if (price.isNotEmpty) '💰 $price',
       if (province.isNotEmpty) '📍 $province',
-      '',
-      'مشاهده آگهی در بازارک:',
-      url,
     ].join('\n');
 
+    // لینک فقط یک‌بار (در فیلد url) ارسال می‌شود تا در پیام دوبار تکرار نشود.
     final shared = await shareWeb(title: title, text: text, url: url);
     if (!shared) {
       await Clipboard.setData(ClipboardData(text: url));
