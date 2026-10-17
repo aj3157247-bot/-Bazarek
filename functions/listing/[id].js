@@ -1,4 +1,4 @@
-import { idFromSegment, listingPath, applyIdFilter } from "../_listing_url.js";
+import { idFromSegment, listingPath, applyIdFilter, resolveFullId } from "../_listing_url.js";
 
 function escHtml(value) {
   return String(value ?? "")
@@ -96,7 +96,7 @@ async function getShell(context) {
   return null;
 }
 
-async function getProduct(env, id) {
+async function queryProduct(env, id) {
   const supabaseUrl = String(env.SUPABASE_URL || "").replace(/\/+$/, "");
   const key =
     env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -138,9 +138,20 @@ async function getProduct(env, id) {
   }
 }
 
+async function getProduct(env, id) {
+  const found = await queryProduct(env, id);
+  if (found || !/^[0-9a-f]{12}$/.test(id)) return found;
+  // پشتیبان برای شناسه کوتاه
+  const supabaseUrl = String(env.SUPABASE_URL || "").replace(/\/+$/, "");
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !key) return null;
+  const full = await resolveFullId(supabaseUrl, key, id);
+  return full ? queryProduct(env, full) : null;
+}
+
 function buildSeo(shell, product, requestUrl) {
   const title = cleanText(product.title, 120) || "آگهی در بازارک";
-  const description =
+  const rawDescription =
     cleanText(product.description, 180) ||
     `آگهی ${title} در بازار آنلاین افغانستان، بازارک.`;
   // آدرس canonical همیشه لینک کوتاه استاندارد است (لینک‌های قدیمی با UUID هم به همین اشاره می‌کنند).
@@ -150,6 +161,15 @@ function buildSeo(shell, product, requestUrl) {
     cleanText(product.location_text, 120) ||
     cleanText(product.location, 120) ||
     cleanText(product.province, 80);
+
+  // قیمت و محل را اول توضیحات می‌گذاریم تا در پیش‌نمایش واتساپ/تلگرام/گوگل دیده شود.
+  const priceNum = Number(product.price);
+  const cur = String(product.currency || "AFN").toUpperCase();
+  const priceText =
+    product.price === null || product.price === undefined || product.price === "" || !isFinite(priceNum) || priceNum <= 0
+      ? "قیمت: توافقی"
+      : `قیمت: ${priceNum.toLocaleString("en-US")} ${cur === "USD" ? "دالر" : "افغانی"}`;
+  const description = [priceText, location, rawDescription].filter(Boolean).join(" • ").slice(0, 230);
 
   let html = shell;
   html = replaceTitle(html, `${title} | بازارک`);
