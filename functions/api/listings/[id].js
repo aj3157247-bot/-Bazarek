@@ -37,7 +37,7 @@ export async function onRequestGet({ params, env }) {
   }
 
   const columns = [
-    'id','title','description','price','stock','category','subcategory','image_url',
+    'id','title','description','price','stock','category','subcategory','image_url','video_url',
     'created_at','vendor_id','is_featured','is_pinned','featured_until','pinned_until',
     'boost_level','boost_until','allow_chat','show_phone','contact_phone','location_text',
     'external_link','is_negotiable','currency','views_count','province','brand','model',
