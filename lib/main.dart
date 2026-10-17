@@ -5088,7 +5088,40 @@ class _SaveButtonState extends State<_SaveButton> {
   @override void initState() { super.initState(); _read(); }
   Future<void> _read() async { final p = await SharedPreferences.getInstance(); final id = widget.item['id']?.toString(); if (mounted) setState(() => saved = id != null && (p.getStringList('saved_ad_ids') ?? []).contains(id)); }
   Future<void> _toggle() async { final id = widget.item['id']?.toString(); if (id == null) return; final p = await SharedPreferences.getInstance(); final ids = p.getStringList('saved_ad_ids') ?? []; if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; } await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {}); }
-  @override Widget build(BuildContext context) => IconButton(onPressed: _toggle, visualDensity: VisualDensity.compact, icon: Icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: saved ? Colors.red : Colors.black45, size: 21));
+  @override Widget build(BuildContext context) => _HeartBadge(saved: saved, onTap: _toggle);
+}
+
+// دکمه قلب ذخیره آگهی: روی هر عکسی (روشن یا تیره) واضح دیده می‌شود.
+// ذخیره‌نشده: دایره‌ی تیره‌ی نیمه‌شفاف + قلب سفید؛ ذخیره‌شده: دایره‌ی سفید + قلب صورتی پررنگ.
+class _HeartBadge extends StatelessWidget {
+  final bool saved;
+  final VoidCallback onTap;
+  const _HeartBadge({required this.saved, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: saved ? Colors.white : const Color(0xB3102A43),
+              shape: BoxShape.circle,
+              border: Border.all(color: saved ? const Color(0x33FF2D6F) : const Color(0x66FFFFFF), width: 1),
+              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            child: Icon(
+              saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              size: 21,
+              color: saved ? const Color(0xFFFF2D6F) : Colors.white,
+            ),
+          ),
+        ),
+      );
 }
 
 
@@ -5624,28 +5657,7 @@ class _SaveAdButtonState extends State<_SaveAdButton> {
     if (ids.contains(id)) { ids.remove(id); saved = false; } else { ids.add(id); saved = true; }
     await p.setStringList('saved_ad_ids', ids); if (mounted) setState(() {});
   }
-  @override Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: _toggle,
-      customBorder: const CircleBorder(),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0x1F000000)),
-          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
-        ),
-        child: Icon(
-          saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          size: 21,
-          color: saved ? const Color(0xFFE53935) : const Color(0xFF3C4043),
-        ),
-      ),
-    ),
-  );
+  @override Widget build(BuildContext context) => _HeartBadge(saved: saved, onTap: _toggle);
 }
 
 class NumberFormatHelper {
