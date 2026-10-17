@@ -157,6 +157,7 @@ function buildSeo(shell, product, requestUrl) {
   // آدرس canonical همیشه لینک کوتاه استاندارد است (لینک‌های قدیمی با UUID هم به همین اشاره می‌کنند).
   const canonical = `${requestUrl.origin}${listingPath(product)}`;
   const image = firstImage(product.image_url);
+  const video = /^https?:\/\//i.test(String(product.video_url || "")) ? String(product.video_url) : "";
   const location =
     cleanText(product.location_text, 120) ||
     cleanText(product.location, 120) ||
@@ -200,6 +201,18 @@ function buildSeo(shell, product, requestUrl) {
     url: canonical,
     ...(image ? { image: [image] } : {}),
     ...(location ? { areaServed: location } : {}),
+    ...(video
+      ? {
+          subjectOf: {
+            "@type": "VideoObject",
+            name: title,
+            description,
+            contentUrl: video,
+            uploadDate: product.created_at || undefined,
+            ...(image ? { thumbnailUrl: image } : {})
+          }
+        }
+      : {}),
     ...(product.price !== null && product.price !== undefined
       ? {
           offers: {
