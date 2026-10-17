@@ -17,6 +17,8 @@ import 'admin_panel_screen.dart';
 import 'apk_webview_stub.dart' if (dart.library.io) 'apk_webview.dart';
 import 'audio_recorder.dart';
 import 'audio_player.dart';
+import 'video_player.dart';
+import 'video_probe.dart';
 
 
 class Text extends StatelessWidget {
@@ -2068,6 +2070,28 @@ class ApiService {
     if (response.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'Audio upload failed.') : 'Audio upload failed.');
     final url = data is Map ? data['url']?.toString() : null;
     if (url == null || url.isEmpty) throw Exception('Audio URL was not returned.');
+    return url;
+  }
+
+  static Future<String> uploadVideo(Uint8List bytes, String filename, String mimeType) async {
+    Future<http.StreamedResponse> request() async {
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/upload-video'));
+      req.headers['Accept'] = 'application/json';
+      if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      req.files.add(http.MultipartFile.fromBytes('video', bytes, filename: filename, contentType: MediaType.parse(mimeType)));
+      return req.send().timeout(const Duration(seconds: 240));
+    }
+    var response = await request();
+    var body = await response.stream.bytesToString();
+    if (response.statusCode == 401 && await refreshSession()) {
+      response = await request();
+      body = await response.stream.bytesToString();
+    }
+    dynamic data;
+    try { data = jsonDecode(body); } catch (_) { data = null; }
+    if (response.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'آپلود ویدیو ناموفق بود.') : 'آپلود ویدیو ناموفق بود.');
+    final url = data is Map ? data['url']?.toString() : null;
+    if (url == null || url.isEmpty) throw Exception('آدرس ویدیو دریافت نشد.');
     return url;
   }
 
@@ -5925,6 +5949,12 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   LocalizedText(product['description']?.toString() ?? 'بدون توضیحات'),
+                  if ((product['video_url'] ?? '').toString().trim().isNotEmpty) ...[
+                    const Divider(height: 32),
+                    Text('ویدیو', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    BazarekVideoPlayer(url: product['video_url'].toString()),
+                  ],
                   if ((product['audio_url'] ?? '').toString().trim().isNotEmpty) ...[
                     const Divider(height: 32),
                     Text(tr(context, 'audio_section'), style: Theme.of(context).textTheme.titleMedium),
@@ -8812,25 +8842,135 @@ String _dateTimeForUser(dynamic value) {
   }
 }
 
-class CategoriesScreen extends StatelessWidget {
+String _coverImageOf(dynamic item) {
+  try {
+    final raw = item['image_url'];
+    final list = raw is List ? raw : (raw is String && raw.isNotEmpty ? jsonDecode(raw) : const []);
+    if (list is List && list.isNotEmpty) return list.first.toString();
+  } catch (_) {}
+  return '';
+}
+
+/// برای هر دسته تا ۳ عکس واقعی از آگهی‌های همان دسته انتخاب می‌کند؛
+/// اول از زیردسته‌های متفاوت (مثلاً موتر، موترسایکل، بایسکل) تا کلاژ متنوع شود.
+Map<String, List<String>> _buildCategoryCovers(List<dynamic> products) {
+  final bySub = <String, Map<String, List<String>>>{};
+  for (final item in products) {
+    if (item is! Map) continue;
+    final cat = item['category']?.toString() ?? '';
+    if (cat.isEmpty) continue;
+    final img = _coverImageOf(item);
+    if (img.isEmpty) continue;
+    final sub = item['subcategory']?.toString() ?? '';
+    bySub.putIfAbsent(cat, () => {}).putIfAbsent(sub, () => []).add(img);
+  }
+  final out = <String, List<String>>{};
+  bySub.forEach((cat, subs) {
+    final picked = <String>[];
+    var round = 0;
+    while (picked.length < 3) {
+      var added = false;
+      for (final list in subs.values) {
+        if (round < list.length && picked.length < 3 && !picked.contains(list[round])) {
+          picked.add(list[round]);
+          added = true;
+        }
+      }
+      if (!added) break;
+      round++;
+    }
+    out[cat] = picked;
+  });
+  return out;
+}
+
+/// کاور دسته: عکس‌ها کنار هم در یک قاب؛ اگر آگهی‌ای نبود آیکن روی زمینه‌ی رنگی.
+class _CategoryCover extends StatelessWidget {
+  final List<String> images;
+  final IconData icon;
+  const _CategoryCover({required this.images, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    if (images.isEmpty) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [scheme.primaryContainer, scheme.primaryContainer.withOpacity(.55)],
+          ),
+        ),
+        child: Center(child: Icon(icon, size: 44, color: scheme.primary)),
+      );
+    }
+    return Row(
+      textDirection: TextDirection.ltr,
+      children: [
+        for (var i = 0; i < images.length; i++) ...[
+          if (i > 0) const SizedBox(width: 2),
+          Expanded(
+            child: Image.network(
+              _optimizedImageUrl(images[i], width: 360, quality: 72, resize: 'cover'),
+              height: double.infinity,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) =>
+                  progress == null ? child : const ColoredBox(color: Color(0xFFF1F3F4)),
+              errorBuilder: (_, __, ___) => ColoredBox(
+                color: const Color(0xFFF1F3F4),
+                child: Icon(icon, color: Colors.black26),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
+
+  @override
+  State<CategoriesScreen> createState() => _CategoriesScreenState();
+}
+
+class _CategoriesScreenState extends State<CategoriesScreen> {
+  Map<String, List<String>> covers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCovers();
+  }
+
+  Future<void> _loadCovers() async {
+    try {
+      final products = await ApiService.getProducts();
+      if (!mounted) return;
+      setState(() => covers = _buildCategoryCovers(products));
+    } catch (_) {
+      // بدون عکس هم صفحه کار می‌کند؛ آیکن نمایش داده می‌شود.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 1000 ? 5 : width >= 700 ? 4 : 3;
+    final columns = width >= 1000 ? 4 : width >= 700 ? 3 : 2;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(psText(context, 'همه دسته‌بندی‌ها', 'ټولې کټګورۍ')),
       ),
       body: GridView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: columns,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.95,
+          childAspectRatio: 1.08,
         ),
         itemCount: categories.length,
         itemBuilder: (context, index) {
@@ -8847,38 +8987,31 @@ class CategoriesScreen extends StatelessWidget {
 
           return Card(
             elevation: 0,
+            margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFE3E6E8)),
+            ),
             child: InkWell(
               onTap: () => _openCategoryRoute(context, category),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 27,
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .primaryContainer,
-                      child: Icon(
-                        icon,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _CategoryCover(images: covers[id] ?? const [], icon: icon),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    child: Text(
                       title,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );
@@ -9787,6 +9920,15 @@ class _AddProductSheetState extends State<AddProductSheet> {
   String? audioUrl;
   bool recordingAudio = false;
   bool uploadingAudio = false;
+  // ویدیو: آگهی عادی ≤ ۳۰ ثانیه و ۲۰MB — فروشگاه حرفه‌ای ≤ ۶۰ ثانیه و ۴۰MB
+  Uint8List? videoBytes;
+  String videoName = 'video.mp4';
+  String videoMime = 'video/mp4';
+  double? videoSeconds;
+  String? videoUrl;
+  bool uploadingVideo = false;
+  int get _videoLimitSeconds => widget.professional ? 60 : 30;
+  int get _videoLimitMb => widget.professional ? 40 : 20;
   bool publishing = false;
   final AudioRecorderService _audioRecorder = AudioRecorderService();
 
@@ -9906,6 +10048,37 @@ class _AddProductSheetState extends State<AddProductSheet> {
     audioUrl = result;
   }
 
+  Future<void> _pickVideoFile() async {
+    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp4', 'webm', 'mov']);
+    if (files.isEmpty) return;
+    final file = files.first;
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) return;
+    if (bytes.length > _videoLimitMb * 1024 * 1024) {
+      _msg('حجم ویدیو نباید بیشتر از $_videoLimitMb مگابایت باشد.');
+      return;
+    }
+    final lower = file.name.toLowerCase();
+    final mime = lower.endsWith('.webm') ? 'video/webm' : (lower.endsWith('.mov') ? 'video/quicktime' : 'video/mp4');
+    final secs = await probeVideoSeconds(bytes, mime);
+    if (secs != null && secs > _videoLimitSeconds + 0.5) {
+      _msg('ویدیو باید حداکثر $_videoLimitSeconds ثانیه باشد (ویدیوی شما ${secs.round()} ثانیه است).');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      videoBytes = bytes;
+      videoName = file.name.isNotEmpty ? file.name : 'video.mp4';
+      videoMime = mime;
+      videoSeconds = secs;
+      videoUrl = null;
+    });
+  }
+
+  void _clearVideo() {
+    if (mounted) setState(() { videoBytes = null; videoSeconds = null; videoUrl = null; videoName = 'video.mp4'; });
+  }
+
   Future<void> _clearAudio() async {
     await _audioRecorder.cancel();
     if (mounted) setState(() { audioBytes = null; audioName = 'voice.webm'; audioUrl = null; recordingAudio = false; });
@@ -9962,11 +10135,16 @@ class _AddProductSheetState extends State<AddProductSheet> {
         await _uploadAudio();
         if ((audioUrl ?? '').isEmpty) throw Exception(tr(context, 'audio_upload_failed'));
       }
+      if (videoBytes != null && videoBytes!.isNotEmpty) {
+        setState(() => uploadingVideo = true);
+        videoUrl = await ApiService.uploadVideo(videoBytes!, videoName, videoMime);
+        if ((videoUrl ?? '').isEmpty) throw Exception('آپلود ویدیو ناموفق بود.');
+      }
       final payload = jsonEncode({
         'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
         'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
-        'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls), 'audio_url': audioUrl ?? '',
+        'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls), 'audio_url': audioUrl ?? '', 'video_url': videoUrl ?? '',
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
         'brand': brand.text.trim(), 'model': model.text.trim(), 'sizes': sizes.text.trim(), 'colors': colors.text.trim(),
@@ -9997,7 +10175,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
-    } finally { if (mounted) setState(() { publishing = false; uploadingAudio = false; }); }
+    } finally { if (mounted) setState(() { publishing = false; uploadingAudio = false; uploadingVideo = false; }); }
   }
 
   @override
@@ -10067,6 +10245,24 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 OutlinedButton.icon(onPressed: recordingAudio || uploadingAudio ? null : _pickAudioFile, icon: const Icon(Icons.audio_file_outlined), label: Text(tr(context, 'choose_audio'))),
               ]),
               if (recordingAudio) ...[const SizedBox(height: 8), LinearProgressIndicator(), const SizedBox(height: 4), Text(tr(context, 'audio_recording'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
+            ]),
+          ),
+          section('ویدیو (اختیاری)', 'یک ویدیوی کوتاه تا $_videoLimitSeconds ثانیه برای نشان دادن جنس و وضعیت محصول اضافه کنید.', Icons.videocam_rounded,
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (videoBytes != null && videoBytes!.isNotEmpty) ...[
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF8FAFB), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE1E6EA))),
+                  child: Row(children: [
+                    const Icon(Icons.movie_rounded),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(videoSeconds == null ? videoName : '$videoName • ${videoSeconds!.round()} ثانیه', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+                    IconButton(onPressed: publishing ? null : _clearVideo, icon: const Icon(Icons.delete_outline_rounded)),
+                  ])),
+                const SizedBox(height: 8),
+              ],
+              OutlinedButton.icon(onPressed: publishing ? null : _pickVideoFile, icon: const Icon(Icons.video_library_outlined), label: Text(videoBytes == null ? 'انتخاب ویدیو' : 'تغییر ویدیو')),
+              const SizedBox(height: 6),
+              Text('حداکثر $_videoLimitSeconds ثانیه • حداکثر $_videoLimitMb مگابایت • MP4', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
+              if (uploadingVideo) ...[const SizedBox(height: 8), const LinearProgressIndicator(), const SizedBox(height: 4), const Text('در حال آپلود ویدیو...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
             ]),
           ),
           section('۲. معرفی محصول', professional ? 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.' : 'اطلاعات اصلی آگهی را وارد کنید.', Icons.inventory_2_rounded,
