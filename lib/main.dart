@@ -1562,6 +1562,9 @@ const Map<String, List<Map<String, String>>> subcategories = {
   ],
 };
 
+/// هر بار آگهی ساخته، حذف یا فعال/غیرفعال شود این عدد زیاد می‌شود تا صفحه‌ی اصلی خودکار تازه شود.
+final ValueNotifier<int> listingsVersion = ValueNotifier<int>(0);
+
 class ApiConfig {
   static const String baseUrl = 'https://bazarek.onrender.com/api';
 }
@@ -2215,6 +2218,7 @@ class ApiService {
     if (res.statusCode != 200 || data is! Map) {
       throw Exception(data is Map ? (data['error'] ?? 'خطا در تغییر وضعیت آگهی.') : 'خطا در تغییر وضعیت آگهی.');
     }
+    listingsVersion.value++;
     return Map<String, dynamic>.from(data);
   }
 
@@ -2259,6 +2263,7 @@ class ApiService {
     if (res.statusCode != 200) {
       throw Exception(data?['error'] ?? 'حذف آگهی ناموفق بود.');
     }
+    listingsVersion.value++;
   }
 
   static Future<Map<String, dynamic>> getMyProfile() async {
@@ -2946,9 +2951,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    listingsVersion.addListener(_onListingsChanged);
     _loadProducts();
     _loadProfessionalStores();
     _startStoreAutoRotation();
+  }
+
+  void _onListingsChanged() {
+    if (!mounted) return;
+    _loadProducts();
+    _loadProfessionalStores();
   }
 
   void _startStoreAutoRotation() {
@@ -3087,6 +3099,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    listingsVersion.removeListener(_onListingsChanged);
     _storeAutoTimer?.cancel();
     _storePageController.dispose();
     _searchController.dispose();
@@ -10201,6 +10214,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         data = Map<String,dynamic>.from(decoded as Map);
       }
       if (!mounted) return;
+      listingsVersion.value++; // صفحه‌ی اصلی بدون رفرش، آگهی تازه را نشان می‌دهد
       _msg(widget.professional ? 'محصول با موفقیت در فروشگاه ثبت شد.' : tr(context, 'publish_success'));
       Navigator.pop(context, true);
     } catch (e) {
