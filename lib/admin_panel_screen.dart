@@ -192,7 +192,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
 
   @override void initState() {
     super.initState();
-    tabs = TabController(length: 8, vsync: this);
+    tabs = TabController(length: 9, vsync: this);
     _loadAll();
     _clockTimer = Timer.periodic(Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
@@ -397,10 +397,10 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       title: AdminText('مدیریت بازارک', style: TextStyle(fontWeight: FontWeight.bold)),
       actions: [IconButton(onPressed: _loadAll, icon: Icon(Icons.refresh), tooltip: _adminTranslate(context, 'به‌روزرسانی')), IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.logout), tooltip: _adminTranslate(context, 'خروج'))],
       bottom: TabBar(controller: tabs, isScrollable: true, tabs: [
-        Tab(text: _adminTranslate(context, 'داشبورد'), icon: Icon(Icons.dashboard_outlined)), Tab(text: _adminTranslate(context, 'آگهی‌ها'), icon: Icon(Icons.campaign_outlined)), Tab(text: _adminTranslate(context, 'کاربران'), icon: Icon(Icons.people_outline)), Tab(text: _adminTranslate(context, 'شکایات'), icon: Icon(Icons.report_problem_outlined)), Tab(text: _adminTranslate(context, 'پشتیبانی'), icon: Icon(Icons.support_agent_outlined)), Tab(text: _adminTranslate(context, 'هشدارها'), icon: Icon(Icons.notifications_outlined)), Tab(text: _adminTranslate(context, 'مالی'), icon: Icon(Icons.account_balance_wallet_outlined)), Tab(text: _adminTranslate(context, 'امنیت'), icon: Icon(Icons.security_outlined)),
+        Tab(text: _adminTranslate(context, 'داشبورد'), icon: Icon(Icons.dashboard_outlined)), Tab(text: _adminTranslate(context, 'آگهی‌ها'), icon: Icon(Icons.campaign_outlined)), Tab(text: _adminTranslate(context, 'کاربران'), icon: Icon(Icons.people_outline)), Tab(text: _adminTranslate(context, 'شکایات'), icon: Icon(Icons.report_problem_outlined)), Tab(text: _adminTranslate(context, 'پشتیبانی'), icon: Icon(Icons.support_agent_outlined)), Tab(text: _adminTranslate(context, 'هشدارها'), icon: Icon(Icons.notifications_outlined)), Tab(text: _adminTranslate(context, 'مالی'), icon: Icon(Icons.account_balance_wallet_outlined)), Tab(text: _adminTranslate(context, 'امنیت'), icon: Icon(Icons.security_outlined)), Tab(text: _adminTranslate(context, 'آمار'), icon: Icon(Icons.insights_outlined)),
       ]),
     ),
-    body: loading ? Center(child: CircularProgressIndicator()) : loadError != null ? _ErrorState(error: loadError!, retry: _loadAll) : TabBarView(controller: tabs, children: [_overview(), _products(), _users(), _reports(), _support(), _warnings(), _finance(), _security()]),
+    body: loading ? Center(child: CircularProgressIndicator()) : loadError != null ? _ErrorState(error: loadError!, retry: _loadAll) : TabBarView(controller: tabs, children: [_overview(), _products(), _users(), _reports(), _support(), _warnings(), _finance(), _security(), _AnalyticsTab(token: widget.token)]),
   );
 
   void _go(int index) => tabs.animateTo(index);
@@ -596,4 +596,293 @@ class _ErrorState extends StatelessWidget {
   final String error; final VoidCallback retry;
   _ErrorState({required this.error, required this.retry});
   @override Widget build(BuildContext context) => Center(child: Padding(padding: EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.cloud_off, size: 56), SizedBox(height: 12), AdminText(_adminFriendlyError(error), textAlign: TextAlign.center), SizedBox(height: 16), FilledButton.icon(onPressed: retry, icon: Icon(Icons.refresh), label: AdminText('تلاش دوباره'))])));
+}
+
+
+// ───────────────────────── تب آمار (Analytics) ─────────────────────────
+class _AnalyticsTab extends StatefulWidget {
+  final String token;
+  const _AnalyticsTab({required this.token});
+  @override
+  State<_AnalyticsTab> createState() => _AnalyticsTabState();
+}
+
+class _AnalyticsTabState extends State<_AnalyticsTab> {
+  int days = 7;
+  bool loading = true;
+  String? error;
+  Map<String, dynamic> data = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final d = await _AdminApi.map('/admin/analytics?days=$days', widget.token);
+      if (!mounted) return;
+      setState(() { data = d; loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { loading = false; error = _adminFriendlyError(e); });
+    }
+  }
+
+  static int _n(dynamic v) => v is num ? v.toInt() : (int.tryParse('${v ?? 0}') ?? 0);
+
+  static String _fmt(num v) {
+    final s = v.toInt().toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+
+  static String _sourceName(String s) => s == 'direct' ? 'مستقیم / نامشخص' : s;
+  static String _categoryName(String id) {
+    const names = {
+      'vehicles': 'وسایط نقلیه', 'real_estate': 'املاک و خانه', 'electronics': 'لوازم الکترونیکی',
+      'home': 'لوازم خانه', 'fashion': 'لباس و پوشاک', 'services': 'خدمات', 'jobs': 'استخدام و کاریابی',
+    };
+    return names[id] ?? id;
+  }
+
+  Widget _card({required Widget child, EdgeInsets? padding}) => Container(
+        width: double.infinity,
+        padding: padding ?? const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x14000000)),
+        ),
+        child: child,
+      );
+
+  Widget _title(String t, {IconData? icon}) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(children: [
+          if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
+          Text(t, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        ]),
+      );
+
+  Widget _kpi(String label, num value, IconData icon, {num? previous, Color? color}) {
+    String? change;
+    Color changeColor = Colors.black54;
+    if (previous != null && previous > 0) {
+      final pct = ((value - previous) / previous * 100).round();
+      change = '${pct >= 0 ? '+' : ''}$pct٪ نسبت به دوره‌ی قبل';
+      changeColor = pct >= 0 ? const Color(0xFF1B7F3B) : const Color(0xFFC62828);
+    }
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+        Row(children: [
+          Icon(icon, size: 20, color: color ?? Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 6),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.black54))),
+        ]),
+        const SizedBox(height: 6),
+        Text(_fmt(value), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
+        if (change != null) Text(change, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: changeColor)),
+      ]),
+    );
+  }
+
+  Widget _bars(List<dynamic> items, String valueKey, String labelKey, {String Function(String)? labelFmt}) {
+    final values = items.map((e) => _n((e as Map)[valueKey])).toList();
+    final maxV = values.isEmpty ? 1 : values.reduce((a, b) => a > b ? a : b).clamp(1, 1 << 30);
+    final primary = Theme.of(context).colorScheme.primary;
+    return Column(children: [
+      SizedBox(
+        height: 130,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          textDirection: TextDirection.ltr,
+          children: [
+            for (var i = 0; i < values.length; i++)
+              Expanded(
+                child: Tooltip(
+                  message: '${labelFmt != null ? labelFmt('${(items[i] as Map)[labelKey]}') : (items[i] as Map)[labelKey]}: ${_fmt(values[i])}',
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: values[i] == 0 ? 0.02 : (values[i] / maxV).clamp(0.04, 1.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: values[i] == 0 ? const Color(0x22000000) : primary,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 6),
+      if (items.isNotEmpty)
+        Row(
+          textDirection: TextDirection.ltr,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(labelFmt != null ? labelFmt('${(items.first as Map)[labelKey]}') : '${(items.first as Map)[labelKey]}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+            Text('بیشترین: ${_fmt(maxV)}', style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w700)),
+            Text(labelFmt != null ? labelFmt('${(items.last as Map)[labelKey]}') : '${(items.last as Map)[labelKey]}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          ],
+        ),
+    ]);
+  }
+
+  Widget _rankRow(String label, int value, int maxValue, {String? trailing}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+            const SizedBox(width: 8),
+            Text(trailing ?? _fmt(value), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+          ]),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(value: maxValue <= 0 ? 0 : (value / maxValue).clamp(0.0, 1.0), minHeight: 6, backgroundColor: const Color(0x14000000)),
+          ),
+        ]),
+      );
+
+  Widget _empty() => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 10),
+        child: Text('هنوز داده‌ای ثبت نشده است.', style: TextStyle(color: Colors.black45, fontWeight: FontWeight.w600)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (error != null) return _ErrorState(error: error!, retry: _load);
+
+    final totals = Map<String, dynamic>.from(data['totals'] ?? {});
+    final prev = Map<String, dynamic>.from(data['previous'] ?? {});
+    final today = Map<String, dynamic>.from(data['today'] ?? {});
+    final daily = List<dynamic>.from(data['daily'] ?? const []);
+    final hours = List<dynamic>.from(data['hours'] ?? const []);
+    final topListings = List<dynamic>.from(data['top_listings'] ?? const []);
+    final topCats = List<dynamic>.from(data['top_categories'] ?? const []);
+    final sources = List<dynamic>.from(data['sources'] ?? const []);
+    final devices = List<dynamic>.from(data['devices'] ?? const []);
+    final searches = List<dynamic>.from(data['top_searches'] ?? const []);
+    final online = _n(data['online_now']);
+    final columns = MediaQuery.sizeOf(context).width > 700 ? 4 : 2;
+
+    final deviceTotal = devices.fold<int>(0, (a, e) => a + _n((e as Map)['visitors']));
+    int maxOf(List<dynamic> l, String k) => l.isEmpty ? 1 : l.map((e) => _n((e as Map)[k])).reduce((a, b) => a > b ? a : b);
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        // انتخاب بازه‌ی زمانی
+        Wrap(spacing: 8, children: [
+          for (final p in const [[1, 'امروز'], [7, '۷ روز'], [30, '۳۰ روز'], [90, '۹۰ روز']])
+            ChoiceChip(
+              label: Text(p[1] as String),
+              selected: days == p[0],
+              onSelected: (_) { setState(() => days = p[0] as int); _load(); },
+            ),
+        ]),
+        const SizedBox(height: 12),
+        _card(
+          child: Row(children: [
+            Container(width: 10, height: 10, decoration: BoxDecoration(color: online > 0 ? const Color(0xFF1DB954) : Colors.black26, shape: BoxShape.circle)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('اکنون آنلاین (۵ دقیقه‌ی اخیر)', style: const TextStyle(fontWeight: FontWeight.w700))),
+            Text(_fmt(online), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: columns,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.5,
+          children: [
+            _kpi('بازدید صفحه', _n(totals['page_views']), Icons.visibility_outlined, previous: _n(prev['page_views'])),
+            _kpi('بازدیدکننده‌ی یکتا', _n(totals['visitors']), Icons.people_alt_outlined, previous: _n(prev['visitors'])),
+            _kpi('بازدید آگهی‌ها', _n(totals['listing_views']), Icons.campaign_outlined, previous: _n(prev['listing_views'])),
+            _kpi('بازدید امروز', _n(today['page_views']), Icons.today_outlined, color: const Color(0xFF6A1B9A)),
+            _kpi('کلیک تماس تلفنی', _n(totals['call_clicks']), Icons.phone_in_talk_outlined, color: const Color(0xFF1B7F3B)),
+            _kpi('کلیک چت با فروشنده', _n(totals['chat_clicks']), Icons.chat_bubble_outline, color: const Color(0xFF0B6BCB)),
+            _kpi('اشتراک‌گذاری', _n(totals['share_clicks']), Icons.share_outlined, color: const Color(0xFFEF6C00)),
+            _kpi('جستجوها', _n(totals['searches']), Icons.search, color: const Color(0xFF455A64)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text('امروز: ${_fmt(_n(today['visitors']))} بازدیدکننده‌ی یکتا', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w700)),
+        ),
+        const SizedBox(height: 14),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('بازدید روزانه', icon: Icons.bar_chart_rounded),
+          if (daily.isEmpty) _empty() else _bars(daily, 'views', 'day', labelFmt: (d) => d.length >= 10 ? d.substring(5) : d),
+        ])),
+        const SizedBox(height: 12),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('ساعت‌های اوج بازدید (به وقت کابل)', icon: Icons.schedule_rounded),
+          if (hours.isEmpty) _empty() else _bars(hours, 'views', 'hour', labelFmt: (h) => '$h:00'),
+        ])),
+        const SizedBox(height: 12),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('پربازدیدترین آگهی‌ها', icon: Icons.local_fire_department_outlined),
+          if (topListings.isEmpty) _empty(),
+          for (final l in topListings)
+            _rankRow(
+              '${(l as Map)['title']}',
+              _n(l['views']),
+              maxOf(topListings, 'views'),
+              trailing: '${_fmt(_n(l['views']))} بازدید  •  ${_n(l['calls'])} تماس  •  ${_n(l['chats'])} چت',
+            ),
+        ])),
+        const SizedBox(height: 12),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('دسته‌های پربازدید', icon: Icons.category_outlined),
+          if (topCats.isEmpty) _empty(),
+          for (final c in topCats) _rankRow(_categoryName('${(c as Map)['category']}'), _n(c['views']), maxOf(topCats, 'views')),
+        ])),
+        const SizedBox(height: 12),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('منبع ورود بازدیدکنندگان', icon: Icons.travel_explore_outlined),
+          if (sources.isEmpty) _empty(),
+          for (final s in sources) _rankRow(_sourceName('${(s as Map)['source']}'), _n(s['visitors']), maxOf(sources, 'visitors')),
+        ])),
+        const SizedBox(height: 12),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('دستگاه', icon: Icons.devices_outlined),
+          if (devices.isEmpty) _empty(),
+          for (final d in devices)
+            _rankRow(
+              '${(d as Map)['device']}' == 'mobile' ? 'موبایل' : ('${d['device']}' == 'desktop' ? 'کامپیوتر' : 'نامشخص'),
+              _n(d['visitors']),
+              deviceTotal,
+              trailing: deviceTotal == 0 ? '0٪' : '${(_n(d['visitors']) * 100 / deviceTotal).round()}٪',
+            ),
+        ])),
+        const SizedBox(height: 12),
+        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _title('جستجوهای پرتکرار', icon: Icons.manage_search_rounded),
+          if (searches.isEmpty) _empty(),
+          for (final s in searches) _rankRow('${(s as Map)['query']}', _n(s['count']), maxOf(searches, 'count')),
+        ])),
+        const SizedBox(height: 24),
+      ]),
+    );
+  }
 }

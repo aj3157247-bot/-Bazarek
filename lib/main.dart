@@ -13,6 +13,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'web_seo.dart';
+import 'analytics.dart';
 import 'admin_panel_screen.dart';
 import 'apk_webview_stub.dart' if (dart.library.io) 'apk_webview.dart';
 import 'audio_recorder.dart';
@@ -242,6 +243,7 @@ void _restoreSeoForPath(String path) {
 }
 
 void main() {
+  Analytics.endpoint = '${ApiConfig.baseUrl}/analytics/event';
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const BazarekEntryApp());
 }
@@ -2108,6 +2110,7 @@ class ApiService {
       if (province != null && province.isNotEmpty) 'province': province,
       if (query != null && query.isNotEmpty) 'q': query,
     };
+    if (query != null && query.trim().length >= 2) Analytics.track('search', query: query.trim(), category: category ?? '');
     final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams);
     try {
       final res = await http.get(uri, headers: {'Accept': 'application/json', ...headers}).timeout(const Duration(seconds: 15));
@@ -5772,6 +5775,7 @@ class ProductDetailScreen extends StatelessWidget {
   const ProductDetailScreen({super.key, required this.product});
 
   Future<void> _shareListing(BuildContext context) async {
+    Analytics.track('share_click', listingId: product['id']?.toString() ?? '', category: product['category']?.toString() ?? '');
     final title = product['title']?.toString().trim().isNotEmpty == true
         ? product['title'].toString().trim()
         : 'آگهی در بازارک';
@@ -6026,6 +6030,7 @@ class ProductDetailScreen extends StatelessWidget {
                     }
                     phone = phone.replaceAll(' ', '').replaceAll('-', '').replaceAll('(', '').replaceAll(')', '');
 
+                    Analytics.track('call_click', listingId: product['id']?.toString() ?? '', category: product['category']?.toString() ?? '');
                     final uri = Uri(scheme: 'tel', path: phone);
                     try {
                       if (await canLaunchUrl(uri)) {
@@ -6052,6 +6057,7 @@ class ProductDetailScreen extends StatelessWidget {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: () async {
+                    Analytics.track('chat_click', listingId: product['id']?.toString() ?? '', category: product['category']?.toString() ?? '');
                     if (!await requireAccount(context)) return;
                     try {
                       final conversation = await ApiService.startConversation(product['id'].toString());
