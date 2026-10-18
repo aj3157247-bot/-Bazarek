@@ -2728,6 +2728,17 @@ class _WebDeepLinkEntryState extends State<WebDeepLinkEntry> {
         return;
       }
 
+      // ورود مدیریت: فقط از طریق آدرس مخصوص /bz-admin (در منوی کاربران هیچ لینکی به آن نیست).
+      if (parts.isNotEmpty && parts.first == 'bz-admin') {
+        if (!mounted) return;
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()));
+        if (!mounted) return;
+        setBrowserPath('/');
+        _restoreSeoForPath('/');
+        setState(() { _showMain = true; _loading = false; });
+        return;
+      }
+
       if (parts.isNotEmpty && parts.first == 'listing' && parts.length >= 2) {
         final id = _listingIdFromSegment(parts[1]);
         final product = await ApiService.getListingById(id);
@@ -9418,7 +9429,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Divider(height: 1),
             menuTile(Icons.support_agent_outlined, 'پشتیبانی و ارتباط با ما', 'کمک و گزارش مشکل', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())), color: const Color(0xFF0F766E)),
             const Divider(height: 1),
-            menuTile(Icons.admin_panel_settings_outlined, 'ورود مدیریت بازارک', 'پنل مدیریت، بررسی آگهی‌ها و گزارش‌ها', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen())), color: const Color(0xFF334155)),
             const Divider(height: 1),
             menuTile(Icons.rocket_launch_rounded, 'Boost آگهی‌ها', 'افزایش نمایش آگهی‌های شما', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }, color: const Color(0xFFB45309)),
             const Divider(height: 1),
