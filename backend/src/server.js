@@ -1139,6 +1139,56 @@ app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{
 });
 app.patch('/api/admin/support/requests/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'in_progress');if(!['open','in_progress','answered','resolved','closed'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const reply=String(req.body?.admin_reply||'').trim().slice(0,4000);const db=getSupabaseAdmin();const {data:old}=await db.from('support_requests').select('user_id,title').eq('id',req.params.id).maybeSingle();const {data,error}=await db.from('support_requests').update({status,admin_reply:reply,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(old?.user_id&&reply){await db.from('user_notifications').insert([{user_id:old.user_id,type:'support',title:'پاسخ پشتیبانی بازارک',message:`پاسخ درخواست «${old.title||'پشتیبانی'}» آماده شد.`}]);}res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در پاسخ به درخواست.'});}});
 
+// ───────────── آمار داخلی (Analytics) ─────────────
+// دریافت رویداد از سایت: عمومی، با محدودیت نرخ در حافظه (۱۲۰ رویداد در دقیقه برای هر IP).
+const ANALYTICS_EVENTS = new Set(['page_view', 'listing_view', 'chat_click', 'call_click', 'share_click', 'search']);
+const analyticsHits = new Map();
+setInterval(() => analyticsHits.clear(), 60 * 1000).unref();
+app.post('/api/analytics/event', express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    const hits = (analyticsHits.get(ip) || 0) + 1;
+    analyticsHits.set(ip, hits);
+    if (hits > 120) return res.status(204).end();
+    const b = req.body || {};
+    const event = String(b.event || '');
+    if (!ANALYTICS_EVENTS.has(event)) return res.status(204).end();
+    const clip = (v, n) => String(v || '').trim().slice(0, n);
+    const visitor = clip(b.visitor_id, 64);
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(visitor)) return res.status(204).end();
+    const listingId = /^[0-9a-fA-F-]{8,40}$/.test(String(b.listing_id || '')) ? String(b.listing_id).toLowerCase() : '';
+    const row = {
+      event,
+      path: clip(b.path, 200),
+      listing_id: listingId,
+      category: /^[a-z0-9_]{1,40}$/.test(String(b.category || '')) ? String(b.category) : '',
+      query: event === 'search' ? clip(b.query, 80) : '',
+      referrer: clip(b.referrer, 100).toLowerCase().replace(/^www\./, ''),
+      device: ['mobile', 'desktop'].includes(String(b.device)) ? String(b.device) : '',
+      visitor_id: visitor,
+      lang: clip(b.lang, 10),
+    };
+    const db = getSupabaseAdmin();
+    const { error } = await db.from('analytics_events').insert([row]);
+    if (error) console.warn('analytics insert error:', error.message);
+    res.status(204).end();
+  } catch (e) { res.status(204).end(); }
+});
+
+app.get('/api/admin/analytics', requireAdmin, async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 7));
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.rpc('admin_analytics', { p_days: days });
+    if (error) {
+      console.error('admin_analytics error:', error.message);
+      const missing = /admin_analytics|analytics_events|does not exist|schema cache/i.test(error.message || '');
+      return res.status(500).json({ error: missing ? 'جدول آمار ساخته نشده است. فایل 202610180001_analytics.sql را در Supabase اجرا کنید.' : 'خطا در دریافت آمار.' });
+    }
+    res.json(data || {});
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آمار.' }); }
+});
+
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
