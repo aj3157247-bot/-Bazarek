@@ -533,9 +533,35 @@ app.post('/api/reports', requireUser, async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت گزارش.'});}
 });
 
+// محدودیت تلاش ورود مدیریت: ۵ تلاش ناموفق از یک IP ← قفل ۱۵ دقیقه‌ای؛ سقف کل ۴۰ تلاش ناموفق در ۱۵ دقیقه.
+const ADMIN_FAIL_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_FAIL_MAX_PER_IP = 5;
+const ADMIN_FAIL_MAX_TOTAL = 40;
+const adminFails = new Map(); // ip -> [timestamps]
+function adminFailsRecent(ip) {
+  const now = Date.now();
+  const list = (adminFails.get(ip) || []).filter(t => now - t < ADMIN_FAIL_WINDOW_MS);
+  if (list.length) adminFails.set(ip, list); else adminFails.delete(ip);
+  return list;
+}
+function adminFailsTotal() {
+  let n = 0;
+  for (const ip of [...adminFails.keys()]) n += adminFailsRecent(ip).length;
+  return n;
+}
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 app.post('/api/admin/login', async (req, res) => {
   const { email, password } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
+  const clientIp = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  if (adminFailsRecent(clientIp).length >= ADMIN_FAIL_MAX_PER_IP || adminFailsTotal() >= ADMIN_FAIL_MAX_TOTAL) {
+    return res.status(429).json({ error: 'تلاش‌های ناموفق زیاد بود. ۱۵ دقیقه بعد دوباره تلاش کنید.' });
+  }
   const db = getSupabaseAdmin();
   const logLogin = async (success) => {
     try {
@@ -551,12 +577,16 @@ app.post('/api/admin/login', async (req, res) => {
     await logLogin(false);
     return res.status(503).json({ error: 'تنظیمات امن پنل مدیریت روی سرور کامل نیست.' });
   }
-  if (normalizedEmail !== String(process.env.ADMIN_EMAIL).trim().toLowerCase() || password !== process.env.ADMIN_PASSWORD) {
+  const emailOk = safeEqual(normalizedEmail, String(process.env.ADMIN_EMAIL).trim().toLowerCase());
+  const passOk = safeEqual(String(password || ''), String(process.env.ADMIN_PASSWORD));
+  if (!(emailOk && passOk)) {
+    adminFails.set(clientIp, [...adminFailsRecent(clientIp), Date.now()]);
     await logLogin(false);
     return res.status(401).json({ error: 'ایمیل یا رمز عبور ادمین اشتباه است.' });
   }
+  adminFails.delete(clientIp);
   await logLogin(true);
-  const token = jwt.sign({ role: 'admin', email: normalizedEmail }, process.env.ADMIN_SESSION_SECRET, { expiresIn: '8h' });
+  const token = jwt.sign({ role: 'admin', email: normalizedEmail }, process.env.ADMIN_SESSION_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
   res.json({ token, security_notice: 'ورود مدیریت ثبت شد.' });
 });
 
