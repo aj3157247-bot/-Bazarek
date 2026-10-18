@@ -2097,6 +2097,20 @@ class ApiService {
     return url;
   }
 
+  /// سرور رایگان Render بعد از چند دقیقه بی‌کاری می‌خوابد و اولین درخواست ~۳۰ تا ۶۰ ثانیه طول می‌کشد.
+  /// پس برای اولین بارگذاری صبر بیشتری می‌کنیم و در صورت قطع شدن اتصال یک بار دوباره تلاش می‌کنیم.
+  static Future<http.Response> _getWithWakeUp(Uri uri) async {
+    final h = {'Accept': 'application/json', ...headers};
+    try {
+      return await http.get(uri, headers: h).timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      // ادامه با تلاش دوم
+    } on http.ClientException {
+      await Future.delayed(const Duration(seconds: 2));
+    }
+    return http.get(uri, headers: h).timeout(const Duration(seconds: 40));
+  }
+
   static Future<List<dynamic>> getProducts({
     String? category,
     String? subcategory,
@@ -2113,7 +2127,7 @@ class ApiService {
     if (query != null && query.trim().length >= 2) Analytics.track('search', query: query.trim(), category: category ?? '');
     final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams);
     try {
-      final res = await http.get(uri, headers: {'Accept': 'application/json', ...headers}).timeout(const Duration(seconds: 15));
+      final res = await _getWithWakeUp(uri);
       final data = jsonDecode(res.body);
       if (res.statusCode == 200) {
         if (data is List) return data;
@@ -2129,7 +2143,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getActiveStores() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/stores/active');
-    final res = await http.get(uri, headers: {'Accept': 'application/json', ...headers}).timeout(const Duration(seconds: 15));
+    final res = await _getWithWakeUp(uri);
     dynamic data;
     try { data = jsonDecode(res.body); } catch (_) { data = null; }
     if (res.statusCode != 200) {
