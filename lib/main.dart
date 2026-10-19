@@ -399,13 +399,18 @@ String localizedProvince(BuildContext context, String value) {
 }
 
 String localizedCategoryTitle(BuildContext context, String id, String fallback) {
+  if (fallback.isEmpty || fallback == id) fallback = legacyCategoryTitles[id] ?? fallback;
   final lang = Localizations.localeOf(context).languageCode;
   if (lang == 'en') {
-    const en = {'real_estate':'Real Estate & Homes','vehicles':'Vehicles','electronics':'Electronics','home_goods':'Home & Kitchen','fashion':'Fashion & Clothing','jobs':'Jobs & Careers','services':'Services','personal':'Personal Items','social_pages':'Social Pages','afghan_stores':'Stores & Businesses','animals_pets':'Pets & Animals','agriculture_livestock':'Agriculture & Livestock','food_grocery':'Food & Grocery','health':'Health & Wellness','education':'Education','kids_family':'Kids & Family','construction_tools':'Construction & Tools','wedding_events':'Weddings & Events','travel_tickets':'Travel & Tickets','lost_found':'Lost & Found','sports_hobbies':'Sports & Hobbies'};
+    const en = {
+      'mobile_tablets':'Mobiles & Tablets', 'energy_solar':'Solar & Energy', 'heating_winter':'Heating & Winter', 'jewelry_gems':'Gold, Jewelry & Gems',
+      'real_estate':'Real Estate & Homes','vehicles':'Vehicles','electronics':'Electronics','home_goods':'Home & Kitchen','fashion':'Fashion & Clothing','jobs':'Jobs & Careers','services':'Services','personal':'Personal Items','social_pages':'Social Pages','afghan_stores':'Stores & Businesses','animals_pets':'Pets & Animals','agriculture_livestock':'Agriculture & Livestock','food_grocery':'Food & Grocery','health':'Health & Wellness','education':'Education','kids_family':'Kids & Family','construction_tools':'Construction & Tools','wedding_events':'Weddings & Events','travel_tickets':'Travel & Tickets','lost_found':'Lost & Found','sports_hobbies':'Sports & Hobbies'};
     return en[id] ?? fallback;
   }
   if (lang == 'ps') {
     const ps = {
+      'mobile_tablets':'موبایل او ټبلټ', 'energy_solar':'انرژي او لمریز سیستم', 'heating_winter':'تودوخه او ژمی', 'jewelry_gems':'سره زر، زېورات او قیمتي ډبرې',
+      
       'real_estate':'املاک او کور', 'vehicles':'وسایط نقلیه', 'electronics':'برېښنایي وسایل',
       'home_goods':'د کور وسایل', 'fashion':'کالي او جامې', 'jobs':'استخدام او د کارموندنه',
       'services':'خدمتونه', 'personal':'شخصي وسایل', 'social_pages':'مجازی پاڼې',
@@ -422,13 +427,18 @@ String localizedCategoryTitle(BuildContext context, String id, String fallback) 
 }
 
 String localizedSubcategoryTitle(BuildContext context, String categoryId, String id, String fallback) {
+  if (fallback.isEmpty || fallback == id) fallback = legacySubcategoryTitles[id] ?? fallback;
   final lang = Localizations.localeOf(context).languageCode;
   if (lang == 'en') {
-    const en = {'house_rent':'House for Rent','house_mortgage':'House for Mortgage','house_sale':'House for Sale','apartment':'Apartment','land_sale':'Land for Sale','land_rent':'Land for Rent','shop':'Shop','office':'Office','garden':'Garden','car':'Car','motorcycle':'Motorcycle','rickshaw':'Rickshaw','parts':'Parts','mobile':'Mobile Phone','laptop':'Laptop','computer':'Computer','tv':'TV','camera':'Camera','furniture':'Furniture','appliances':'Appliances','kitchen':'Kitchen','mens':"Men's Clothing",'womens':"Women's Clothing",'kids':"Kids' Clothing",'shoes':'Shoes','full_time':'Full-time Job','part_time':'Part-time Job','remote':'Remote Job','repair':'Repair Services','transport':'Transport','education':'Education','other':'Other Personal Items','youtube':'YouTube','tiktok':'TikTok','instagram':'Instagram','facebook_page':'Facebook Page','telegram':'Telegram Channel','snapchat':'Snapchat','x_page':'X Page','other_social':'Other Social Pages','cats':'Cats','dogs':'Dogs','birds':'Birds','ornamental_fish':'Ornamental Fish','pet_supplies':'Pet Supplies','cattle':'Cattle','sheep_goats':'Sheep & Goats','horses':'Horses','poultry':'Poultry & Birds','farm_equipment':'Farm Equipment','grocery':'Grocery','fruit_vegetables':'Fruits & Vegetables','water_drinks':'Water & Drinks','bakery':'Bakery & Sweets','pharmacy':'Pharmacy & Health','medical_equipment':'Medical Equipment','fitness_wellness':'Fitness & Wellness','courses':'Courses','books':'Books','school_supplies':'School Supplies','tutoring':'Private Tutoring','baby_gear':'Baby Gear','toys':'Toys','strollers':'Strollers','kids_furniture':'Kids Furniture','building_materials':'Building Materials','tools':'Tools & Machinery','generators':'Generators','solar':'Solar Systems','wedding_dresses':'Wedding Dresses','wedding_services':'Wedding Services','halls':'Halls & Venues','photography':'Photography & Video','air_tickets':'Air Tickets','bus_tickets':'Bus Tickets','hotels':'Hotels & Accommodation','tours':'Tours & Travel','lost_items':'Lost Items','found_items':'Found Items','documents':'Found Documents','sports_equipment':'Sports Equipment','gaming':'Gaming & Consoles','bicycles':'Bicycles','music':'Musical Instruments'};
+    const en = {
+      'trucks':'Trucks & Cargo Vehicles', 'buses':'Buses & Minibuses', 'heavy_machinery':'Heavy Machinery', 'tires_batteries':'Tires, Batteries & Oil', 'car_accessories':'Car Accessories', 'warehouse':'Warehouse & Factory', 'room_rent':'Room for Rent', 'tablet':'Tablet', 'smartwatch':'Smartwatch', 'mobile_accessories':'Mobile Accessories', 'mobile_parts':'Mobile Spare Parts', 'printer_network':'Printers & Networking', 'audio':'Speakers & Audio', 'satellite':'Receivers & Satellite', 'solar_panels':'Solar Panels', 'batteries_inverters':'Batteries & Inverters', 'solar_pumps':'Solar Water Pumps', 'electric_supplies':'Wires & Electrical Supplies', 'turkish_stove':'Turkish Stove', 'simple_stove':'Regular Stove', 'electric_heater':'Electric Heater', 'gas_oil_heater':'Gas & Oil Heater', 'chimney':'Chimney & Stove Parts', 'fuel':'Firewood, Coal & Fuel', 'winter_bedding':'Blankets & Bedding', 'winter_clothes':'Winter Clothes & Boots', 'carpets':'Carpets & Rugs', 'curtains_decor':'Curtains & Decor', 'traditional':'Afghan Traditional Clothing', 'accessories':'Watches, Glasses & Bags', 'gold_silver':'Gold & Silver', 'gemstones':'Gemstones (Lapis, Ruby, Agate)', 'jewelry':'Rings & Jewelry', 'dry_fruits':'Dried Fruits & Nuts', 'meat_dairy':'Meat, Dairy & Eggs', 'honey_saffron':'Honey & Saffron', 'seeds_fertilizer':'Seeds, Fertilizer & Pesticide', 'irrigation':'Pumps & Irrigation', 'doors_windows':'Doors, Windows & Glass', 'plumbing_electric':'Plumbing & Electrical', 'paint_tiles':'Paint, Tiles & Ceramic', 'home_services':'Home & Construction Services', 'visa_documents':'Visa & Documents', 'design_digital':'Design & Online Services', 'translation_typing':'Translation & Typing', 'daily_labor':'Daily Labor', 'job_seekers':'Job Seekers', 'kankor':'Kankor Exam Prep', 'language':'Language Courses', 'herbal':'Herbal & Traditional Medicine', 'wedding_decor':'Decor & Flowers', 'cake_sweets':'Cakes & Sweets', 'pigeons':'Pigeons', 'partridge':'Partridge & Quail', 'parrots':'Parrots & Ornamental Birds', 'camping':'Camping & Outdoor', 'clothing_stores':'Clothing Stores', 'shoe_stores':'Shoe Stores', 'gold_stores':'Gold & Jewelry Stores', 'mobile_stores':'Mobile Stores', 'electronics_stores':'Electronics Stores', 'home_stores':'Home Goods Stores', 'furniture_stores':'Furniture Stores', 'cosmetics_stores':'Cosmetics Stores', 'supermarkets':'Supermarkets', 'car_parts_stores':'Car Parts Stores', 'children_stores':'Kids Stores', 'heating_stores':'Heating & Winter Stores', 'solar_stores':'Solar & Electrical Stores', 'carpet_stores':'Carpet Stores', 'dry_fruit_stores':'Dried Fruit & Spice Stores', 'other_stores':'Other Stores',
+      'house_rent':'House for Rent','house_mortgage':'House for Mortgage','house_sale':'House for Sale','apartment':'Apartment','land_sale':'Land for Sale','land_rent':'Land for Rent','shop':'Shop','office':'Office','garden':'Garden','car':'Car','motorcycle':'Motorcycle','rickshaw':'Rickshaw','parts':'Parts','mobile':'Mobile Phone','laptop':'Laptop','computer':'Computer','tv':'TV','camera':'Camera','furniture':'Furniture','appliances':'Appliances','kitchen':'Kitchen','mens':"Men's Clothing",'womens':"Women's Clothing",'kids':"Kids' Clothing",'shoes':'Shoes','full_time':'Full-time Job','part_time':'Part-time Job','remote':'Remote Job','repair':'Repair Services','transport':'Transport','education':'Education','other':'Other Personal Items','youtube':'YouTube','tiktok':'TikTok','instagram':'Instagram','facebook_page':'Facebook Page','telegram':'Telegram Channel','snapchat':'Snapchat','x_page':'X Page','other_social':'Other Social Pages','cats':'Cats','dogs':'Dogs','birds':'Birds','ornamental_fish':'Ornamental Fish','pet_supplies':'Pet Supplies','cattle':'Cattle','sheep_goats':'Sheep & Goats','horses':'Horses','poultry':'Poultry & Birds','farm_equipment':'Farm Equipment','grocery':'Grocery','fruit_vegetables':'Fruits & Vegetables','water_drinks':'Water & Drinks','bakery':'Bakery & Sweets','pharmacy':'Pharmacy & Health','medical_equipment':'Medical Equipment','fitness_wellness':'Fitness & Wellness','courses':'Courses','books':'Books','school_supplies':'School Supplies','tutoring':'Private Tutoring','baby_gear':'Baby Gear','toys':'Toys','strollers':'Strollers','kids_furniture':'Kids Furniture','building_materials':'Building Materials','tools':'Tools & Machinery','generators':'Generators','solar':'Solar Systems','wedding_dresses':'Wedding Dresses','wedding_services':'Wedding Services','halls':'Halls & Venues','photography':'Photography & Video','air_tickets':'Air Tickets','bus_tickets':'Bus Tickets','hotels':'Hotels & Accommodation','tours':'Tours & Travel','lost_items':'Lost Items','found_items':'Found Items','documents':'Found Documents','sports_equipment':'Sports Equipment','gaming':'Gaming & Consoles','bicycles':'Bicycles','music':'Musical Instruments'};
     return en[id] ?? fallback;
   }
   if (lang != 'ps') return fallback;
   const ps = {
+      'trucks':'لاریان او بارکشي موټر', 'buses':'بس او مینی‌بس', 'heavy_machinery':'درانه ماشینري', 'tires_batteries':'ټایر، بیټري او غوړي', 'car_accessories':'د موټر وسایل او سینګار', 'warehouse':'ګودام او فابریکه', 'room_rent':'کرایي کوټه', 'tablet':'ټبلټ', 'smartwatch':'سمارټ ساعت', 'mobile_accessories':'د موبایل ملحقات', 'mobile_parts':'د موبایل پرزې', 'printer_network':'پرینټر او شبکه', 'audio':'سپیکر او غږیز سیسټم', 'satellite':'ریسیور او سټلایټ', 'solar_panels':'لمریز پینل', 'batteries_inverters':'بیټري او انورټر', 'solar_pumps':'لمریز اوبو پمپ', 'electric_supplies':'تار او برېښنایي وسایل', 'turkish_stove':'ترکي بخاري', 'simple_stove':'ساده بخاري', 'electric_heater':'برېښنایي بخاري', 'gas_oil_heater':'ګازي او تېلي بخاري', 'chimney':'دودکش او د بخاري وسایل', 'fuel':'لرګي، سکاره او سونګ', 'winter_bedding':'کمبل، توشک او لحاف', 'winter_clothes':'ژمنۍ جامې او بوټان', 'carpets':'غالۍ او فرش', 'curtains_decor':'پردې او سجاوټ', 'traditional':'افغاني دودیزې جامې', 'accessories':'ساعتونه، عینکې او کڅوړې', 'gold_silver':'سره زر او سپین زر', 'gemstones':'قیمتي ډبرې', 'jewelry':'گوتمۍ او زېورات', 'dry_fruits':'وچې میوې او مغزیات', 'meat_dairy':'غوښه، لبنیات او هګۍ', 'honey_saffron':'شات او زعفران', 'seeds_fertilizer':'تخمونه، سره او درمل', 'irrigation':'پمپ او خړوبولو وسایل', 'doors_windows':'دروازې، کړکۍ او شیشه', 'plumbing_electric':'نل، سینیټري او برېښنا', 'paint_tiles':'رنګ، کاشي او سرامیک', 'home_services':'د کور او ساختمان خدمتونه', 'visa_documents':'ویزه او اسناد', 'design_digital':'ډیزاین او آنلاین خدمتونه', 'translation_typing':'ژباړه او ټایپ', 'daily_labor':'ورځنی مزدوري', 'job_seekers':'کارموندونکي', 'kankor':'کانکور کورس', 'language':'د ژبو کورسونه', 'herbal':'عطاري او درمل بوټي', 'wedding_decor':'سجاوټ او ګل‌آرایی', 'cake_sweets':'کیک او شیریني', 'pigeons':'کوتر', 'partridge':'کوکر او بلدرچین', 'parrots':'طوطی او زینتي مرغان', 'camping':'کمپینګ او بهرنۍ سفر', 'clothing_stores':'د جامو هټۍ', 'shoe_stores':'د بوټانو هټۍ', 'gold_stores':'د سرو زرو هټۍ', 'mobile_stores':'د موبایل هټۍ', 'electronics_stores':'د برېښنایي وسایلو هټۍ', 'home_stores':'د کور وسایلو هټۍ', 'furniture_stores':'د فرنیچر هټۍ', 'cosmetics_stores':'د آرایښت هټۍ', 'supermarkets':'سوپرمارکېټونه', 'car_parts_stores':'د موټر پرزو هټۍ', 'children_stores':'د ماشومانو هټۍ', 'heating_stores':'د بخاري او ژمي هټۍ', 'solar_stores':'د لمریز او برېښنا هټۍ', 'carpet_stores':'د غالۍ هټۍ', 'dry_fruit_stores':'د وچو میوو او عطارۍ هټۍ', 'other_stores':'نورې هټۍ',
+      
     'house_rent':'کرایي کور', 'house_mortgage':'ګروي کور', 'house_sale':'د خرڅلاو کور', 'apartment':'اپارتمان',
     'land_sale':'د خرڅلاو ځمکه', 'land_rent':'کرایي ځمکه', 'shop':'دوکان', 'office':'دفتر', 'garden':'باغ',
     'car':'موټر', 'motorcycle':'موټرسایکل', 'rickshaw':'ریکشا', 'parts':'پرزې', 'mobile':'موبایل', 'laptop':'لېپټاپ',
@@ -1454,112 +1464,154 @@ const List<String> provinces = [
 ];
 
 const List<Map<String, dynamic>> categories = [
-  {'id': 'real_estate', 'title': 'املاک و خانه', 'icon': Icons.home},
   {'id': 'vehicles', 'title': 'وسایط نقلیه', 'icon': Icons.directions_car},
-  {'id': 'electronics', 'title': 'لوازم الکترونیکی', 'icon': Icons.smartphone},
+  {'id': 'real_estate', 'title': 'املاک و خانه', 'icon': Icons.home},
+  {'id': 'mobile_tablets', 'title': 'موبایل و تبلت', 'icon': Icons.smartphone},
+  {'id': 'electronics', 'title': 'لوازم الکترونیکی و کمپیوتر', 'icon': Icons.laptop},
+  {'id': 'energy_solar', 'title': 'انرژی و سولر', 'icon': Icons.bolt},
+  {'id': 'heating_winter', 'title': 'گرمایش و زمستان', 'icon': Icons.local_fire_department},
   {'id': 'home_goods', 'title': 'لوازم خانه', 'icon': Icons.chair},
   {'id': 'fashion', 'title': 'لباس و پوشاک', 'icon': Icons.checkroom},
-  {'id': 'jobs', 'title': 'استخدام و کاریابی', 'icon': Icons.work},
-  {'id': 'services', 'title': 'خدمات', 'icon': Icons.build},
-  {'id': 'personal', 'title': 'وسایل شخصی', 'icon': Icons.person},
-  {'id': 'social_pages', 'title': 'صفحات مجازی', 'icon': Icons.public},
-  {'id': 'afghan_stores', 'title': 'فروشگاه‌ها و کسب‌وکارها', 'icon': Icons.storefront},
-  {'id': 'animals_pets', 'title': 'حیوانات خانگی', 'icon': Icons.pets},
-  {'id': 'agriculture_livestock', 'title': 'زراعت و مالداری', 'icon': Icons.agriculture},
+  {'id': 'jewelry_gems', 'title': 'طلا، جواهر و سنگ‌های قیمتی', 'icon': Icons.stars},
   {'id': 'food_grocery', 'title': 'مواد غذایی', 'icon': Icons.local_grocery_store},
-  {'id': 'health', 'title': 'صحت و تندرستی', 'icon': Icons.health_and_safety},
-  {'id': 'education', 'title': 'تعلیم و آموزش', 'icon': Icons.school},
-  {'id': 'kids_family', 'title': 'وسایل اطفال و خانواده', 'icon': Icons.child_friendly},
+  {'id': 'agriculture_livestock', 'title': 'زراعت و مالداری', 'icon': Icons.agriculture},
   {'id': 'construction_tools', 'title': 'ساختمان و ابزار', 'icon': Icons.construction},
+  {'id': 'services', 'title': 'خدمات', 'icon': Icons.build},
+  {'id': 'jobs', 'title': 'استخدام و کاریابی', 'icon': Icons.work},
+  {'id': 'education', 'title': 'تعلیم و آموزش', 'icon': Icons.school},
+  {'id': 'health', 'title': 'صحت و تندرستی', 'icon': Icons.health_and_safety},
+  {'id': 'kids_family', 'title': 'وسایل اطفال و خانواده', 'icon': Icons.child_friendly},
   {'id': 'wedding_events', 'title': 'عروسی و مراسم', 'icon': Icons.celebration},
-  {'id': 'travel_tickets', 'title': 'سفر و تکت', 'icon': Icons.flight_takeoff},
-  {'id': 'lost_found', 'title': 'گمشده و پیدا شده', 'icon': Icons.find_in_page},
+  {'id': 'animals_pets', 'title': 'پرندگان و حیوانات خانگی', 'icon': Icons.pets},
   {'id': 'sports_hobbies', 'title': 'ورزش و سرگرمی', 'icon': Icons.sports_soccer},
+  {'id': 'travel_tickets', 'title': 'سفر و تکت', 'icon': Icons.flight_takeoff},
+  {'id': 'afghan_stores', 'title': 'فروشگاه‌ها و کسب‌وکارها', 'icon': Icons.storefront},
 ];
 
-
 const Map<String, List<Map<String, String>>> subcategories = {
-  'real_estate': [
-    {'id':'house_rent','title':'خانه کرایی'},
-    {'id':'house_mortgage','title':'خانه گروی'},
-    {'id':'house_sale','title':'خانه فروشی'},
-    {'id':'apartment','title':'آپارتمان'},
-    {'id':'land_sale','title':'زمین فروشی'},
-    {'id':'land_rent','title':'زمین کرایی'},
-    {'id':'shop','title':'دکان'},
-    {'id':'office','title':'دفتر'},
-    {'id':'garden','title':'باغ'},
-  ],
   'vehicles': [
-    {'id':'car','title':'موتر'}, {'id':'motorcycle','title':'موتورسایکل'}, {'id':'rickshaw','title':'رکشا'}, {'id':'parts','title':'پرزه‌جات'},
+    {'id':'car','title':'موتر'}, {'id':'motorcycle','title':'موترسایکل'}, {'id':'bicycles','title':'بایسکل'},
+    {'id':'rickshaw','title':'ریکشا'}, {'id':'trucks','title':'لاری و موتر باربری'}, {'id':'buses','title':'بس و مینی‌بس'},
+    {'id':'heavy_machinery','title':'ماشین‌آلات سنگین'}, {'id':'parts','title':'پرزه‌جات'}, {'id':'tires_batteries','title':'تایر، بیتری و روغن'},
+    {'id':'car_accessories','title':'لوازم و تزئینات موتر'},
+  ],
+  'real_estate': [
+    {'id':'house_rent','title':'خانه کرایی'}, {'id':'house_mortgage','title':'خانه گروی'}, {'id':'house_sale','title':'خانه فروشی'},
+    {'id':'apartment','title':'آپارتمان'}, {'id':'land_sale','title':'زمین فروشی'}, {'id':'land_rent','title':'زمین کرایی'},
+    {'id':'shop','title':'دکان'}, {'id':'office','title':'دفتر'}, {'id':'garden','title':'باغ'},
+    {'id':'warehouse','title':'گدام و فابریکه'}, {'id':'room_rent','title':'اتاق و کوټه کرایی'},
+  ],
+  'mobile_tablets': [
+    {'id':'mobile','title':'موبایل'}, {'id':'tablet','title':'تبلت'}, {'id':'smartwatch','title':'ساعت هوشمند'},
+    {'id':'mobile_accessories','title':'لوازم جانبی موبایل'}, {'id':'mobile_parts','title':'پرزه و لوازم تعمیر موبایل'},
   ],
   'electronics': [
-    {'id':'mobile','title':'موبایل'}, {'id':'laptop','title':'لپ‌تاپ'}, {'id':'computer','title':'کمپیوتر'}, {'id':'tv','title':'تلویزیون'}, {'id':'camera','title':'دوربین'},
+    {'id':'laptop','title':'لپ‌تاپ'}, {'id':'computer','title':'کمپیوتر'}, {'id':'tv','title':'تلویزیون'},
+    {'id':'camera','title':'دوربین و کمره امنیتی'}, {'id':'printer_network','title':'پرینتر و شبکه'}, {'id':'gaming','title':'گیم و کنسول'},
+    {'id':'audio','title':'اسپیکر و سیستم صوتی'}, {'id':'satellite','title':'ریسیور و ستلایت'},
+  ],
+  'energy_solar': [
+    {'id':'solar_panels','title':'پنل سولر'}, {'id':'batteries_inverters','title':'بیتری و انورتر'}, {'id':'generators','title':'جنراتور'},
+    {'id':'solar_pumps','title':'پمپ آب سولری'}, {'id':'electric_supplies','title':'سیم و لوازم برق'},
+  ],
+  'heating_winter': [
+    {'id':'turkish_stove','title':'بخاری ترکی'}, {'id':'simple_stove','title':'بخاری ساده'}, {'id':'electric_heater','title':'بخاری برقی'},
+    {'id':'gas_oil_heater','title':'بخاری گازی و نفتی'}, {'id':'chimney','title':'دودکش و لوازم بخاری'}, {'id':'fuel','title':'هیزم، ذغال و سوخت'},
+    {'id':'winter_bedding','title':'کمبل، تشک و لحاف'}, {'id':'winter_clothes','title':'لباس و بوت زمستانی'},
   ],
   'home_goods': [
-    {'id':'furniture','title':'مبلمان'}, {'id':'appliances','title':'لوازم برقی'}, {'id':'kitchen','title':'لوازم آشپزخانه'},
+    {'id':'furniture','title':'مبلمان'}, {'id':'carpets','title':'قالین و فرش'}, {'id':'appliances','title':'لوازم برقی'},
+    {'id':'kitchen','title':'لوازم آشپزخانه'}, {'id':'curtains_decor','title':'پرده و دکوراسیون'},
   ],
   'fashion': [
-    {'id':'mens','title':'لباس مردانه'}, {'id':'womens','title':'لباس زنانه'}, {'id':'kids','title':'لباس کودک'}, {'id':'shoes','title':'کفش'},
+    {'id':'mens','title':'لباس مردانه'}, {'id':'womens','title':'لباس زنانه'}, {'id':'kids','title':'لباس کودک'},
+    {'id':'shoes','title':'کفش'}, {'id':'traditional','title':'لباس محلی و افغانی'}, {'id':'accessories','title':'ساعت، عینک و کیف'},
   ],
-  'jobs': [
-    {'id':'full_time','title':'کار تمام‌وقت'}, {'id':'part_time','title':'کار نیمه‌وقت'}, {'id':'remote','title':'کار آنلاین'},
+  'jewelry_gems': [
+    {'id':'gold_silver','title':'طلا و نقره'}, {'id':'gemstones','title':'سنگ‌های قیمتی (لاجورد، یاقوت، عقیق)'}, {'id':'jewelry','title':'انگشتر و زیورآلات'},
   ],
-  'services': [
-    {'id':'repair','title':'تعمیرات'}, {'id':'transport','title':'ترانسپورت'}, {'id':'education','title':'آموزش'},
-  ],
-  'personal': [
-    {'id':'other','title':'سایر وسایل شخصی'},
-  ],
-  'social_pages': [
-    {'id':'youtube','title':'یوتیوب'}, {'id':'tiktok','title':'تیک‌تاک'}, {'id':'instagram','title':'اینستاگرام'},
-    {'id':'facebook_page','title':'صفحه فیسبوک'}, {'id':'telegram','title':'کانال تلگرام'}, {'id':'snapchat','title':'اسنپ‌چت'},
-    {'id':'x_page','title':'صفحه X'}, {'id':'other_social','title':'سایر صفحات'},
-  ],
-  'afghan_stores': [
-    {'id':'clothing_stores','title':'فروشگاه‌های لباس'}, {'id':'shoe_stores','title':'فروشگاه‌های کفش'},
-    {'id':'gold_stores','title':'طلافروشی و جواهرات'}, {'id':'mobile_stores','title':'فروشگاه‌های موبایل و لوازم جانبی'},
-    {'id':'electronics_stores','title':'فروشگاه‌های لوازم برقی'}, {'id':'home_stores','title':'فروشگاه‌های لوازم خانه'},
-    {'id':'furniture_stores','title':'فروشگاه‌های مبلمان'}, {'id':'cosmetics_stores','title':'فروشگاه‌های آرایشی و بهداشتی'},
-    {'id':'supermarkets','title':'سوپرمارکت و مواد غذایی'}, {'id':'car_parts_stores','title':'فروشگاه‌های پرزه‌جات موتر'},
-    {'id':'children_stores','title':'فروشگاه‌های کودک'}, {'id':'other_stores','title':'سایر فروشگاه‌ها'},
-  ],
-  'animals_pets': [
-    {'id':'cats','title':'پیشک / گربه'}, {'id':'dogs','title':'سگ'}, {'id':'birds','title':'پرنده‌های خانگی'},
-    {'id':'ornamental_fish','title':'ماهی زینتی'}, {'id':'pet_supplies','title':'غذا و لوازم حیوانات'},
+  'food_grocery': [
+    {'id':'grocery','title':'مواد غذایی'}, {'id':'dry_fruits','title':'میوه خشک و مغزیجات'}, {'id':'fruit_vegetables','title':'میوه و سبزی'},
+    {'id':'meat_dairy','title':'گوشت، لبنیات و تخم'}, {'id':'honey_saffron','title':'عسل و زعفران'}, {'id':'water_drinks','title':'آب و نوشیدنی'},
+    {'id':'bakery','title':'نان و شیرینی'},
   ],
   'agriculture_livestock': [
     {'id':'cattle','title':'گاو و گوساله'}, {'id':'sheep_goats','title':'گوسفند و بز'}, {'id':'horses','title':'اسب'},
-    {'id':'poultry','title':'مرغ و پرنده'}, {'id':'farm_equipment','title':'ماشین‌آلات و ابزار زراعت'},
-  ],
-  'food_grocery': [
-    {'id':'grocery','title':'مواد غذایی'}, {'id':'fruit_vegetables','title':'میوه و سبزی'}, {'id':'water_drinks','title':'آب و نوشیدنی'},
-    {'id':'bakery','title':'نان و شیرینی'},
-  ],
-  'health': [
-    {'id':'pharmacy','title':'محصولات صحی'}, {'id':'medical_equipment','title':'تجهیزات طبی'}, {'id':'fitness_wellness','title':'ورزش و تندرستی'},
-  ],
-  'education': [
-    {'id':'courses','title':'کورس و آموزش'}, {'id':'books','title':'کتاب و جزوه'}, {'id':'school_supplies','title':'لوازم مکتب'}, {'id':'tutoring','title':'استاد خصوصی'},
-  ],
-  'kids_family': [
-    {'id':'baby_gear','title':'لوازم نوزاد'}, {'id':'toys','title':'اسباب‌بازی'}, {'id':'strollers','title':'کالسکه و چوکی طفل'}, {'id':'kids_furniture','title':'اثاثیه اطفال'},
+    {'id':'poultry','title':'مرغ و پرنده'}, {'id':'farm_equipment','title':'ماشین‌آلات و ابزار زراعت'}, {'id':'seeds_fertilizer','title':'تخم، کود و دوا'},
+    {'id':'irrigation','title':'پمپ و لوازم آبیاری'},
   ],
   'construction_tools': [
-    {'id':'building_materials','title':'مصالح ساختمانی'}, {'id':'tools','title':'ابزار و ماشین‌آلات'}, {'id':'generators','title':'جنراتور'}, {'id':'solar','title':'سیستم‌های سولری'},
+    {'id':'building_materials','title':'مصالح ساختمانی'}, {'id':'tools','title':'ابزار و ماشین‌آلات'}, {'id':'doors_windows','title':'در، کلکین و شیشه'},
+    {'id':'plumbing_electric','title':'لوله، سینیتری و برق'}, {'id':'paint_tiles','title':'رنگ، کاشی و سرامیک'},
+  ],
+  'services': [
+    {'id':'repair','title':'تعمیرات'}, {'id':'transport','title':'ترانسپورت و باربری'}, {'id':'home_services','title':'خدمات منزل و ساختمانی'},
+    {'id':'visa_documents','title':'ویزا و خدمات اسناد'}, {'id':'design_digital','title':'دیزاین و خدمات آنلاین'}, {'id':'translation_typing','title':'ترجمه و تایپ'},
+  ],
+  'jobs': [
+    {'id':'full_time','title':'کار تمام‌وقت'}, {'id':'part_time','title':'کار نیمه‌وقت'}, {'id':'remote','title':'کار آنلاین'},
+    {'id':'daily_labor','title':'کار روزمزد'}, {'id':'job_seekers','title':'کارجو (جستجوی کار)'},
+  ],
+  'education': [
+    {'id':'courses','title':'کورس و آموزش'}, {'id':'kankor','title':'کورس کانکور'}, {'id':'language','title':'کورس زبان'},
+    {'id':'books','title':'کتاب و جزوه'}, {'id':'school_supplies','title':'لوازم مکتب'}, {'id':'tutoring','title':'استاد خصوصی'},
+  ],
+  'health': [
+    {'id':'pharmacy','title':'محصولات صحی'}, {'id':'medical_equipment','title':'تجهیزات طبی'}, {'id':'herbal','title':'عطاری و گیاهان دارویی'},
+    {'id':'fitness_wellness','title':'ورزش و تندرستی'},
+  ],
+  'kids_family': [
+    {'id':'baby_gear','title':'لوازم نوزاد'}, {'id':'toys','title':'اسباب‌بازی'}, {'id':'strollers','title':'کالسکه و چوکی طفل'},
+    {'id':'kids_furniture','title':'اثاثیه اطفال'},
   ],
   'wedding_events': [
-    {'id':'wedding_dresses','title':'لباس عروسی'}, {'id':'wedding_services','title':'خدمات عروسی'}, {'id':'halls','title':'تالار و محل مراسم'}, {'id':'photography','title':'عکاسی و فیلمبرداری'},
+    {'id':'wedding_dresses','title':'لباس عروسی'}, {'id':'wedding_services','title':'خدمات عروسی'}, {'id':'halls','title':'تالار و محل مراسم'},
+    {'id':'photography','title':'عکاسی و فیلمبرداری'}, {'id':'wedding_decor','title':'دکور و گل‌آرایی'}, {'id':'cake_sweets','title':'کیک و شیرینی'},
   ],
-  'travel_tickets': [
-    {'id':'air_tickets','title':'تکت هواپیما'}, {'id':'bus_tickets','title':'تکت بس'}, {'id':'hotels','title':'هوتل و اقامت'}, {'id':'tours','title':'تور و گردشگری'},
-  ],
-  'lost_found': [
-    {'id':'lost_items','title':'اشیای گمشده'}, {'id':'found_items','title':'اشیای پیدا شده'}, {'id':'documents','title':'اسناد پیدا شده'},
+  'animals_pets': [
+    {'id':'pigeons','title':'کبوتر'}, {'id':'partridge','title':'کبک و بلدرچین'}, {'id':'parrots','title':'طوطی و پرنده‌های زینتی'},
+    {'id':'cats','title':'پیشک / گربه'}, {'id':'dogs','title':'سگ'}, {'id':'pet_supplies','title':'غذا و لوازم حیوانات'},
   ],
   'sports_hobbies': [
-    {'id':'sports_equipment','title':'تجهیزات ورزشی'}, {'id':'gaming','title':'گیم و کنسول'}, {'id':'bicycles','title':'بایسکل'}, {'id':'music','title':'آلات موسیقی'},
+    {'id':'sports_equipment','title':'تجهیزات ورزشی'}, {'id':'music','title':'آلات موسیقی'}, {'id':'camping','title':'کمپینگ و سفر'},
   ],
+  'travel_tickets': [
+    {'id':'air_tickets','title':'تکت هواپیما'}, {'id':'bus_tickets','title':'تکت بس'}, {'id':'hotels','title':'هوتل و اقامت'},
+    {'id':'tours','title':'تور و گردشگری'},
+  ],
+  'afghan_stores': [
+    {'id':'clothing_stores','title':'فروشگاه‌های لباس'}, {'id':'shoe_stores','title':'فروشگاه‌های کفش'}, {'id':'gold_stores','title':'طلافروشی و جواهرات'},
+    {'id':'mobile_stores','title':'فروشگاه‌های موبایل و لوازم جانبی'}, {'id':'electronics_stores','title':'فروشگاه‌های لوازم برقی'}, {'id':'home_stores','title':'فروشگاه‌های لوازم خانه'},
+    {'id':'furniture_stores','title':'فروشگاه‌های مبلمان'}, {'id':'cosmetics_stores','title':'فروشگاه‌های آرایشی و بهداشتی'}, {'id':'supermarkets','title':'سوپرمارکت و مواد غذایی'},
+    {'id':'car_parts_stores','title':'فروشگاه‌های پرزه‌جات موتر'}, {'id':'children_stores','title':'فروشگاه‌های کودک'}, {'id':'heating_stores','title':'فروشگاه‌های بخاری و لوازم زمستانی'},
+    {'id':'solar_stores','title':'فروشگاه‌های سولر و برق'}, {'id':'carpet_stores','title':'قالین‌فروشی'}, {'id':'dry_fruit_stores','title':'میوه خشک و عطاری'},
+    {'id':'other_stores','title':'سایر فروشگاه‌ها'},
+  ],
+};
+
+/// دسته‌ها و زیردسته‌های حذف‌شده از فهرست؛ فقط برای نمایش عنوان آگهی‌های قدیمی که هنوز این id را دارند.
+const Map<String, String> legacyCategoryTitles = {
+  'personal': 'وسایل شخصی',
+  'social_pages': 'صفحات مجازی',
+  'lost_found': 'گمشده و پیدا شده',
+};
+const Map<String, String> legacySubcategoryTitles = {
+  'other': 'سایر وسایل شخصی',
+  'birds': 'پرنده‌های خانگی',
+  'ornamental_fish': 'ماهی زینتی',
+  'education': 'آموزش',
+  'solar': 'سیستم‌های سولری',
+  'youtube': 'یوتیوب',
+  'tiktok': 'تیک‌تاک',
+  'instagram': 'اینستاگرام',
+  'facebook_page': 'صفحه فیسبوک',
+  'telegram': 'کانال تلگرام',
+  'snapchat': 'اسنپ‌چت',
+  'x_page': 'صفحه X',
+  'other_social': 'سایر صفحات',
+  'lost_items': 'اشیای گمشده',
+  'found_items': 'اشیای پیدا شده',
+  'documents': 'اسناد پیدا شده',
 };
 
 /// هر بار آگهی ساخته، حذف یا فعال/غیرفعال شود این عدد زیاد می‌شود تا صفحه‌ی اصلی خودکار تازه شود.
@@ -2128,7 +2180,8 @@ class ApiService {
       if (query != null && query.isNotEmpty) 'q': query,
     };
     if (query != null && query.trim().length >= 2) Analytics.track('search', query: query.trim(), category: category ?? '');
-    final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams);
+    // پارامتر زمان: جلوگیری از کش شدن پاسخ لیست در مرورگر/شبکه (آگهی تازه همان لحظه دیده شود)
+    final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: {...queryParams, '_t': DateTime.now().millisecondsSinceEpoch.toString()});
     try {
       final res = await _getWithWakeUp(uri);
       final data = jsonDecode(res.body);
@@ -3921,7 +3974,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     onTap: () async {
                                       if (!await requireAccount(context)) return;
                                       if (!context.mounted) return;
-                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
+                                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
+                                      if (mounted) _loadProducts();
                                     },
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(horizontal: 9),
@@ -3958,12 +4012,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 onPressed: () async {
                                   if (!await requireAccount(context)) return;
                                   if (!context.mounted) return;
-                                  Navigator.push(
+                                  await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => const AddProductScreen(),
                                     ),
                                   );
+                                  if (mounted) _loadProducts();
                                 },
                                 child: Text(
                                   isPs ? 'اعلان درج کول' : 'ثبت آگهی',
@@ -4787,12 +4842,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             onPressed: () async {
                               if (!await requireAccount(context)) return;
                               if (!context.mounted) return;
-                              Navigator.push(
+                              await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const AddProductScreen(),
                                 ),
                               );
+                              if (mounted) _loadProducts();
                             },
                             child: Text(
                               isPs ? 'اعلان درج کول' : 'ثبت آگهی',
@@ -10213,8 +10269,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
         if (response.statusCode != 201) throw Exception(decoded is Map ? (decoded['error'] ?? tr(context, 'publish_error')) : tr(context, 'publish_error'));
         data = Map<String,dynamic>.from(decoded as Map);
       }
-      if (!mounted) return;
       listingsVersion.value++; // صفحه‌ی اصلی بدون رفرش، آگهی تازه را نشان می‌دهد
+      if (!mounted) return;
       _msg(widget.professional ? 'محصول با موفقیت در فروشگاه ثبت شد.' : tr(context, 'publish_success'));
       Navigator.pop(context, true);
     } catch (e) {

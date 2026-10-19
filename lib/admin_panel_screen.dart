@@ -646,8 +646,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
   static String _sourceName(String s) => s == 'direct' ? 'مستقیم / نامشخص' : s;
   static String _categoryName(String id) {
     const names = {
-      'vehicles': 'وسایط نقلیه', 'real_estate': 'املاک و خانه', 'electronics': 'لوازم الکترونیکی',
-      'home': 'لوازم خانه', 'fashion': 'لباس و پوشاک', 'services': 'خدمات', 'jobs': 'استخدام و کاریابی',
+      'vehicles': 'وسایط نقلیه', 'real_estate': 'املاک و خانه', 'mobile_tablets': 'موبایل و تبلت', 'electronics': 'لوازم الکترونیکی و کمپیوتر', 'energy_solar': 'انرژی و سولر', 'heating_winter': 'گرمایش و زمستان', 'home_goods': 'لوازم خانه', 'fashion': 'لباس و پوشاک', 'jewelry_gems': 'طلا، جواهر و سنگ‌های قیمتی', 'food_grocery': 'مواد غذایی', 'agriculture_livestock': 'زراعت و مالداری', 'construction_tools': 'ساختمان و ابزار', 'services': 'خدمات', 'jobs': 'استخدام و کاریابی', 'education': 'تعلیم و آموزش', 'health': 'صحت و تندرستی', 'kids_family': 'وسایل اطفال و خانواده', 'wedding_events': 'عروسی و مراسم', 'animals_pets': 'پرندگان و حیوانات خانگی', 'sports_hobbies': 'ورزش و سرگرمی', 'travel_tickets': 'سفر و تکت', 'afghan_stores': 'فروشگاه‌ها و کسب‌وکارها', 'personal': 'وسایل شخصی', 'social_pages': 'صفحات مجازی', 'lost_found': 'گمشده و پیدا شده',
     };
     return names[id] ?? id;
   }
