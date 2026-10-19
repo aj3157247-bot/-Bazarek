@@ -693,6 +693,7 @@ app.get('/api/translate', async (req, res) => {
 });
 
 app.get('/api/listings', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const db = getSupabaseAdmin();
     let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,audio_url,video_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
@@ -1405,11 +1406,14 @@ app.post('/api/products', requireUser, async (req, res) => {
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
-    // Temporary public-marketplace launch focus. Existing listings remain intact;
-    // only creation of new non-store ads is limited to active vehicle types.
-    const activeVehicleSubcategories = new Set(['car', 'motorcycle', 'rickshaw', 'bicycles']);
-    if (!forceStoreProduct && (String(category) !== 'vehicles' || !activeVehicleSubcategories.has(String(subcategory)))) {
-      return res.status(400).json({ error: 'فعلاً فقط ثبت آگهی موتر، موترسایکل، بایسکل و ریکشا فعال است.' });
+    // تمرکز موقت بازار عمومی: ثبت آگهی عادی فقط در دسته‌های فعال مجاز است (آگهی‌های قبلی دست‌نخورده می‌مانند).
+    // برای باز کردن دسته‌های بیشتر، در Render متغیر ACTIVE_AD_CATEGORIES را بگذارید، مثلاً:
+    //   ACTIVE_AD_CATEGORIES=vehicles,heating_winter
+    // (برای باز کردن همه‌ی دسته‌ها مقدار را * بگذارید.)
+    const activeAdCategories = String(process.env.ACTIVE_AD_CATEGORIES || 'vehicles').split(',').map(x => x.trim()).filter(Boolean);
+    const allCategoriesOpen = activeAdCategories.includes('*');
+    if (!forceStoreProduct && !allCategoriesOpen && !activeAdCategories.includes(String(category))) {
+      return res.status(400).json({ error: 'فعلاً ثبت آگهی در این دسته فعال نیست. دسته‌های فعال: وسایط نقلیه (موتر، موترسایکل، بایسکل، ریکشا و ...).' });
     }
     const cleanCode = String(product_code || '').trim().slice(0,80);
     const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
