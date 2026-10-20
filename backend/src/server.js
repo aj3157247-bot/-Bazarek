@@ -875,7 +875,7 @@ app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db
 app.get('/api/sellers/:id', async (req,res)=>{
   try{
     const db=getSupabaseAdmin(); const id=String(req.params.id);
-    const {data:profile,error}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,created_at').eq('id',id).maybeSingle();
+    const {data:profile,error}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,created_at,store_category,store_cover_url').eq('id',id).maybeSingle();
     if(error) throw error; if(!profile) return res.status(404).json({error:'فروشنده پیدا نشد.'});
     const [{count:followers_count},{data:ratings},storeSub]=await Promise.all([
       db.from('seller_follows').select('*',{count:'exact',head:true}).eq('seller_id',id),
@@ -915,6 +915,46 @@ app.get('/api/sellers/:id/listings', async (req,res)=>{try{
 }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
 
 // Public directory of active professional stores. Product counts are strictly store-product counts.
+// ───────────── هویت فروشگاه: نوع فروشگاه و عکس روی فروشگاه ─────────────
+const STORE_TYPE_IDS = new Set(['clothing','shoes','heating','mobile','electronics','solar','home','furniture','carpet','gold','supermarket','dry_fruit','car_parts','car_dealer','construction','cosmetics','kids','books','wedding','sports','pharmacy','agriculture','other']);
+
+app.patch('/api/store/identity', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.status(403).json({ error: 'برای تنظیم فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
+    const category = String((req.body || {}).store_category || '').trim();
+    if (!STORE_TYPE_IDS.has(category)) return res.status(400).json({ error: 'نوع فروشگاه معتبر نیست.' });
+    const { data, error } = await db.from('profiles').update({ store_category: category, updated_at: new Date().toISOString() }).eq('id', req.user.id).select('id,store_category,store_cover_url').single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { console.error('store identity error:', e); res.status(500).json({ error: 'خطا در ذخیره نوع فروشگاه.' }); }
+});
+
+app.post('/api/store/cover', requireUser, upload.single('cover'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'تصویر انتخاب نشده است.' });
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.status(403).json({ error: 'برای افزودن عکس فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
+    // کاور افقی ۱۶:۹ — عکس‌های موبایل (EXIF) درست چرخانده و برش می‌خورند.
+    const processed = await sharp(req.file.buffer).rotate().resize(1280, 720, { fit: 'cover', position: 'attention' }).jpeg({ quality: 82 }).toBuffer();
+    const buckets = await db.storage.listBuckets();
+    if (!buckets.data?.some(b => b.name === AVATAR_BUCKET)) {
+      const { error: be } = await db.storage.createBucket(AVATAR_BUCKET, { public: true, fileSizeLimit: '10MB' });
+      if (be && !String(be.message || '').toLowerCase().includes('already')) throw be;
+    }
+    const path = `${req.user.id}/cover-${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, processed, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    if (!data?.publicUrl) throw new Error('آدرس تصویر ساخته نشد.');
+    const { error: pe } = await db.from('profiles').update({ store_cover_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', req.user.id);
+    if (pe) throw pe;
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) { console.error('store cover error:', e); res.status(500).json({ error: 'خطا در آپلود عکس فروشگاه.' }); }
+});
+
 app.get('/api/stores/active', async (req,res)=>{try{
   const db=getSupabaseAdmin(); const now=new Date().toISOString();
   const {data:subs,error:se}=await db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('plan',['store_monthly','store_yearly']).eq('status','active').gt('ends_at',now).order('ends_at',{ascending:false}).limit(500);
@@ -923,14 +963,14 @@ app.get('/api/stores/active', async (req,res)=>{try{
   const ids=[...new Set(active.map(s=>s.user_id).filter(Boolean))];
   if(!ids.length)return res.json([]);
   const [{data:profiles,error:pe},{data:products,error:prode}]=await Promise.all([
-    db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified').in('id',ids),
+    db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,store_category,store_cover_url').in('id',ids),
     db.from('products').select('vendor_id').in('vendor_id',ids).eq('is_active',true).eq('is_store_product',true)
   ]);
   if(pe)throw pe;if(prode)throw prode;
   const counts={}; for(const p of (products||[])) counts[p.vendor_id]=(counts[p.vendor_id]||0)+1;
   const pm=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
   const best={}; for(const s of active){if(!best[s.user_id]||new Date(s.ends_at).getTime()>new Date(best[s.user_id].ends_at).getTime())best[s.user_id]=s;}
-  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.shop_name||p.full_name||'فروشگاه بازارک',city:p.city||'',description:p.bio||'',avatar_url:p.avatar_url||'',verified:p.verified!==false,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
+  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.shop_name||p.full_name||'فروشگاه بازارک',city:p.city||'',description:p.bio||'',avatar_url:p.avatar_url||'',store_category:p.store_category||'',store_cover_url:p.store_cover_url||'',verified:p.verified!==false,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
 }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});}});
 
 // One-click repair for a product that was accidentally created as an ordinary ad from the store flow.
