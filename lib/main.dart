@@ -1614,6 +1614,211 @@ const Map<String, String> legacySubcategoryTitles = {
   'documents': 'اسناد پیدا شده',
 };
 
+
+/// نوع فروشگاه حرفه‌ای (مخصوص بازار افغانستان). productCategory = دسته‌ی محصولات همین نوع فروشگاه؛
+/// با انتخاب آن فرم ثبت محصول خودکار ساده می‌شود.
+class StoreType {
+  final String id;
+  final String fa;
+  final String en;
+  final String ps;
+  final IconData icon;
+  final String productCategory;
+  const StoreType(this.id, this.fa, this.en, this.ps, this.icon, this.productCategory);
+}
+
+const List<StoreType> storeTypes = [
+  StoreType('clothing', 'لباس‌فروشی', 'Clothing Store', 'د جامو هټۍ', Icons.checkroom, 'fashion'),
+  StoreType('shoes', 'کفش‌فروشی', 'Shoe Store', 'د بوټانو هټۍ', Icons.directions_walk, 'fashion'),
+  StoreType('heating', 'بخاری و لوازم زمستانی', 'Heating & Winter', 'د بخاري او ژمي هټۍ', Icons.local_fire_department, 'heating_winter'),
+  StoreType('mobile', 'موبایل‌فروشی و لوازم جانبی', 'Mobile Store', 'د موبایل هټۍ', Icons.smartphone, 'mobile_tablets'),
+  StoreType('electronics', 'الکترونیک و کمپیوتر', 'Electronics & Computers', 'برېښنایي او کمپیوټر', Icons.laptop, 'electronics'),
+  StoreType('solar', 'سولر و برق', 'Solar & Electrical', 'لمریز او برېښنا', Icons.bolt, 'energy_solar'),
+  StoreType('home', 'لوازم خانه و آشپزخانه', 'Home & Kitchen', 'د کور او پخلنځي وسایل', Icons.chair, 'home_goods'),
+  StoreType('furniture', 'مبلمان و دکوراسیون', 'Furniture & Decor', 'فرنیچر او سجاوټ', Icons.weekend, 'home_goods'),
+  StoreType('carpet', 'قالین‌فروشی', 'Carpet Store', 'د غالۍ هټۍ', Icons.grid_view, 'home_goods'),
+  StoreType('gold', 'طلا و جواهر', 'Gold & Jewelry', 'سره زر او زېورات', Icons.stars, 'jewelry_gems'),
+  StoreType('supermarket', 'سوپرمارکت و مواد غذایی', 'Supermarket & Grocery', 'سوپرمارکېټ', Icons.local_grocery_store, 'food_grocery'),
+  StoreType('dry_fruit', 'میوه خشک و عطاری', 'Dried Fruit & Spices', 'وچې میوې او عطاري', Icons.eco, 'food_grocery'),
+  StoreType('car_parts', 'پرزه‌جات و لوازم موتر', 'Car Parts', 'د موټر پرزې', Icons.build, 'vehicles'),
+  StoreType('car_dealer', 'نمایشگاه موتر و موترسایکل', 'Car & Motorcycle Dealer', 'د موټر نندارتون', Icons.directions_car, 'vehicles'),
+  StoreType('construction', 'مصالح ساختمانی و ابزار', 'Construction & Tools', 'ساختماني مواد او وسایل', Icons.construction, 'construction_tools'),
+  StoreType('cosmetics', 'آرایشی و بهداشتی', 'Cosmetics & Care', 'آرایښتي او روغتیایي', Icons.brush, 'health'),
+  StoreType('kids', 'لوازم کودک و اسباب‌بازی', 'Kids & Toys', 'د ماشومانو وسایل', Icons.child_friendly, 'kids_family'),
+  StoreType('books', 'کتاب و لوازم تحریر', 'Books & Stationery', 'کتاب او لوازم تحریر', Icons.menu_book, 'education'),
+  StoreType('wedding', 'عروسی و مراسم', 'Weddings & Events', 'واده او مراسم', Icons.celebration, 'wedding_events'),
+  StoreType('sports', 'ورزش و تندرستی', 'Sports & Fitness', 'ورزش او روغتیا', Icons.sports_soccer, 'sports_hobbies'),
+  StoreType('pharmacy', 'داروخانه و تجهیزات طبی', 'Pharmacy & Medical', 'درملتون او طبي وسایل', Icons.local_pharmacy, 'health'),
+  StoreType('agriculture', 'زراعت و مالداری', 'Agriculture & Livestock', 'کرنه او مالداري', Icons.agriculture, 'agriculture_livestock'),
+  StoreType('other', 'سایر فروشگاه‌ها', 'Other Stores', 'نورې هټۍ', Icons.storefront, ''),
+];
+
+StoreType? storeTypeById(String? id) {
+  if (id == null || id.isEmpty) return null;
+  for (final t in storeTypes) {
+    if (t.id == id) return t;
+  }
+  return null;
+}
+
+String storeTypeTitle(BuildContext context, String id) {
+  final t = storeTypeById(id);
+  if (t == null) return '';
+  final lang = Localizations.localeOf(context).languageCode;
+  return lang == 'en' ? t.en : (lang == 'ps' ? t.ps : t.fa);
+}
+
+/// بنر فروشگاه: عکس روی فروشگاه (کاور) + لوگو + نام + نوع فروشگاه + تعداد محصول.
+/// اگر کاور نبود، پس‌زمینه‌ی گرادینت با آیکن نوع فروشگاه نشان داده می‌شود.
+class StoreHeaderBanner extends StatelessWidget {
+  final String name;
+  final String coverUrl;
+  final String avatarUrl;
+  final String typeId;
+  final int productCount;
+  final double height;
+  final Widget? bottom;
+  final bool verified;
+  const StoreHeaderBanner({
+    super.key,
+    required this.name,
+    this.coverUrl = '',
+    this.avatarUrl = '',
+    this.typeId = '',
+    this.productCount = 0,
+    this.height = 200,
+    this.bottom,
+    this.verified = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final type = storeTypeById(typeId);
+    final hasCover = coverUrl.trim().isNotEmpty;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: height,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasCover)
+              Image.network(
+                _optimizedImageUrl(coverUrl, width: 900, quality: 80),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF172B3A)),
+              )
+            else
+              DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)]),
+                ),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Icon(type?.icon ?? Icons.storefront_rounded, size: 96, color: Colors.white.withOpacity(.10)),
+                  ),
+                ),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00000000), Color(0x33000000), Color(0xCC000000)],
+                  stops: [0.25, 0.55, 1],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 12,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [BoxShadow(color: Color(0x44000000), blurRadius: 8)],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: avatarUrl.trim().isNotEmpty
+                            ? Image.network(
+                                _optimizedImageUrl(avatarUrl, width: 160, quality: 80),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185)),
+                              )
+                            : Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185), size: 28),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900),
+                                  ),
+                                ),
+                                if (verified) ...[
+                                  const SizedBox(width: 5),
+                                  const Icon(Icons.verified_rounded, color: Color(0xFF55D7E6), size: 19),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                if (type != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: Colors.white.withOpacity(.20), borderRadius: BorderRadius.circular(20)),
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                      Icon(type.icon, size: 13, color: Colors.white),
+                                      const SizedBox(width: 4),
+                                      Text(storeTypeTitle(context, type.id), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                                    ]),
+                                  ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(color: Colors.white.withOpacity(.20), borderRadius: BorderRadius.circular(20)),
+                                  child: Text('$productCount محصول', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (bottom != null) ...[const SizedBox(height: 10), bottom!],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// هر بار آگهی ساخته، حذف یا فعال/غیرفعال شود این عدد زیاد می‌شود تا صفحه‌ی اصلی خودکار تازه شود.
 final ValueNotifier<int> listingsVersion = ValueNotifier<int>(0);
 
@@ -2388,6 +2593,41 @@ class ApiService {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  static Future<void> saveStoreType(String typeId) async {
+    Future<http.Response> send() => http.patch(
+          Uri.parse('${ApiConfig.baseUrl}/store/identity'),
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json', ...headers},
+          body: jsonEncode({'store_category': typeId}),
+        ).timeout(const Duration(seconds: 20));
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    if (res.statusCode != 200) {
+      dynamic data; try { data = jsonDecode(res.body); } catch (_) {}
+      throw Exception(data is Map ? (data['error'] ?? 'ذخیره نوع فروشگاه ناموفق بود.') : 'ذخیره نوع فروشگاه ناموفق بود.');
+    }
+  }
+
+  static Future<String> uploadStoreCover(PickedProfileImage image) async {
+    Future<http.Response> send() async {
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/store/cover'));
+      if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      final detected = _detectImageType(image.bytes, image.mimeType, image.name);
+      if (detected == null) throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG یا WEBP انتخاب کنید.');
+      req.files.add(http.MultipartFile.fromBytes('cover', image.bytes,
+          filename: 'cover-${DateTime.now().millisecondsSinceEpoch}.${detected.ext}', contentType: MediaType.parse(detected.mime)));
+      final streamed = await req.send().timeout(const Duration(seconds: 60));
+      return http.Response.fromStream(streamed);
+    }
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) {}
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'آپلود عکس فروشگاه ناموفق بود.') : 'آپلود عکس فروشگاه ناموفق بود.');
+    final url = data is Map ? (data['url']?.toString() ?? '') : '';
+    if (url.isEmpty) throw Exception('آدرس عکس فروشگاه دریافت نشد.');
+    listingsVersion.value++;
+    return url;
+  }
+
   static Future<String> uploadAvatar(PickedProfileImage image) async {
     Future<http.Response> send() async {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/profile/avatar'));
@@ -3000,6 +3240,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final PageController _storePageController = PageController();
   Timer? _storeAutoTimer;
   int _storePageIndex = 0;
+  String _storeTypeFilter = '';
+  List<Map<String, dynamic>> get shownStores => _storeTypeFilter.isEmpty
+      ? professionalStores
+      : professionalStores.where((s) => (s['store_category']?.toString() ?? '') == _storeTypeFilter).toList();
 
   @override
   void initState() {
@@ -3019,8 +3263,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _startStoreAutoRotation() {
     _storeAutoTimer?.cancel();
     _storeAutoTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted || professionalStores.length < 2 || !_storePageController.hasClients) return;
-      final next = (_storePageIndex + 1) % professionalStores.length;
+      if (!mounted || shownStores.length < 2 || !_storePageController.hasClients) return;
+      final next = (_storePageIndex + 1) % shownStores.length;
       _storePageController.animateToPage(
         next,
         duration: const Duration(milliseconds: 450),
@@ -4423,7 +4667,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          if (professionalStores.isEmpty)
+          if (professionalStores.any((s) => (s['store_category']?.toString() ?? '').isNotEmpty)) ...[
+            SizedBox(
+              height: 38,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final entry in <MapEntry<String, String>>[
+                    const MapEntry('', 'همه'),
+                    for (final t in storeTypes)
+                      if (professionalStores.any((s) => s['store_category']?.toString() == t.id)) MapEntry(t.id, t.fa),
+                  ])
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: ChoiceChip(
+                        label: Text(entry.value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+                        selected: _storeTypeFilter == entry.key,
+                        onSelected: (_) {
+                          setState(() { _storeTypeFilter = entry.key; _storePageIndex = 0; });
+                          if (_storePageController.hasClients) _storePageController.jumpToPage(0);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (shownStores.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
@@ -4452,113 +4723,55 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   PageView.builder(
                     controller: _storePageController,
-                    itemCount: professionalStores.length,
+                    itemCount: shownStores.length,
                     physics: const BouncingScrollPhysics(),
                     onPageChanged: (index) {
                       if (mounted) setState(() => _storePageIndex = index);
                     },
                     itemBuilder: (context, index) {
-                      final store = professionalStores[index];
+                      final store = shownStores[index];
                       final vendorId = store['vendor_id']?.toString() ?? '';
                       final shopName = (store['shop_name']?.toString().trim().isNotEmpty == true)
                           ? store['shop_name'].toString().trim()
                           : (store['seller_name']?.toString().trim().isNotEmpty == true
                               ? store['seller_name'].toString().trim()
                               : 'فروشگاه بازارک');
-                      final description = store['description']?.toString().trim() ?? '';
                       final count = int.tryParse(store['products_count']?.toString() ?? '') ?? 0;
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF0F6B78), Color(0xFF172B3A)],
+                        child: StoreHeaderBanner(
+                          name: shopName,
+                          coverUrl: store['store_cover_url']?.toString() ?? '',
+                          avatarUrl: store['avatar_url']?.toString() ?? '',
+                          typeId: store['store_category']?.toString() ?? '',
+                          productCount: count,
+                          verified: true,
+                          height: isMobile ? 245 : 255,
+                          bottom: SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFFFD814),
+                                foregroundColor: const Color(0xFF111111),
+                                minimumSize: const Size.fromHeight(40),
+                              ),
+                              onPressed: vendorId.isEmpty
+                                  ? null
+                                  : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName),
+                                        ),
+                                      ),
+                              icon: const Icon(Icons.storefront_rounded, size: 18),
+                              label: Text(isPs ? 'ننوتل به پلورنځي' : 'ورود به فروشگاه', style: const TextStyle(fontWeight: FontWeight.w900)),
                             ),
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 12, offset: Offset(0, 5))],
-                          ),
-                          padding: const EdgeInsets.all(15),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 58,
-                                    height: 58,
-                                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                                    child: const Icon(Icons.storefront_rounded, color: Color(0xFF007185), size: 34),
-                                  ),
-                                  const SizedBox(width: 11),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                shopName,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 5),
-                                            const Icon(Icons.verified_rounded, color: Color(0xFF55D7E6), size: 20),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          '$count ${isPs ? 'محصول' : 'محصول فروشگاه'}',
-                                          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 13),
-                              Expanded(
-                                child: Text(
-                                  description.isNotEmpty
-                                      ? description
-                                      : (isPs ? 'دا پلورنځي محصولات، معلومات او خدمتونه وګورئ.' : 'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.'),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFFFFD814),
-                                    foregroundColor: const Color(0xFF111111),
-                                    minimumSize: const Size.fromHeight(42),
-                                  ),
-                                  onPressed: vendorId.isEmpty
-                                      ? null
-                                      : () => Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName),
-                                            ),
-                                          ),
-                                  icon: const Icon(Icons.storefront_rounded, size: 18),
-                                  label: Text(isPs ? 'ننوتل به پلورنځي' : 'ورود به فروشگاه و مشاهده محصولات', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                       );
                     },
                   ),
-                  if (professionalStores.length > 1) ...[
+                  if (shownStores.length > 1) ...[
                     Positioned(
                       left: 6,
                       top: 92,
@@ -4569,7 +4782,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: IconButton(
                           tooltip: isPs ? 'مخکینی پلورنځی' : 'فروشگاه قبلی',
                           onPressed: () {
-                            final previous = (_storePageIndex - 1 + professionalStores.length) % professionalStores.length;
+                            final previous = (_storePageIndex - 1 + shownStores.length) % shownStores.length;
                             _storePageController.animateToPage(previous, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
                           },
                           icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF172B3A)),
@@ -4586,7 +4799,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: IconButton(
                           tooltip: isPs ? 'راتلونکی پلورنځی' : 'فروشگاه بعدی',
                           onPressed: () {
-                            final next = (_storePageIndex + 1) % professionalStores.length;
+                            final next = (_storePageIndex + 1) % shownStores.length;
                             _storePageController.animateToPage(next, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
                           },
                           icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF172B3A)),
@@ -4597,12 +4810,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-          if (professionalStores.length > 1) ...[
+          if (shownStores.length > 1) ...[
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (var i = 0; i < professionalStores.length; i++)
+                for (var i = 0; i < shownStores.length; i++)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -6321,12 +6534,14 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
   String? error;
   List<dynamic> listings = [];
   String selectedCategory = '';
+  Map<String, dynamic> storeProfile = {};
 
   @override
   void initState() {
     super.initState();
     selectedCategory = widget.initialCategory ?? '';
     _load();
+    ApiService.getSellerProfile(widget.sellerId).then((p) { if (mounted) setState(() => storeProfile = p); }).catchError((_) {});
   }
 
   Future<void> _load() async {
@@ -6606,20 +6821,18 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF131921), Color(0xFF243447)]), borderRadius: BorderRadius.circular(8)),
-                        child: Row(children: [
-                          const Icon(Icons.storefront_rounded, color: Color(0xFFFFD814), size: 42),
-                          const SizedBox(width: 11),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(widget.sellerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-                            const SizedBox(height: 4),
-                            Text(ps ? 'هر محصول د عکس، قیمت او ځانګړي کوډ سره.' : 'هر محصول با عکس، قیمت و کد اختصاصی نمایش داده می‌شود.', style: const TextStyle(color: Color(0xFFD5D9D9), fontSize: 11, height: 1.45)),
-                            const SizedBox(height: 7),
-                            Text(ps ? 'د اخیستلو پر وخت د محصول کوډ ووایاست.' : 'برای خرید، کافی است کد کالا را به فروشنده بگویید.', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-                          ])),
-                        ]),
+                      StoreHeaderBanner(
+                        name: widget.sellerName,
+                        coverUrl: storeProfile['store_cover_url']?.toString() ?? '',
+                        avatarUrl: storeProfile['avatar_url']?.toString() ?? '',
+                        typeId: storeProfile['store_category']?.toString() ?? '',
+                        productCount: listings.length,
+                        height: 210,
+                      ),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(ps ? 'د اخیستلو پر وخت د محصول کوډ ووایاست.' : 'برای خرید، کافی است کد کالا را به فروشنده بگویید.', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w700)),
                       ),
                       const SizedBox(height: 10),
                       _categoryBar(context),
@@ -6816,6 +7029,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                     children: [
                       _storeHero(ps),
                       const SizedBox(height: 14),
+                      if (hasActiveStore) ...[_storeIdentityCard(ps), const SizedBox(height: 14)],
                       if (hasActiveStore && storeDaysLeft <= 7) _renewalBanner(ps),
                       if (!hasActiveStore && hasStoreHistory) _expiredStoreBanner(ps),
                       if (!hasActiveStore && !hasStoreHistory) _inactiveBanner(ps),
@@ -6909,6 +7123,143 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  bool _savingIdentity = false;
+
+  Future<void> _pickStoreCover() async {
+    if (_savingIdentity) return;
+    final image = await pickProfileImage();
+    if (image == null) return;
+    setState(() => _savingIdentity = true);
+    try {
+      await ApiService.uploadStoreCover(image);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('عکس فروشگاه ذخیره شد.')));
+      await _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally {
+      if (mounted) setState(() => _savingIdentity = false);
+    }
+  }
+
+  Future<void> _chooseStoreType() async {
+    final current = profile['store_category']?.toString() ?? '';
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('فروشگاه شما چه چیزی می‌فروشد؟', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            const Text('یکی را انتخاب کنید؛ ثبت محصول برای شما ساده‌تر می‌شود.', style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 12.5)),
+            const SizedBox(height: 12),
+            Flexible(
+              child: GridView.count(
+                shrinkWrap: true,
+                crossAxisCount: 3,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: .95,
+                children: [
+                  for (final t in storeTypes)
+                    InkWell(
+                      onTap: () => Navigator.pop(ctx, t.id),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: t.id == current ? const Color(0xFFE7F6F5) : const Color(0xFFF6F8F9),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: t.id == current ? const Color(0xFF007185) : const Color(0xFFE1E6EA), width: t.id == current ? 2 : 1),
+                        ),
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(t.icon, size: 30, color: const Color(0xFF007185)),
+                          const SizedBox(height: 7),
+                          Text(t.fa, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, height: 1.25)),
+                        ]),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (picked == null || picked == current) return;
+    setState(() => _savingIdentity = true);
+    try {
+      await ApiService.saveStoreType(picked);
+      if (!mounted) return;
+      listingsVersion.value++;
+      await _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+    } finally {
+      if (mounted) setState(() => _savingIdentity = false);
+    }
+  }
+
+  Widget _storeIdentityCard(bool ps) {
+    final typeId = profile['store_category']?.toString() ?? '';
+    final cover = profile['store_cover_url']?.toString() ?? '';
+    final avatar = profile['avatar_url']?.toString() ?? '';
+    final needsSetup = typeId.isEmpty || cover.isEmpty;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: needsSetup ? const Color(0xFFF0C36D) : const Color(0xFFE1E6EA)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.palette_outlined, color: Color(0xFF007185)),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('ظاهر فروشگاه', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+          if (needsSetup) const Text('تکمیل کنید', style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w800, fontSize: 12)),
+        ]),
+        const SizedBox(height: 4),
+        const Text('عکس زیبا و نوع فروشگاه شما در صفحه‌ی اصلی بازارک نمایش داده می‌شود.', style: TextStyle(color: Colors.black54, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: _savingIdentity ? null : _pickStoreCover,
+          child: Stack(children: [
+            StoreHeaderBanner(name: shopName, coverUrl: cover, avatarUrl: avatar, typeId: typeId, productCount: listings.length, height: 170),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6)]),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  _savingIdentity
+                      ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.add_a_photo_rounded, size: 16, color: Color(0xFF007185)),
+                  const SizedBox(width: 6),
+                  Text(cover.isEmpty ? 'افزودن عکس فروشگاه' : 'تغییر عکس', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _savingIdentity ? null : _chooseStoreType,
+            icon: Icon(storeTypeById(typeId)?.icon ?? Icons.category_outlined, size: 19),
+            label: Text(typeId.isEmpty ? 'انتخاب نوع فروشگاه' : 'نوع فروشگاه: ${storeTypeById(typeId)?.fa ?? ''}  (تغییر)'),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -10029,6 +10380,36 @@ class _AddProductSheetState extends State<AddProductSheet> {
   int get _videoLimitSeconds => widget.professional ? 60 : 30;
   int get _videoLimitMb => widget.professional ? 40 : 20;
   bool publishing = false;
+  bool inStock = true;
+  String storeMappedCategory = '';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.professional) {
+      stock.text = '100';
+      _loadStoreContext();
+    }
+  }
+
+  /// نوع فروشگاه را می‌خوانیم تا دسته‌ی محصول، ولایت و شماره تماس خودکار پر شود (فرم ساده).
+  Future<void> _loadStoreContext() async {
+    try {
+      final p = await ApiService.getMyProfile();
+      if (!mounted) return;
+      final type = storeTypeById(p['store_category']?.toString());
+      setState(() {
+        if (type != null && type.productCategory.isNotEmpty) {
+          storeMappedCategory = type.productCategory;
+          if (category.isEmpty) category = type.productCategory;
+        }
+        final city = p['city']?.toString().trim() ?? '';
+        if (province.isEmpty && city.isNotEmpty && provinces.contains(city)) province = city;
+        final phone = p['phone']?.toString().trim() ?? '';
+        if (contactPhone.text.trim().isEmpty && phone.isNotEmpty) contactPhone.text = phone;
+      });
+    } catch (_) {}
+  }
   final AudioRecorderService _audioRecorder = AudioRecorderService();
 
   final ImagePicker _picker = ImagePicker();
@@ -10212,6 +10593,10 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
   Future<void> _publish() async {
     if (publishing) return;
+    if (widget.professional) {
+      if (!inStock) { stock.text = '0'; }
+      else if (stock.text.trim().isEmpty || stock.text.trim() == '0') { stock.text = '100'; }
+    }
     if (title.text.trim().isEmpty) { _msg('عنوان آگهی را وارد کنید.'); return; }
     if (category.isEmpty) { _msg('دسته‌بندی را انتخاب کنید.'); return; }
     if (subcategory.isEmpty && (subcategories[category]?.isNotEmpty ?? false)) { _msg('زیر‌دسته را انتخاب کنید.'); return; }
@@ -10313,6 +10698,144 @@ class _AddProductSheetState extends State<AddProductSheet> {
 
     Widget chips(List<String> values, TextEditingController target) => Wrap(spacing: 7, runSpacing: 7, children: values.map((v) => ActionChip(label: Text(v), onPressed: () { final current = target.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(); if (!current.contains(v)) current.add(v); setState(() => target.text = current.join(', ')); })).toList());
 
+    final audioSection = section(tr(context, 'audio_section'), tr(context, 'audio_optional'), Icons.mic_none_rounded,
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (audioBytes != null && audioBytes!.isNotEmpty) ...[
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF8FAFB), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE1E6EA))),
+                  child: Row(children: [const Icon(Icons.audiotrack_rounded), const SizedBox(width: 8), Expanded(child: Text(audioName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))), IconButton(onPressed: _clearAudio, tooltip: tr(context, 'remove_audio'), icon: const Icon(Icons.close_rounded))])),
+                const SizedBox(height: 8),
+              ],
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilledButton.icon(onPressed: uploadingAudio ? null : _recordAudio, icon: Icon(recordingAudio ? Icons.stop_circle_outlined : Icons.mic_rounded), label: Text(recordingAudio ? tr(context, 'stop_recording') : tr(context, 'record_audio'))),
+                OutlinedButton.icon(onPressed: recordingAudio || uploadingAudio ? null : _pickAudioFile, icon: const Icon(Icons.audio_file_outlined), label: Text(tr(context, 'choose_audio'))),
+              ]),
+              if (recordingAudio) ...[const SizedBox(height: 8), LinearProgressIndicator(), const SizedBox(height: 4), Text(tr(context, 'audio_recording'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
+            ]),
+          );
+    final videoSection = section('ویدیو (اختیاری)', 'یک ویدیوی کوتاه تا $_videoLimitSeconds ثانیه برای نشان دادن جنس و وضعیت محصول اضافه کنید.', Icons.videocam_rounded,
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (videoBytes != null && videoBytes!.isNotEmpty) ...[
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF8FAFB), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE1E6EA))),
+                  child: Row(children: [
+                    const Icon(Icons.movie_rounded),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(videoSeconds == null ? videoName : '$videoName • ${videoSeconds!.round()} ثانیه', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+                    IconButton(onPressed: publishing ? null : _clearVideo, icon: const Icon(Icons.delete_outline_rounded)),
+                  ])),
+                const SizedBox(height: 8),
+              ],
+              OutlinedButton.icon(onPressed: publishing ? null : _pickVideoFile, icon: const Icon(Icons.video_library_outlined), label: Text(videoBytes == null ? 'انتخاب ویدیو' : 'تغییر ویدیو')),
+              const SizedBox(height: 6),
+              Text('حداکثر $_videoLimitSeconds ثانیه • حداکثر $_videoLimitMb مگابایت • MP4', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
+              if (uploadingVideo) ...[const SizedBox(height: 8), const LinearProgressIndicator(), const SizedBox(height: 4), const Text('در حال آپلود ویدیو...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
+            ]),
+          );
+    final introSection = section('۲. معرفی محصول', professional ? 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.' : 'اطلاعات اصلی آگهی را وارد کنید.', Icons.inventory_2_rounded,
+            Column(children: [
+              field(title, 'نام محصول', hint: professional ? 'مثلاً کفش مردانه چرمی مدل ۲۰۲۶' : 'عنوان آگهی'),
+              DropdownButtonFormField<String>(value: category.isEmpty ? null : category, decoration: InputDecoration(labelText: uiText(context, 'دسته‌بندی'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(), onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; })),
+              if ((subcategories[category] ?? []).isNotEmpty) ...[const SizedBox(height: 11), DropdownButtonFormField<String>(value: subcategory.isEmpty ? null : subcategory, decoration: InputDecoration(labelText: uiText(context, 'زیر‌دسته'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(), onChanged: (val) => setState(() => subcategory = val ?? ''))],
+              const SizedBox(height: 11),
+              DropdownButtonFormField<String>(value: province.isEmpty ? null : province, decoration: InputDecoration(labelText: uiText(context, 'ولایت'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(), onChanged: (val) => setState(() => province = val ?? '')),
+              const SizedBox(height: 11),
+              field(desc, 'توضیحات محصول', hint: professional ? 'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...' : 'توضیحات کامل', maxLines: 5),
+            ]),
+          );
+    final priceSection = section('۳. قیمت و تخفیف', professional ? 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.' : 'قیمت و واحد پول را مشخص کنید.', Icons.sell_rounded,
+            Column(children: [
+              Row(children: [Expanded(child: field(price, 'قیمت اصلی', hint: 'مثلاً 120000', keyboard: TextInputType.number)), const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]),
+              if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
+              Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: const Text('افغانی (AFN)'), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: const Text('دلار (USD)'), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
+              const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
+            ]),
+          );
+    final smartSection = section('۴. مشخصات هوشمند', 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.', Icons.tune_rounded,
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              field(brand, 'برند', hint: isElectronics ? 'مثلاً Samsung' : 'مثلاً Nike'),
+              field(model, 'مدل', hint: isFootwear ? 'مثلاً Air Max 2026' : 'مثلاً X100'),
+              if (isFootwear) ...[Text('سایزهای کفش', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً 41, 42, 43')]
+              else if (isClothing) ...[Text('سایزهای لباس', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً M, L, XL')]
+              else field(sizes, 'اندازه / ظرفیت / سایز', hint: isElectronics ? 'مثلاً 128GB, 256GB' : 'در صورت نیاز وارد کنید'),
+              Text('رنگ‌ها', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(colorHints, colors), const SizedBox(height: 8), field(colors, 'رنگ‌های انتخاب‌شده', hint: 'مثلاً مشکی, سفید'),
+              field(material, 'جنس / جنس بدنه', hint: isFootwear ? 'چرم، پارچه،...' : 'مثلاً چرم، فلز، پلاستیک'),
+              field(condition, 'وضعیت', hint: 'نو، کارکرده، در حد نو'),
+              field(productCode, 'کد محصول (SKU)', hint: 'خالی بگذارید تا خودکار ساخته شود'),
+              field(specifications, 'مشخصات فنی', hint: 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.', maxLines: 4),
+            ]),
+          );
+    final contactSection = section(professional ? '۵. ارتباط و انتشار' : '۴. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
+            Column(children: [
+              field(contactPhone, 'شماره تماس', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
+              field(locationText, 'آدرس / محل', hint: 'شهر، منطقه یا آدرس فروشگاه'),
+              if (category == 'social_pages') field(socialLink, 'لینک صفحه', hint: 'https://...'),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('امکان چت مستقیم'), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
+            ]),
+          );
+
+    final proTypeSubs = subcategories[category] ?? const <Map<String, String>>[];
+    InputDecoration proDeco(String label) => InputDecoration(labelText: label, filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)));
+    final simpleMainCard = section('اطلاعات محصول', 'فقط همین چند مورد کافی است؛ بقیه اختیاری است.', Icons.inventory_2_rounded,
+      Column(children: [
+        field(title, 'نام محصول', hint: 'مثلاً بخاری ترکی ۴ شعله'),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(flex: 3, child: field(price, 'قیمت', hint: 'مثلاً 12000', keyboard: TextInputType.number)),
+          const SizedBox(width: 10),
+          Expanded(flex: 2, child: field(discountPercent, 'تخفیف ٪', hint: 'اختیاری', keyboard: const TextInputType.numberWithOptions(decimal: true))),
+        ]),
+        Row(children: [
+          Expanded(child: ChoiceChip(label: const Center(child: Text('افغانی')), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'))),
+          const SizedBox(width: 8),
+          Expanded(child: ChoiceChip(label: const Center(child: Text('دالر')), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'))),
+        ]),
+        if (salePrice > 0 && discount > 0 && discount < 100)
+          Padding(padding: const EdgeInsets.only(top: 9), child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دالر' : 'افغانی'}', style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w900))),
+        const SizedBox(height: 12),
+        if (storeMappedCategory.isEmpty) ...[
+          DropdownButtonFormField<String>(
+            value: category.isEmpty ? null : category,
+            decoration: proDeco('دسته محصول'),
+            items: categories.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(localizedCategoryTitle(context, c['id'].toString(), c['title'].toString())))).toList(),
+            onChanged: (v) => setState(() { category = v ?? ''; subcategory = ''; }),
+          ),
+          const SizedBox(height: 11),
+        ],
+        if (proTypeSubs.isNotEmpty) ...[
+          DropdownButtonFormField<String>(
+            value: subcategory.isEmpty ? null : subcategory,
+            decoration: proDeco('نوع محصول'),
+            items: proTypeSubs.map((sc) => DropdownMenuItem(value: sc['id']!, child: Text(localizedSubcategoryTitle(context, category, sc['id']!, sc['title']!)))).toList(),
+            onChanged: (v) => setState(() => subcategory = v ?? ''),
+          ),
+          const SizedBox(height: 11),
+        ],
+        DropdownButtonFormField<String>(
+          value: province.isEmpty ? null : province,
+          decoration: proDeco('ولایت'),
+          items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(),
+          onChanged: (val) => setState(() => province = val ?? ''),
+        ),
+        SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('موجود است', style: TextStyle(fontWeight: FontWeight.w800)), value: inStock, onChanged: (v) => setState(() => inStock = v)),
+        field(desc, 'توضیحات (اختیاری)', hint: 'یک یا دو جمله درباره‌ی محصول', maxLines: 3),
+      ]),
+    );
+    final moreOptions = Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFE1E6EA))),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: const Icon(Icons.tune_rounded, color: Color(0xFF007185)),
+          title: const Text('امکانات بیشتر (اختیاری)', style: TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: const Text('ویدیو، پیام صوتی، رنگ و سایز، تماس و ...', style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+          children: [videoSection, audioSection, smartSection, contactSection],
+        ),
+      ),
+    );
+
     return Container(
       color: const Color(0xFFF4F6F8),
       child: SingleChildScrollView(
@@ -10333,81 +10856,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
               ]),
             ]),
           ),
-          section(tr(context, 'audio_section'), tr(context, 'audio_optional'), Icons.mic_none_rounded,
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (audioBytes != null && audioBytes!.isNotEmpty) ...[
-                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF8FAFB), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE1E6EA))),
-                  child: Row(children: [const Icon(Icons.audiotrack_rounded), const SizedBox(width: 8), Expanded(child: Text(audioName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))), IconButton(onPressed: _clearAudio, tooltip: tr(context, 'remove_audio'), icon: const Icon(Icons.close_rounded))])),
-                const SizedBox(height: 8),
-              ],
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                FilledButton.icon(onPressed: uploadingAudio ? null : _recordAudio, icon: Icon(recordingAudio ? Icons.stop_circle_outlined : Icons.mic_rounded), label: Text(recordingAudio ? tr(context, 'stop_recording') : tr(context, 'record_audio'))),
-                OutlinedButton.icon(onPressed: recordingAudio || uploadingAudio ? null : _pickAudioFile, icon: const Icon(Icons.audio_file_outlined), label: Text(tr(context, 'choose_audio'))),
-              ]),
-              if (recordingAudio) ...[const SizedBox(height: 8), LinearProgressIndicator(), const SizedBox(height: 4), Text(tr(context, 'audio_recording'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
-            ]),
-          ),
-          section('ویدیو (اختیاری)', 'یک ویدیوی کوتاه تا $_videoLimitSeconds ثانیه برای نشان دادن جنس و وضعیت محصول اضافه کنید.', Icons.videocam_rounded,
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (videoBytes != null && videoBytes!.isNotEmpty) ...[
-                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF8FAFB), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE1E6EA))),
-                  child: Row(children: [
-                    const Icon(Icons.movie_rounded),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(videoSeconds == null ? videoName : '$videoName • ${videoSeconds!.round()} ثانیه', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
-                    IconButton(onPressed: publishing ? null : _clearVideo, icon: const Icon(Icons.delete_outline_rounded)),
-                  ])),
-                const SizedBox(height: 8),
-              ],
-              OutlinedButton.icon(onPressed: publishing ? null : _pickVideoFile, icon: const Icon(Icons.video_library_outlined), label: Text(videoBytes == null ? 'انتخاب ویدیو' : 'تغییر ویدیو')),
-              const SizedBox(height: 6),
-              Text('حداکثر $_videoLimitSeconds ثانیه • حداکثر $_videoLimitMb مگابایت • MP4', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
-              if (uploadingVideo) ...[const SizedBox(height: 8), const LinearProgressIndicator(), const SizedBox(height: 4), const Text('در حال آپلود ویدیو...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))],
-            ]),
-          ),
-          section('۲. معرفی محصول', professional ? 'دسته را انتخاب کنید تا گزینه‌های مخصوص همان محصول نمایش داده شود.' : 'اطلاعات اصلی آگهی را وارد کنید.', Icons.inventory_2_rounded,
-            Column(children: [
-              field(title, 'نام محصول', hint: professional ? 'مثلاً کفش مردانه چرمی مدل ۲۰۲۶' : 'عنوان آگهی'),
-              DropdownButtonFormField<String>(value: category.isEmpty ? null : category, decoration: InputDecoration(labelText: uiText(context, 'دسته‌بندی'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(localizedCategoryTitle(context, c['id'] as String, c['title'] as String)))).toList(), onChanged: (val) => setState(() { category = val ?? ''; subcategory = ''; })),
-              if ((subcategories[category] ?? []).isNotEmpty) ...[const SizedBox(height: 11), DropdownButtonFormField<String>(value: subcategory.isEmpty ? null : subcategory, decoration: InputDecoration(labelText: uiText(context, 'زیر‌دسته'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: (subcategories[category] ?? []).map((c) => DropdownMenuItem(value: c['id'], child: Text(localizedSubcategoryTitle(context, category, c['id']!, c['title']!)))).toList(), onChanged: (val) => setState(() => subcategory = val ?? ''))],
-              const SizedBox(height: 11),
-              DropdownButtonFormField<String>(value: province.isEmpty ? null : province, decoration: InputDecoration(labelText: uiText(context, 'ولایت'), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))), items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(), onChanged: (val) => setState(() => province = val ?? '')),
-              const SizedBox(height: 11),
-              field(desc, 'توضیحات محصول', hint: professional ? 'مزایا، جنس، کاربرد، گارانتی و نکات مهم را بنویسید...' : 'توضیحات کامل', maxLines: 5),
-            ]),
-          ),
-          section('۳. قیمت و تخفیف', professional ? 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.' : 'قیمت و واحد پول را مشخص کنید.', Icons.sell_rounded,
-            Column(children: [
-              Row(children: [Expanded(child: field(price, 'قیمت اصلی', hint: 'مثلاً 120000', keyboard: TextInputType.number)), const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]),
-              if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
-              Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: const Text('افغانی (AFN)'), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: const Text('دلار (USD)'), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
-              const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
-            ]),
-          ),
-          if (professional) section('۴. مشخصات هوشمند', 'فقط مشخصاتی را پر کنید که برای دسته محصول شما معنی دارد.', Icons.tune_rounded,
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              field(brand, 'برند', hint: isElectronics ? 'مثلاً Samsung' : 'مثلاً Nike'),
-              field(model, 'مدل', hint: isFootwear ? 'مثلاً Air Max 2026' : 'مثلاً X100'),
-              if (isFootwear) ...[Text('سایزهای کفش', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً 41, 42, 43')]
-              else if (isClothing) ...[Text('سایزهای لباس', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(sizeHints, sizes), const SizedBox(height: 8), field(sizes, 'سایزهای انتخاب‌شده', hint: 'مثلاً M, L, XL')]
-              else field(sizes, 'اندازه / ظرفیت / سایز', hint: isElectronics ? 'مثلاً 128GB, 256GB' : 'در صورت نیاز وارد کنید'),
-              Text('رنگ‌ها', style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 7), chips(colorHints, colors), const SizedBox(height: 8), field(colors, 'رنگ‌های انتخاب‌شده', hint: 'مثلاً مشکی, سفید'),
-              field(material, 'جنس / جنس بدنه', hint: isFootwear ? 'چرم، پارچه،...' : 'مثلاً چرم، فلز، پلاستیک'),
-              field(condition, 'وضعیت', hint: 'نو، کارکرده، در حد نو'),
-              field(productCode, 'کد محصول (SKU)', hint: 'خالی بگذارید تا خودکار ساخته شود'),
-              field(specifications, 'مشخصات فنی', hint: 'ویژگی‌های فنی مهم را کوتاه و منظم بنویسید.', maxLines: 4),
-            ]),
-          ),
-          section(professional ? '۵. ارتباط و انتشار' : '۴. ارتباط و انتشار', 'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.', Icons.contact_phone_rounded,
-            Column(children: [
-              field(contactPhone, 'شماره تماس', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
-              field(locationText, 'آدرس / محل', hint: 'شهر، منطقه یا آدرس فروشگاه'),
-              if (category == 'social_pages') field(socialLink, 'لینک صفحه', hint: 'https://...'),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('امکان چت مستقیم'), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
-            ]),
-          ),
+          if (!professional) ...[audioSection, videoSection, introSection, priceSection, contactSection],
+          if (professional) ...[simpleMainCard, moreOptions],
           SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? 'در حال انتشار...' : (professional ? 'انتشار در فروشگاه' : 'ثبت و انتشار آگهی')), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
         ]),
       ),
