@@ -99,13 +99,24 @@ export async function resolveFullId(supabaseUrl, key, short) {
 }
 
 // ───────── لینک فروشگاه: /store/<کلمات-انگلیسی نام فروشگاه یا store>-<۱۲ کاراکتر اول شناسه> ─────────
+const STORE_TYPE_SLUG = {
+  clothing: "clothing-store", shoes: "shoe-store", heating: "heating-store", mobile: "mobile-store",
+  electronics: "electronics-store", solar: "solar-store", home: "home-goods-store", furniture: "furniture-store",
+  carpet: "carpet-store", gold: "jewelry-store", supermarket: "supermarket", dry_fruit: "dry-fruit-store",
+  car_parts: "car-parts-store", car_dealer: "car-dealer", construction: "building-materials-store",
+  cosmetics: "cosmetics-store", kids: "kids-store", books: "bookstore", wedding: "wedding-store",
+  sports: "sports-store", pharmacy: "pharmacy", agriculture: "agriculture-store", other: "store",
+};
+
+// اولویت slug: ۱) کلمات انگلیسی نام فروشگاه  ۲) نوع فروشگاه (مثلاً heating-store)  ۳) store
 export function storeSlug(profile) {
   const name = asciiDigits(profile && (profile.shop_name || profile.full_name));
   let tokens = name.match(/[a-z0-9]+/g) || [];
   if (!tokens.some((t) => /[a-z]/.test(t))) tokens = [];
   let slug = tokens.slice(0, 4).join("-");
+  if (!slug) slug = STORE_TYPE_SLUG[profile && profile.store_category] || "store";
   if (slug.length > 40) slug = slug.slice(0, 40).replace(/-+$/, "");
-  return slug || "store";
+  return slug;
 }
 
 export function storePath(profile) {

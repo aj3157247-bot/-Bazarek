@@ -238,7 +238,7 @@ async function fetchStores(env) {
   for (let i = 0; i < ids.length; i += 100) {
     const chunk = ids.slice(i, i + 100);
     const rows = await restGet(env, "profiles", [
-      ["select", "id,shop_name,full_name,updated_at,avatar_url,store_cover_url"],
+      ["select", "id,shop_name,full_name,updated_at,avatar_url,store_cover_url,store_category"],
       ["id", `in.(${chunk.join(",")})`],
     ]);
     if (rows) stores.push(...rows);
@@ -342,7 +342,7 @@ export async function onRequestGet(context) {
     headers: {
       "content-type": "application/xml; charset=utf-8",
       "cache-control": "public, max-age=300, s-maxage=900",
-      "x-bazarek-sitemap": "dynamic-v3",
+      "x-bazarek-sitemap": "dynamic-v4",
     },
   });
 }
