@@ -110,7 +110,7 @@ const STORE_TYPE_SLUG = {
 
 // اولویت slug: ۱) کلمات انگلیسی نام فروشگاه  ۲) نوع فروشگاه (مثلاً heating-store)  ۳) store
 export function storeSlug(profile) {
-  const name = asciiDigits(profile && (profile.shop_name || profile.full_name));
+  const name = asciiDigits(profile && (profile.store_name || profile.shop_name || profile.full_name));
   let tokens = name.match(/[a-z0-9]+/g) || [];
   if (!tokens.some((t) => /[a-z]/.test(t))) tokens = [];
   let slug = tokens.slice(0, 4).join("-");

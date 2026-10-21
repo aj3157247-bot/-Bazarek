@@ -238,7 +238,7 @@ async function fetchStores(env) {
   for (let i = 0; i < ids.length; i += 100) {
     const chunk = ids.slice(i, i + 100);
     const rows = await restGet(env, "profiles", [
-      ["select", "id,shop_name,full_name,updated_at,avatar_url,store_cover_url,store_category"],
+      ["select", "id,shop_name,full_name,updated_at,avatar_url,store_cover_url,store_category,store_name,store_logo_url"],
       ["id", `in.(${chunk.join(",")})`],
     ]);
     if (rows) stores.push(...rows);
@@ -319,7 +319,7 @@ export async function onRequestGet(context) {
     let entry = `  <url><loc>${xml(origin + storePath(s))}</loc>`;
     if (m) entry += `<lastmod>${m}</lastmod>`;
     entry += "<changefreq>daily</changefreq><priority>0.7</priority>";
-    const cover = String(s.store_cover_url || s.avatar_url || "");
+    const cover = String(s.store_cover_url || s.store_logo_url || s.avatar_url || "");
     if (/^https?:\/\//i.test(cover)) entry += `<image:image><image:loc>${xml(cover)}</image:loc></image:image>`;
     out.push(entry + "</url>");
   }
