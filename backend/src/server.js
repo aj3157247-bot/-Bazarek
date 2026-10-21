@@ -625,7 +625,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,audio_url,video_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at,currency').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at,currency').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -696,7 +696,7 @@ app.get('/api/listings', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,audio_url,video_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -710,7 +710,7 @@ app.get('/api/listings', async (req, res) => {
     const now = Date.now();
     const vendorIds = [...new Set((data || []).map(x => x.vendor_id).filter(Boolean))];
     const [{ data: profiles }, { data: globalSubs }, { data: storeSubs }] = await Promise.all([
-      vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone,bio').in('id', vendorIds) : Promise.resolve({ data: [] }),
+      vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone,bio,store_name,store_bio').in('id', vendorIds) : Promise.resolve({ data: [] }),
       vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['boost_weekly','boost_monthly','boost_yearly']) : Promise.resolve({ data: [] }),
       vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['store_monthly','store_yearly']) : Promise.resolve({ data: [] }),
     ]);
@@ -762,7 +762,7 @@ app.get('/api/listings', async (req, res) => {
     res.json(rows.map(x => {
       const level = Number(x.effective_boost_level || 0);
       const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
-      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
+      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: (x.is_store_product === true ? (pm[x.vendor_id]?.store_name || pm[x.vendor_id]?.shop_name) : pm[x.vendor_id]?.shop_name) || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
@@ -783,7 +783,7 @@ app.get('/api/listings/:id', async (req,res)=>{
     let seller = {};
     if (data.vendor_id) {
       const {data:profile,error:profileError} = await db.from('profiles')
-        .select('id,full_name,shop_name,phone,bio')
+        .select('id,full_name,shop_name,phone,bio,store_name,store_bio')
         .eq('id', data.vendor_id)
         .maybeSingle();
       if (profileError) console.error('listing seller lookup:', profileError);
@@ -793,9 +793,9 @@ app.get('/api/listings/:id', async (req,res)=>{
     res.set('Cache-Control', 'no-store');
     res.json({
       ...data,
-      seller_name: seller.shop_name || seller.full_name || 'فروشنده بازارک',
+      seller_name: (data.is_store_product === true ? (seller.store_name || seller.shop_name) : seller.shop_name) || seller.full_name || 'فروشنده بازارک',
       seller_phone: data.show_phone ? (data.contact_phone || seller.phone || '') : '',
-      store_description: seller.bio || '',
+      store_description: (data.is_store_product === true ? (seller.store_bio || seller.bio) : seller.bio) || '',
       store_active: Boolean(storeSub),
       store_plan: storeSub?.plan || null,
       store_starts_at: storeSub?.starts_at || null,
@@ -875,7 +875,7 @@ app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db
 app.get('/api/sellers/:id', async (req,res)=>{
   try{
     const db=getSupabaseAdmin(); const id=String(req.params.id);
-    const {data:profile,error}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,created_at,store_category,store_cover_url').eq('id',id).maybeSingle();
+    const {data:profile,error}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,created_at,store_category,store_cover_url,store_name,store_bio,store_logo_url,store_phone,store_whatsapp,store_city,store_address').eq('id',id).maybeSingle();
     if(error) throw error; if(!profile) return res.status(404).json({error:'فروشنده پیدا نشد.'});
     const [{count:followers_count},{data:ratings},storeSub]=await Promise.all([
       db.from('seller_follows').select('*',{count:'exact',head:true}).eq('seller_id',id),
@@ -893,13 +893,13 @@ app.get('/api/sellers/:id', async (req,res)=>{
       try { const {data:sv}=await db.from('saved_stores').select('user_id').eq('user_id',req.user.id).eq('seller_id',id).maybeSingle(); is_saved=!!sv; } catch (_) {}
     }
     const {count:products_count}=await db.from('products').select('*',{count:'exact',head:true}).eq('vendor_id',id).eq('is_active',true).eq('is_store_product',true);
-    res.json({...profile,followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
+    res.json({...profile,shop_name:profile.store_name||profile.shop_name||'',bio:profile.store_bio||profile.bio||'',avatar_url:profile.store_logo_url||profile.avatar_url||'',city:profile.store_city||profile.city||'',followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
   }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پروفایل فروشنده.'});}
 });
 app.get('/api/sellers/:id/ads', async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const sellerId=String(req.params.id);
-  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',false).order('created_at',{ascending:false}).limit(100);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',false).order('created_at',{ascending:false}).limit(100);
   if(error)throw error;
   res.json(data||[]);
 }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آگهی‌های فروشنده.'});}});
@@ -907,7 +907,7 @@ app.get('/api/sellers/:id/ads', async (req,res)=>{try{
 app.get('/api/sellers/:id/listings', async (req,res)=>{try{
   const db=getSupabaseAdmin();
   const sellerId=String(req.params.id);
-  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
   if(error)throw error;
   const storeSub=await getActiveStoreSubscription(db,sellerId);
   const storeActive=Boolean(storeSub);
@@ -1062,6 +1062,42 @@ app.patch('/api/admin/store-verifications/:id', requireAdmin, async (req, res) =
   } catch (e) { console.error('admin verification decision error:', e); res.status(500).json({ error: 'ثبت تصمیم ناموفق بود.' }); }
 });
 
+// ───────────── پروفایل فروشگاه (جدا از پروفایل شخصی) ─────────────
+app.patch('/api/store/profile', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    if (!(await getActiveStoreSubscription(db, req.user.id))) return res.status(403).json({ error: 'برای ویرایش پروفایل فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
+    const b = req.body || {};
+    const clip = (v, n) => String(v || '').trim().slice(0, n);
+    const phone = (v) => String(v || '').replace(/[^0-9+]/g, '').slice(0, 20);
+    const name = clip(b.store_name, 80);
+    if (!name) return res.status(400).json({ error: 'نام فروشگاه را وارد کنید.' });
+    const update = {
+      store_name: name, store_bio: clip(b.store_bio, 600), store_city: clip(b.store_city, 60), store_address: clip(b.store_address, 200),
+      store_phone: phone(b.store_phone), store_whatsapp: phone(b.store_whatsapp), updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await db.from('profiles').update(update).eq('id', req.user.id).select('id,store_name,store_bio,store_city,store_address,store_phone,store_whatsapp,store_logo_url').single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { console.error('store profile error:', e); res.status(500).json({ error: 'خطا در ذخیره پروفایل فروشگاه.' }); }
+});
+
+app.post('/api/store/logo', requireUser, upload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'تصویر انتخاب نشده است.' });
+    const db = getSupabaseAdmin();
+    if (!(await getActiveStoreSubscription(db, req.user.id))) return res.status(403).json({ error: 'برای افزودن لوگو باید فروشگاه حرفه‌ای فعال باشد.' });
+    const processed = await sharp(req.file.buffer).rotate().resize(600, 600, { fit: 'cover', position: 'attention' }).jpeg({ quality: 85 }).toBuffer();
+    const path = `${req.user.id}/store-logo-${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, processed, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    const { error: pe } = await db.from('profiles').update({ store_logo_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', req.user.id);
+    if (pe) throw pe;
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) { console.error('store logo error:', e); res.status(500).json({ error: 'خطا در آپلود لوگوی فروشگاه.' }); }
+});
+
 app.get('/api/stores/active', async (req,res)=>{try{
   const db=getSupabaseAdmin(); const now=new Date().toISOString();
   const {data:subs,error:se}=await db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('plan',['store_monthly','store_yearly']).eq('status','active').gt('ends_at',now).order('ends_at',{ascending:false}).limit(500);
@@ -1070,14 +1106,14 @@ app.get('/api/stores/active', async (req,res)=>{try{
   const ids=[...new Set(active.map(s=>s.user_id).filter(Boolean))];
   if(!ids.length)return res.json([]);
   const [{data:profiles,error:pe},{data:products,error:prode}]=await Promise.all([
-    db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,store_category,store_cover_url').in('id',ids),
+    db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,store_category,store_cover_url,store_name,store_bio,store_logo_url,store_city,store_phone,store_whatsapp').in('id',ids),
     db.from('products').select('vendor_id').in('vendor_id',ids).eq('is_active',true).eq('is_store_product',true)
   ]);
   if(pe)throw pe;if(prode)throw prode;
   const counts={}; for(const p of (products||[])) counts[p.vendor_id]=(counts[p.vendor_id]||0)+1;
   const pm=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
   const best={}; for(const s of active){if(!best[s.user_id]||new Date(s.ends_at).getTime()>new Date(best[s.user_id].ends_at).getTime())best[s.user_id]=s;}
-  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.shop_name||p.full_name||'فروشگاه بازارک',city:p.city||'',description:p.bio||'',avatar_url:p.avatar_url||'',store_category:p.store_category||'',store_cover_url:p.store_cover_url||'',verified:p.verified!==false,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
+  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',city:p.store_city||p.city||'',description:p.store_bio||p.bio||'',avatar_url:p.store_logo_url||p.avatar_url||'',store_whatsapp:p.store_whatsapp||p.store_phone||'',store_category:p.store_category||'',store_cover_url:p.store_cover_url||'',verified:p.verified!==false,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
 }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});}});
 
 // One-click repair for a product that was accidentally created as an ordinary ad from the store flow.
@@ -1549,7 +1585,7 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
     const forceStoreProduct = String(req.headers['x-bazarek-store-product'] || '').toLowerCase() === 'true';
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
@@ -1574,7 +1610,7 @@ app.post('/api/products', requireUser, async (req, res) => {
       const storeSub = await getActiveStoreSubscription(db, req.user.id);
       if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
     }
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     try {
@@ -1592,7 +1628,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/store-products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت محصول الزامی است.' });
     const db = getSupabaseAdmin();
@@ -1607,7 +1643,7 @@ app.post('/api/store-products', requireUser, async (req, res) => {
       price: Math.max(0, Number(price) || 0),
       cost_price: Math.max(0, Number(cost_price) || 0),
       description: String(description).slice(0,10000),
-      category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000),
+      category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20),
       allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone),
       contact_phone: String(contact_phone).trim().slice(0,30),
       location_text: String(location_text).trim().slice(0,160),
@@ -1639,7 +1675,7 @@ app.get('/api/my/store-products', requireUser, async (req, res) => {
     const db = getSupabaseAdmin();
     const storeSub = await getActiveStoreSubscription(db, req.user.id);
     if (!storeSub) return res.json([]);
-    const { data, error } = await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id', req.user.id).eq('is_active', true).eq('is_store_product', true).order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id', req.user.id).eq('is_active', true).eq('is_store_product', true).order('created_at', { ascending: false }).limit(100);
     if (error) throw error;
     res.json(data || []);
   } catch (e) {
@@ -1708,7 +1744,7 @@ app.delete('/api/me/account', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable', 'currency', 'brand', 'model', 'sizes', 'colors', 'material', 'condition', 'product_code', 'specifications', 'discount_percent', 'province', 'audio_url', 'video_url'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable', 'currency', 'brand', 'model', 'sizes', 'colors', 'material', 'condition', 'product_code', 'specifications', 'discount_percent', 'province', 'audio_url', 'video_url', 'show_whatsapp', 'whatsapp_number'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
