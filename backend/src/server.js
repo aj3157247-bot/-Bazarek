@@ -955,6 +955,113 @@ app.post('/api/store/cover', requireUser, upload.single('cover'), async (req, re
   } catch (e) { console.error('store cover error:', e); res.status(500).json({ error: 'خطا در آپلود عکس فروشگاه.' }); }
 });
 
+// ───────────── فعال‌سازی رایگان فروشگاه: تأیید هویت (تذکره + سلفی) ─────────────
+const KYC_BUCKET = 'store-kyc';
+async function ensureKycBucket(db) {
+  const buckets = await db.storage.listBuckets();
+  if (!buckets.data?.some(b => b.name === KYC_BUCKET)) {
+    const { error } = await db.storage.createBucket(KYC_BUCKET, { public: false, fileSizeLimit: '10MB' });
+    if (error && !String(error.message || '').toLowerCase().includes('already')) throw error;
+  }
+}
+
+app.get('/api/store/verification', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const [{ data: rows }, storeSub] = await Promise.all([
+      db.from('store_verifications').select('id,status,admin_note,created_at,reviewed_at').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(1),
+      getActiveStoreSubscription(db, req.user.id),
+    ]);
+    const last = rows && rows[0];
+    res.set('Cache-Control', 'no-store');
+    res.json({ status: storeSub ? 'approved' : (last?.status || 'none'), admin_note: last?.admin_note || '', store_active: Boolean(storeSub), created_at: last?.created_at || null });
+  } catch (e) { console.error('verification status error:', e); res.status(500).json({ error: 'خطا در دریافت وضعیت تأیید.' }); }
+});
+
+app.post('/api/store/verification', requireUser, upload.fields([{ name: 'id_card', maxCount: 1 }, { name: 'selfie', maxCount: 1 }]), async (req, res) => {
+  try {
+    const idFile = req.files?.id_card?.[0];
+    const selfieFile = req.files?.selfie?.[0];
+    if (!idFile || !selfieFile) return res.status(400).json({ error: 'هر دو عکس (تذکره و سلفی) لازم است.' });
+    const db = getSupabaseAdmin();
+    if (await getActiveStoreSubscription(db, req.user.id)) return res.status(409).json({ error: 'فروشگاه شما همین حالا فعال است.' });
+    const { data: pending } = await db.from('store_verifications').select('id').eq('user_id', req.user.id).eq('status', 'pending').limit(1);
+    if (pending?.length) return res.status(409).json({ error: 'درخواست قبلی شما در انتظار بررسی مدیریت است.' });
+    await ensureKycBucket(db);
+    const stamp = `${Date.now()}-${crypto.randomUUID()}`;
+    const compress = (buf) => sharp(buf).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+    const [idBuf, selfieBuf] = await Promise.all([compress(idFile.buffer), compress(selfieFile.buffer)]);
+    const idPath = `${req.user.id}/${stamp}-id.jpg`;
+    const selfiePath = `${req.user.id}/${stamp}-selfie.jpg`;
+    const up1 = await db.storage.from(KYC_BUCKET).upload(idPath, idBuf, { contentType: 'image/jpeg', upsert: false });
+    if (up1.error) throw up1.error;
+    const up2 = await db.storage.from(KYC_BUCKET).upload(selfiePath, selfieBuf, { contentType: 'image/jpeg', upsert: false });
+    if (up2.error) { await db.storage.from(KYC_BUCKET).remove([idPath]); throw up2.error; }
+    const { data, error } = await db.from('store_verifications').insert([{ user_id: req.user.id, id_card_path: idPath, selfie_path: selfiePath }]).select('id,status,created_at').single();
+    if (error) { await db.storage.from(KYC_BUCKET).remove([idPath, selfiePath]); throw error; }
+    res.status(201).json(data);
+  } catch (e) {
+    console.error('verification submit error:', e);
+    res.status(500).json({ error: 'ارسال مدارک ناموفق بود. دوباره تلاش کنید.' });
+  }
+});
+
+app.get('/api/admin/store-verifications', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const status = ['pending', 'approved', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
+    const { data: rows, error } = await db.from('store_verifications').select('*').eq('status', status).order('created_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    const ids = [...new Set((rows || []).map(r => r.user_id))];
+    const { data: profiles } = ids.length ? await db.from('profiles').select('id,full_name,shop_name,phone,city').in('id', ids) : { data: [] };
+    const pm = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    const sign = async (path) => {
+      if (!path) return '';
+      const { data } = await db.storage.from(KYC_BUCKET).createSignedUrl(path, 600);
+      return data?.signedUrl || '';
+    };
+    const out = [];
+    for (const r of rows || []) {
+      out.push({
+        id: r.id, user_id: r.user_id, status: r.status, admin_note: r.admin_note, created_at: r.created_at, reviewed_at: r.reviewed_at,
+        full_name: pm[r.user_id]?.full_name || '', shop_name: pm[r.user_id]?.shop_name || '', phone: pm[r.user_id]?.phone || '', city: pm[r.user_id]?.city || '',
+        id_card_url: await sign(r.id_card_path), selfie_url: await sign(r.selfie_path),
+      });
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json(out);
+  } catch (e) { console.error('admin verifications error:', e); res.status(500).json({ error: 'خطا در دریافت درخواست‌های تأیید.' }); }
+});
+
+app.patch('/api/admin/store-verifications/:id', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const decision = String(req.body?.status || '');
+    if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ error: 'وضعیت نامعتبر است.' });
+    const note = String(req.body?.note || '').trim().slice(0, 300);
+    const { data: v, error: ve } = await db.from('store_verifications').select('*').eq('id', req.params.id).maybeSingle();
+    if (ve) throw ve;
+    if (!v) return res.status(404).json({ error: 'درخواست پیدا نشد.' });
+    if (v.status !== 'pending') return res.status(409).json({ error: 'این درخواست قبلاً بررسی شده است.' });
+    if (decision === 'approved' && !(await getActiveStoreSubscription(db, v.user_id))) {
+      const now = new Date();
+      const end = new Date(now.getTime() + 365 * 86400000);
+      const row = { user_id: v.user_id, plan: 'store_yearly', price_afn: 0, starts_at: now.toISOString(), ends_at: end.toISOString(),
+        status: 'active', payment_method: 'free_promo', payment_reference: `kyc-${v.id}` };
+      let { error: se } = await db.from('seller_subscriptions').insert([row]);
+      // اگر جدول قدیمی قیمت صفر را نپذیرد (check price_afn > 0)، با ۱ افغانی ثبت می‌کنیم.
+      if (se && String(se.code) === '23514') ({ error: se } = await db.from('seller_subscriptions').insert([{ ...row, price_afn: 1 }]));
+      if (se) throw se;
+    }
+    const { error: ue } = await db.from('store_verifications').update({ status: decision, admin_note: note, reviewed_at: new Date().toISOString(), id_card_path: '', selfie_path: '' }).eq('id', v.id);
+    if (ue) throw ue;
+    // حریم خصوصی: بعد از تصمیم مدیریت، عکس‌های مدارک از سرور پاک می‌شوند.
+    const files = [v.id_card_path, v.selfie_path].filter(Boolean);
+    if (files.length) await db.storage.from(KYC_BUCKET).remove(files);
+    res.json({ ok: true, status: decision });
+  } catch (e) { console.error('admin verification decision error:', e); res.status(500).json({ error: 'ثبت تصمیم ناموفق بود.' }); }
+});
+
 app.get('/api/stores/active', async (req,res)=>{try{
   const db=getSupabaseAdmin(); const now=new Date().toISOString();
   const {data:subs,error:se}=await db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('plan',['store_monthly','store_yearly']).eq('status','active').gt('ends_at',now).order('ends_at',{ascending:false}).limit(500);
@@ -1341,6 +1448,7 @@ app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
   const plan=String(req.body?.plan||'').trim().toLowerCase();
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
   const p=plans[plan];
+  if(p.store)return res.status(400).json({error:'فعال‌سازی فروشگاه فعلاً رایگان است و با تأیید هویت انجام می‌شود (نه با پرداخت).'});
   const reference=String(req.body?.payment_reference||'').trim();
   if(!reference)return res.status(400).json({error:'برای خرید اشتراک باید مبلغ را انتقال دهید و شماره پیگیری را وارد کنید.'});
   const db=getSupabaseAdmin();
@@ -1600,13 +1708,15 @@ app.delete('/api/me/account', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable', 'currency', 'brand', 'model', 'sizes', 'colors', 'material', 'condition', 'product_code', 'specifications'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable', 'currency', 'brand', 'model', 'sizes', 'colors', 'material', 'condition', 'product_code', 'specifications', 'discount_percent', 'province', 'audio_url', 'video_url'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
     if (payload.currency !== undefined) payload.currency = String(payload.currency).toUpperCase() === 'USD' ? 'USD' : 'AFN';
     if (payload.cost_price !== undefined) payload.cost_price = Math.max(0, Number(payload.cost_price) || 0);
     if (payload.stock !== undefined) payload.stock = Math.max(0, Math.trunc(Number(payload.stock) || 0));
+    if (payload.discount_percent !== undefined) payload.discount_percent = Math.min(90, Math.max(0, Number(payload.discount_percent) || 0));
+    if (payload.title !== undefined) { payload.title = String(payload.title).trim().slice(0, 140); if (!payload.title) return res.status(400).json({ error: 'عنوان نمی‌تواند خالی باشد.' }); }
     payload.updated_at = new Date().toISOString();
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('products').update(payload).eq('id', req.params.id).eq('vendor_id', req.user.id).select().single();
