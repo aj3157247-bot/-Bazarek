@@ -97,3 +97,17 @@ export async function resolveFullId(supabaseUrl, key, short) {
   }
   return null;
 }
+
+// ───────── لینک فروشگاه: /store/<کلمات-انگلیسی نام فروشگاه یا store>-<۱۲ کاراکتر اول شناسه> ─────────
+export function storeSlug(profile) {
+  const name = asciiDigits(profile && (profile.shop_name || profile.full_name));
+  let tokens = name.match(/[a-z0-9]+/g) || [];
+  if (!tokens.some((t) => /[a-z]/.test(t))) tokens = [];
+  let slug = tokens.slice(0, 4).join("-");
+  if (slug.length > 40) slug = slug.slice(0, 40).replace(/-+$/, "");
+  return slug || "store";
+}
+
+export function storePath(profile) {
+  return `/store/${storeSlug(profile)}-${shortId(profile && profile.id)}`;
+}

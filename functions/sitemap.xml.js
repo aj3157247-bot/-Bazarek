@@ -1,6 +1,6 @@
-// sitemap.xml پویا: هر آگهی فعال بلافاصله بعد از ثبت (حداکثر تا ~۱۵ دقیقه، مدت کش) خودکار در sitemap قرار می‌گیرد.
-// آگهی‌های غیرفعال/حذف‌شده هم خودکار از آن خارج می‌شوند. نیازی به ویرایش دستی نیست.
-import { listingPath } from "./_listing_url.js";
+// sitemap.xml پویا: آگهی‌ها، فروشگاه‌ها و محصولات فروشگاه‌ها خودکار وارد می‌شوند و
+// <lastmod> هر URL از «تاریخ واقعی آخرین تغییر» همان رکورد در دیتابیس خوانده می‌شود (نه یک تاریخ ثابت).
+import { listingPath, storePath } from "./_listing_url.js";
 
 const STATIC_PATHS = [
   "/category/vehicles",
@@ -168,7 +168,7 @@ const STATIC_PATHS = [
 ];
 
 const PAGE_SIZE = 1000;      // سقف پیش‌فرض ردیف‌های Supabase در هر درخواست
-const MAX_PAGES = 45;        // ≤ ۴۵ هزار آگهی؛ سقف هر sitemap ۵۰ هزار URL و سقف subrequest کلادفلر ۵۰ است
+const MAX_PAGES = 40;        // ≤ ۴۰ هزار آگهی؛ سقف هر sitemap ۵۰ هزار URL و سقف subrequest کلادفلر ۵۰ است
 
 function xml(value) {
   return String(value ?? "")
@@ -192,41 +192,71 @@ function firstImage(value) {
   return m ? m[0] : "";
 }
 
-function day(value) {
+// تاریخ ISO کامل (W3C Datetime) یا رشته‌ی خالی اگر نامعتبر بود
+function iso(value) {
   const d = new Date(value);
-  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  return value && !isNaN(d.getTime()) ? d.toISOString() : "";
+}
+function maxIso(a, b) { return !a ? b : (!b ? a : (a > b ? a : b)); }
+
+function authHeaders(env) {
+  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY || "");
+  return { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json" };
+}
+
+async function restGet(env, table, params) {
+  const base = String(env.SUPABASE_URL || "").replace(/\/+$/, "");
+  if (!base) return null;
+  const url = new URL(`${base}/rest/v1/${table}`);
+  for (const [k, v] of params) url.searchParams.append(k, v);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(url, { headers: authHeaders(env), signal: controller.signal });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows : null;
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// فروشگاه‌های فعال: فقط پروفایل‌هایی که اشتراک فروشگاه معتبر دارند
+async function fetchStores(env) {
+  const nowIso = new Date().toISOString();
+  const subs = await restGet(env, "seller_subscriptions", [
+    ["select", "user_id,ends_at,starts_at"],
+    ["status", "eq.active"],
+    ["plan", "in.(store_monthly,store_yearly)"],
+    ["ends_at", `gt.${nowIso}`],
+    ["limit", "5000"],
+  ]);
+  const ids = [...new Set((subs || []).filter((x) => !x.starts_at || x.starts_at <= nowIso).map((x) => x.user_id).filter(Boolean))];
+  const stores = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const rows = await restGet(env, "profiles", [
+      ["select", "id,shop_name,full_name,updated_at,avatar_url,store_cover_url"],
+      ["id", `in.(${chunk.join(",")})`],
+    ]);
+    if (rows) stores.push(...rows);
+  }
+  return stores;
 }
 
 async function fetchListings(env) {
-  const base = String(env.SUPABASE_URL || "").replace(/\/+$/, "");
-  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY;
-  if (!base || !key) return [];
-
   const all = [];
   for (let page = 0; page < MAX_PAGES; page++) {
-    const url = new URL(`${base}/rest/v1/products`);
-    url.searchParams.set("select", "id,title,category,subcategory,image_url,created_at");
-    url.searchParams.set("is_active", "eq.true");
-    url.searchParams.set("order", "created_at.desc,id.asc");
-    url.searchParams.set("limit", String(PAGE_SIZE));
-    url.searchParams.set("offset", String(page * PAGE_SIZE));
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    let rows;
-    try {
-      const r = await fetch(url, {
-        headers: { apikey: String(key), Authorization: `Bearer ${String(key)}`, Accept: "application/json" },
-        signal: controller.signal,
-      });
-      if (!r.ok) break;
-      rows = await r.json();
-    } catch (_) {
-      break;
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!Array.isArray(rows) || rows.length === 0) break;
+    const rows = await restGet(env, "products", [
+      ["select", "id,title,category,subcategory,image_url,created_at,updated_at,vendor_id,is_store_product"],
+      ["is_active", "eq.true"],
+      ["order", "created_at.desc,id.asc"],
+      ["limit", String(PAGE_SIZE)],
+      ["offset", String(page * PAGE_SIZE)],
+    ]);
+    if (!rows || rows.length === 0) break;
     all.push(...rows);
     if (rows.length < PAGE_SIZE) break;
   }
@@ -235,38 +265,72 @@ async function fetchListings(env) {
 
 export async function onRequestGet(context) {
   const origin = new URL(context.request.url).origin;
-  const today = new Date().toISOString().slice(0, 10);
+  const env = context.env;
 
   let listings = [];
-  try {
-    listings = await fetchListings(context.env);
-  } catch (_) {
-    listings = [];
+  let stores = [];
+  try { listings = await fetchListings(env); } catch (_) { listings = []; }
+  try { stores = await fetchStores(env); } catch (_) { stores = []; }
+
+  const activeStoreIds = new Set(stores.map((s) => s.id));
+  // محصول فروشگاهی فقط وقتی دیده می‌شود که فروشگاهش فعال باشد (مثل خود سایت)
+  listings = listings.filter((x) => x && x.id && (x.is_store_product !== true || activeStoreIds.has(x.vendor_id)));
+
+  // lastmod واقعی هر رکورد
+  const lastmodOf = (x) => maxIso(iso(x.updated_at), iso(x.created_at));
+  const catMod = new Map();   // category -> lastmod
+  const subMod = new Map();   // category/sub -> lastmod
+  const storeMod = new Map(); // vendor_id -> lastmod آخرین محصول
+  let siteMod = "";
+  for (const x of listings) {
+    const m = lastmodOf(x);
+    siteMod = maxIso(siteMod, m);
+    if (x.category) {
+      catMod.set(x.category, maxIso(catMod.get(x.category) || "", m));
+      if (x.subcategory) {
+        const k = `${x.category}/${x.subcategory}`;
+        subMod.set(k, maxIso(subMod.get(k) || "", m));
+      }
+    }
+    if (x.is_store_product === true) storeMod.set(x.vendor_id, maxIso(storeMod.get(x.vendor_id) || "", m));
   }
+  for (const s of stores) siteMod = maxIso(siteMod, iso(s.updated_at));
 
   const out = [];
   out.push('<?xml version="1.0" encoding="UTF-8"?>');
   out.push('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">');
-  out.push(`  <url><loc>${origin}/</loc><lastmod>${today}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>`);
+  const homeMod = siteMod ? `<lastmod>${siteMod}</lastmod>` : "";
+  out.push(`  <url><loc>${origin}/</loc>${homeMod}<changefreq>hourly</changefreq><priority>1.0</priority></url>`);
 
+  // دسته‌ها: فقط وقتی lastmod واقعی دارند تاریخ می‌گیرند؛ دسته‌ی خالی بدون lastmod می‌آید (تاریخ جعلی نمی‌گذاریم)
   for (const path of STATIC_PATHS) {
-    const depth = path.split("/").filter(Boolean).length;
-    out.push(`  <url><loc>${xml(origin + path)}</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>${depth === 2 ? "0.8" : "0.7"}</priority></url>`);
+    const parts = path.split("/").filter(Boolean); // ["category", cat, sub?]
+    const key = parts.slice(1).join("/");
+    const m = (parts.length === 2 ? catMod.get(key) : subMod.get(key)) || "";
+    out.push(`  <url><loc>${xml(origin + path)}</loc>${m ? `<lastmod>${m}</lastmod>` : ""}<changefreq>daily</changefreq><priority>${parts.length === 2 ? "0.8" : "0.7"}</priority></url>`);
   }
 
+  // فروشگاه‌ها
+  for (const s of stores) {
+    if (!s.id) continue;
+    const m = maxIso(iso(s.updated_at), storeMod.get(s.id) || "");
+    let entry = `  <url><loc>${xml(origin + storePath(s))}</loc>`;
+    if (m) entry += `<lastmod>${m}</lastmod>`;
+    entry += "<changefreq>daily</changefreq><priority>0.7</priority>";
+    const cover = String(s.store_cover_url || s.avatar_url || "");
+    if (/^https?:\/\//i.test(cover)) entry += `<image:image><image:loc>${xml(cover)}</image:loc></image:image>`;
+    out.push(entry + "</url>");
+  }
+
+  // آگهی‌ها و محصولات فروشگاه‌ها
   for (const item of listings) {
-    if (!item || !item.id) continue;
-    const loc = origin + listingPath(item);
-    const lastmod = day(item.created_at);
+    const m = lastmodOf(item);
     const img = firstImage(item.image_url);
-    let entry = `  <url><loc>${xml(loc)}</loc>`;
-    if (lastmod) entry += `<lastmod>${lastmod}</lastmod>`;
+    let entry = `  <url><loc>${xml(origin + listingPath(item))}</loc>`;
+    if (m) entry += `<lastmod>${m}</lastmod>`;
     entry += "<changefreq>weekly</changefreq><priority>0.6</priority>";
-    if (img && /^https?:\/\//i.test(img)) {
-      entry += `<image:image><image:loc>${xml(img)}</image:loc></image:image>`;
-    }
-    entry += "</url>";
-    out.push(entry);
+    if (img && /^https?:\/\//i.test(img)) entry += `<image:image><image:loc>${xml(img)}</image:loc></image:image>`;
+    out.push(entry + "</url>");
   }
 
   out.push("</urlset>");
@@ -276,6 +340,7 @@ export async function onRequestGet(context) {
     headers: {
       "content-type": "application/xml; charset=utf-8",
       "cache-control": "public, max-age=300, s-maxage=900",
+      "x-bazarek-sitemap": "dynamic-v2",
     },
   });
 }
