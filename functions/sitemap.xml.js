@@ -302,12 +302,14 @@ export async function onRequestGet(context) {
   const homeMod = siteMod ? `<lastmod>${siteMod}</lastmod>` : "";
   out.push(`  <url><loc>${origin}/</loc>${homeMod}<changefreq>hourly</changefreq><priority>1.0</priority></url>`);
 
-  // دسته‌ها: فقط وقتی lastmod واقعی دارند تاریخ می‌گیرند؛ دسته‌ی خالی بدون lastmod می‌آید (تاریخ جعلی نمی‌گذاریم)
+  // دسته‌ها و زیردسته‌ها: فقط وقتی حداقل یک آگهی فعال دارند وارد می‌شوند (صفحه‌ی خالی برای گوگل Soft 404 می‌شود).
+  // تاریخ lastmod = تاریخ آخرین آگهی همان دسته. با ثبت اولین آگهی، دسته خودکار اضافه می‌شود.
   for (const path of STATIC_PATHS) {
     const parts = path.split("/").filter(Boolean); // ["category", cat, sub?]
     const key = parts.slice(1).join("/");
     const m = (parts.length === 2 ? catMod.get(key) : subMod.get(key)) || "";
-    out.push(`  <url><loc>${xml(origin + path)}</loc>${m ? `<lastmod>${m}</lastmod>` : ""}<changefreq>daily</changefreq><priority>${parts.length === 2 ? "0.8" : "0.7"}</priority></url>`);
+    if (!m) continue;
+    out.push(`  <url><loc>${xml(origin + path)}</loc><lastmod>${m}</lastmod><changefreq>daily</changefreq><priority>${parts.length === 2 ? "0.8" : "0.7"}</priority></url>`);
   }
 
   // فروشگاه‌ها
@@ -340,7 +342,7 @@ export async function onRequestGet(context) {
     headers: {
       "content-type": "application/xml; charset=utf-8",
       "cache-control": "public, max-age=300, s-maxage=900",
-      "x-bazarek-sitemap": "dynamic-v2",
+      "x-bazarek-sitemap": "dynamic-v3",
     },
   });
 }
