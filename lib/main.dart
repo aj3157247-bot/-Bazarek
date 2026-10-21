@@ -1837,6 +1837,8 @@ class _EditListingScreenState extends State<EditListingScreen> {
   bool negotiable = false;
   bool inStock = true;
   bool saving = false;
+  bool showWhatsapp = false;
+  late final TextEditingController whatsapp;
   final List<String> images = [];
   final List<Uint8List> newBytes = [];
   final List<String> newNames = [];
@@ -1856,6 +1858,8 @@ class _EditListingScreenState extends State<EditListingScreen> {
     desc = TextEditingController(text: p['description']?.toString() ?? '');
     final dc = num.tryParse(p['discount_percent']?.toString() ?? '') ?? 0;
     discount = TextEditingController(text: dc == 0 ? '' : dc.toString());
+    showWhatsapp = p['show_whatsapp'] == true;
+    whatsapp = TextEditingController(text: p['whatsapp_number']?.toString() ?? '');
     currency = (p['currency']?.toString().toUpperCase() == 'USD') ? 'USD' : 'AFN';
     negotiable = p['is_negotiable'] == true;
     inStock = (num.tryParse(p['stock']?.toString() ?? '') ?? 1) > 0;
@@ -1874,6 +1878,7 @@ class _EditListingScreenState extends State<EditListingScreen> {
     price.dispose();
     desc.dispose();
     discount.dispose();
+    whatsapp.dispose();
     super.dispose();
   }
 
@@ -1905,6 +1910,8 @@ class _EditListingScreenState extends State<EditListingScreen> {
         'currency': currency,
         'description': desc.text.trim(),
         'image_url': jsonEncode(all),
+        'show_whatsapp': showWhatsapp,
+        'whatsapp_number': showWhatsapp ? whatsapp.text.trim() : '',
       };
       if (isStore) {
         body['discount_percent'] = num.tryParse(discount.text.trim()) ?? 0;
@@ -2008,6 +2015,14 @@ class _EditListingScreenState extends State<EditListingScreen> {
           SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('موجود است', style: TextStyle(fontWeight: FontWeight.w800)), value: inStock, onChanged: (v) => setState(() => inStock = v))
         else
           SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت قابل مذاکره است', style: TextStyle(fontWeight: FontWeight.w800)), value: negotiable, onChanged: (v) => setState(() => negotiable = v)),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
+          title: const Text('دکمه‌ی واتساپ', style: TextStyle(fontWeight: FontWeight.w800)),
+          value: showWhatsapp,
+          onChanged: (v) => setState(() => showWhatsapp = v),
+        ),
+        if (showWhatsapp) TextField(controller: whatsapp, keyboardType: TextInputType.phone, decoration: _deco('شماره واتساپ', hint: '07xxxxxxxx')),
         const SizedBox(height: 14),
         SizedBox(
           height: 52,
@@ -2015,6 +2030,231 @@ class _EditListingScreenState extends State<EditListingScreen> {
             onPressed: saving ? null : _save,
             icon: saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.check_rounded),
             label: Text(saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// شماره‌ی افغانستان یا بین‌المللی را به فرمت واتساپ (بدون + و صفر) تبدیل می‌کند؛ اگر نامعتبر بود null.
+String? normalizeWhatsappNumber(String raw) {
+  var v = raw.trim();
+  const fa = '۰۱۲۳۴۵۶۷۸۹';
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  const en = '0123456789';
+  for (var i = 0; i < 10; i++) {
+    v = v.replaceAll(fa[i], en[i]).replaceAll(ar[i], en[i]);
+  }
+  v = v.replaceAll(RegExp(r'[^0-9+]'), '');
+  if (v.startsWith('+')) v = v.substring(1);
+  if (v.startsWith('00')) v = v.substring(2);
+  if (v.startsWith('0') && v.length == 10) v = '93${v.substring(1)}';
+  if (v.length == 9 && v.startsWith('7')) v = '93$v';
+  return v.length >= 10 && v.length <= 15 ? v : null;
+}
+
+Future<bool> openWhatsapp(BuildContext context, String rawNumber, String message) async {
+  final number = normalizeWhatsappNumber(rawNumber);
+  if (number == null) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شماره‌ی واتساپ ثبت نشده یا نامعتبر است.')));
+    return false;
+  }
+  final uri = Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(message)}');
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن واتساپ ناموفق بود.')));
+    return ok;
+  } catch (_) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('باز کردن واتساپ ناموفق بود.')));
+    return false;
+  }
+}
+
+/// دکمه‌ی سبز واتساپ (همه‌جا یک‌شکل).
+class WhatsappButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  final String label;
+  final bool compact;
+  const WhatsappButton({super.key, required this.onPressed, this.label = 'واتساپ', this.compact = false});
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF25D366),
+          foregroundColor: Colors.white,
+          minimumSize: Size.fromHeight(compact ? 42 : 48),
+        ),
+        icon: const Icon(Icons.chat_rounded, size: 20),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      );
+}
+
+
+/// پروفایل فروشگاه؛ کاملاً جدا از پروفایل شخصی (نام، لوگو، معرفی، شهر، آدرس، تلفن و واتساپ فروشگاه).
+class StoreProfileScreen extends StatefulWidget {
+  final Map<String, dynamic> profile;
+  const StoreProfileScreen({super.key, required this.profile});
+  @override
+  State<StoreProfileScreen> createState() => _StoreProfileScreenState();
+}
+
+class _StoreProfileScreenState extends State<StoreProfileScreen> {
+  late final TextEditingController name;
+  late final TextEditingController bio;
+  late final TextEditingController address;
+  late final TextEditingController phone;
+  late final TextEditingController whatsapp;
+  String city = '';
+  String logoUrl = '';
+  bool saving = false;
+  bool uploadingLogo = false;
+
+  String _first(List<String> keys) {
+    for (final k in keys) {
+      final v = widget.profile[k]?.toString().trim() ?? '';
+      if (v.isNotEmpty) return v;
+    }
+    return '';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    name = TextEditingController(text: _first(['store_name', 'shop_name', 'full_name']));
+    bio = TextEditingController(text: _first(['store_bio', 'bio']));
+    address = TextEditingController(text: _first(['store_address']));
+    phone = TextEditingController(text: _first(['store_phone', 'phone']));
+    whatsapp = TextEditingController(text: _first(['store_whatsapp', 'store_phone', 'phone']));
+    final c = _first(['store_city', 'city']);
+    city = provinces.contains(c) ? c : '';
+    logoUrl = _first(['store_logo_url', 'avatar_url']);
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    bio.dispose();
+    address.dispose();
+    phone.dispose();
+    whatsapp.dispose();
+    super.dispose();
+  }
+
+  void _msg(String t) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+
+  Future<void> _pickLogo() async {
+    if (uploadingLogo) return;
+    final image = await pickProfileImage();
+    if (image == null) return;
+    setState(() => uploadingLogo = true);
+    try {
+      final url = await ApiService.uploadStoreLogo(image);
+      if (mounted) setState(() => logoUrl = url);
+    } catch (e) {
+      if (mounted) _msg(friendlyNetworkError(context, e));
+    } finally {
+      if (mounted) setState(() => uploadingLogo = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (saving) return;
+    if (name.text.trim().isEmpty) { _msg('نام فروشگاه را وارد کنید.'); return; }
+    setState(() => saving = true);
+    try {
+      await ApiService.saveStoreProfile({
+        'store_name': name.text.trim(),
+        'store_bio': bio.text.trim(),
+        'store_city': city,
+        'store_address': address.text.trim(),
+        'store_phone': phone.text.trim(),
+        'store_whatsapp': whatsapp.text.trim(),
+      });
+      if (!mounted) return;
+      _msg('پروفایل فروشگاه ذخیره شد.');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) _msg(friendlyNetworkError(context, e));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  InputDecoration _deco(String label, {String? hint, IconData? icon}) => InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: icon == null ? null : Icon(icon),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFB),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('پروفایل فروشگاه')),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFF1F8F8), borderRadius: BorderRadius.circular(14)),
+          child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.info_outline, size: 20, color: Color(0xFF007185)),
+            SizedBox(width: 8),
+            Expanded(child: Text('این اطلاعات فقط برای فروشگاه شماست و پروفایل شخصی شما را تغییر نمی‌دهد.', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.6))),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: GestureDetector(
+            onTap: _pickLogo,
+            child: Stack(alignment: Alignment.bottomRight, children: [
+              Container(
+                width: 104,
+                height: 104,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFE7F6F5), border: Border.all(color: const Color(0xFF007185), width: 2)),
+                clipBehavior: Clip.antiAlias,
+                child: uploadingLogo
+                    ? const Center(child: CircularProgressIndicator())
+                    : (logoUrl.isNotEmpty
+                        ? Image.network(_optimizedImageUrl(logoUrl, width: 300, quality: 80), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded, size: 46, color: Color(0xFF007185)))
+                        : const Icon(Icons.storefront_rounded, size: 46, color: Color(0xFF007185))),
+              ),
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: const BoxDecoration(color: Color(0xFF007185), shape: BoxShape.circle),
+                child: const Icon(Icons.add_a_photo_rounded, size: 17, color: Colors.white),
+              ),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Center(child: Text('لوگوی فروشگاه', style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w700, fontSize: 12.5))),
+        const SizedBox(height: 18),
+        TextField(controller: name, decoration: _deco('نام فروشگاه', icon: Icons.storefront_outlined)),
+        const SizedBox(height: 12),
+        TextField(controller: bio, maxLines: 3, maxLength: 600, decoration: _deco('معرفی فروشگاه', hint: 'چه چیزی می‌فروشید؟ چرا فروشگاه شما؟', icon: Icons.notes_rounded)),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<String>(
+          value: city.isEmpty ? null : city,
+          decoration: _deco('شهر / ولایت', icon: Icons.location_city_outlined),
+          items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(localizedProvince(context, p)))).toList(),
+          onChanged: (v) => setState(() => city = v ?? ''),
+        ),
+        const SizedBox(height: 12),
+        TextField(controller: address, decoration: _deco('آدرس فروشگاه', hint: 'منطقه، سرک، مارکیت...', icon: Icons.place_outlined)),
+        const SizedBox(height: 12),
+        TextField(controller: phone, keyboardType: TextInputType.phone, decoration: _deco('شماره تماس فروشگاه', hint: '07xxxxxxxx', icon: Icons.phone_outlined)),
+        const SizedBox(height: 12),
+        TextField(controller: whatsapp, keyboardType: TextInputType.phone, decoration: _deco('شماره واتساپ فروشگاه', hint: '07xxxxxxxx', icon: Icons.chat_rounded)),
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 54,
+          child: FilledButton.icon(
+            onPressed: saving ? null : _save,
+            icon: saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.check_rounded),
+            label: Text(saving ? 'در حال ذخیره...' : 'ذخیره پروفایل فروشگاه'),
           ),
         ),
       ]),
@@ -2862,6 +3102,37 @@ class ApiService {
     } catch (_) {}
     if (isFull) return getSellerProfile(key);
     throw Exception('فروشگاه پیدا نشد.');
+  }
+
+  static Future<void> saveStoreProfile(Map<String, dynamic> body) async {
+    Future<http.Response> send() => http.patch(Uri.parse('${ApiConfig.baseUrl}/store/profile'), headers: headers, body: jsonEncode(body)).timeout(const Duration(seconds: 25));
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    if (res.statusCode != 200) {
+      dynamic data; try { data = jsonDecode(res.body); } catch (_) {}
+      throw Exception(data is Map ? (data['error'] ?? 'ذخیره پروفایل فروشگاه ناموفق بود.') : 'ذخیره پروفایل فروشگاه ناموفق بود.');
+    }
+    listingsVersion.value++;
+  }
+
+  static Future<String> uploadStoreLogo(PickedProfileImage image) async {
+    Future<http.Response> send() async {
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/store/logo'));
+      if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      final detected = _detectImageType(image.bytes, image.mimeType, image.name);
+      if (detected == null) throw Exception('فایل انتخاب‌شده یک تصویر معتبر نیست. لطفاً JPG، PNG یا WEBP انتخاب کنید.');
+      req.files.add(http.MultipartFile.fromBytes('logo', image.bytes, filename: 'logo-${DateTime.now().millisecondsSinceEpoch}.${detected.ext}', contentType: MediaType.parse(detected.mime)));
+      final streamed = await req.send().timeout(const Duration(seconds: 60));
+      return http.Response.fromStream(streamed);
+    }
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) {}
+    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'آپلود لوگو ناموفق بود.') : 'آپلود لوگو ناموفق بود.');
+    final url = data is Map ? (data['url']?.toString() ?? '') : '';
+    if (url.isEmpty) throw Exception('آدرس لوگو دریافت نشد.');
+    listingsVersion.value++;
+    return url;
   }
 
   static Future<void> saveStoreType(String typeId) async {
@@ -6649,6 +6920,20 @@ class ProductDetailScreen extends StatelessWidget {
                   label: Text(tr(context, 'call_seller')),
                 ),
               ),
+            if ((product['show_whatsapp'] == true || product['show_whatsapp'] == 1) &&
+                normalizeWhatsappNumber((product['whatsapp_number']?.toString().trim().isNotEmpty == true ? product['whatsapp_number'] : (product['contact_phone'] ?? product['seller_phone'])).toString()) != null) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: WhatsappButton(
+                  compact: true,
+                  onPressed: () {
+                    final number = (product['whatsapp_number']?.toString().trim().isNotEmpty == true ? product['whatsapp_number'] : (product['contact_phone'] ?? product['seller_phone'])).toString();
+                    final link = 'https://bazarek.pages.dev${_listingPath(product)}';
+                    openWhatsapp(context, number, 'سلام، آگهی «${product['title'] ?? ''}» را در بازارک دیدم. هنوز موجود است؟\n$link');
+                  },
+                ),
+              ),
+            ],
             if (product['allow_chat'] == true || product['allow_chat'] == 1) ...[
               const SizedBox(width: 8),
               Expanded(
@@ -7119,6 +7404,18 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                         productCount: listings.length,
                         height: 210,
                       ),
+                      if ((storeProfile['store_whatsapp']?.toString().trim().isNotEmpty == true || storeProfile['store_phone']?.toString().trim().isNotEmpty == true) &&
+                          normalizeWhatsappNumber((storeProfile['store_whatsapp']?.toString().trim().isNotEmpty == true ? storeProfile['store_whatsapp'] : storeProfile['store_phone']).toString()) != null) ...[
+                        const SizedBox(height: 8),
+                        WhatsappButton(
+                          label: 'پیام در واتساپ',
+                          onPressed: () => openWhatsapp(
+                            context,
+                            (storeProfile['store_whatsapp']?.toString().trim().isNotEmpty == true ? storeProfile['store_whatsapp'] : storeProfile['store_phone']).toString(),
+                            'سلام، فروشگاه «${widget.sellerName}» را در بازارک دیدم.',
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -7242,6 +7539,8 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
   }
 
   String get shopName {
+    final own = profile['store_name']?.toString().trim() ?? '';
+    if (own.isNotEmpty) return own;
     final shop = profile['shop_name']?.toString().trim() ?? '';
     if (shop.isNotEmpty) return shop;
     final name = profile['full_name']?.toString().trim() ?? '';
@@ -7251,6 +7550,8 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
   String get shopDescription {
     final d = profile['shop_description']?.toString().trim() ?? '';
     if (d.isNotEmpty) return d;
+    final own = profile['store_bio']?.toString().trim() ?? '';
+    if (own.isNotEmpty) return own;
     final d2 = profile['bio']?.toString().trim() ?? '';
     return d2.isNotEmpty ? d2 : 'فروشگاه حرفه‌ای من در بازارک';
   }
@@ -7500,7 +7801,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
   Widget _storeIdentityCard(bool ps) {
     final typeId = profile['store_category']?.toString() ?? '';
     final cover = profile['store_cover_url']?.toString() ?? '';
-    final avatar = profile['avatar_url']?.toString() ?? '';
+    final avatar = (profile['store_logo_url']?.toString().trim().isNotEmpty == true ? profile['store_logo_url'] : profile['avatar_url'])?.toString() ?? '';
     final needsSetup = typeId.isEmpty || cover.isEmpty;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -7553,9 +7854,9 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () => _open(const ProfileScreen()),
+            onPressed: () => _open(StoreProfileScreen(profile: profile)),
             icon: const Icon(Icons.manage_accounts_outlined, size: 19),
-            label: const Text('ویرایش اسم و پروفایل فروشگاه'),
+            label: const Text('ویرایش پروفایل فروشگاه'),
           ),
         ),
       ]),
@@ -7678,7 +7979,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                     ),
                     const SizedBox(width: 9),
                     IconButton(
-                      onPressed: () => _open(const ProfileScreen()),
+                      onPressed: () => _open(StoreProfileScreen(profile: profile)),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.white.withOpacity(.14),
                         foregroundColor: Colors.white,
@@ -7831,7 +8132,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
         title: ps ? 'پروفایل' : 'ویرایش فروشگاه',
         subtitle: ps ? 'نوم او معلومات' : 'نام و معرفی فروشگاه',
         color: const Color(0xFF6B21A8),
-        onTap: () => _open(const ProfileScreen()),
+        onTap: () => _open(StoreProfileScreen(profile: profile)),
       ),
       _StoreAction(
         icon: Icons.reviews_rounded,
@@ -10364,6 +10665,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final stock = TextEditingController(text: '1');
   final desc = TextEditingController();
   final contactPhone = TextEditingController();
+  final whatsappNumber = TextEditingController();
+  bool showWhatsapp = false;
   final locationText = TextEditingController();
   final socialLink = TextEditingController();
   final brand = TextEditingController();
@@ -10652,7 +10955,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls), 'audio_url': audioUrl ?? '', 'video_url': videoUrl ?? '',
-        'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(),
+        'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(), 'show_whatsapp': showWhatsapp, 'whatsapp_number': showWhatsapp ? (whatsappNumber.text.trim().isEmpty ? contactPhone.text.trim() : whatsappNumber.text.trim()) : '',
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
         'brand': brand.text.trim(), 'model': model.text.trim(), 'sizes': sizes.text.trim(), 'colors': colors.text.trim(),
         'material': material.text.trim(), 'condition': condition.text.trim(), 'product_code': productCode.text.trim(), 'specifications': specifications.text.trim(),
@@ -10793,6 +11096,18 @@ class _AddProductSheetState extends State<AddProductSheet> {
               if (category == 'social_pages') field(socialLink, 'لینک صفحه', hint: 'https://...'),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('امکان چت مستقیم'), value: allowChat, onChanged: (v) => setState(() => allowChat = v)),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('نمایش شماره تماس'), value: showPhone, onChanged: (v) => setState(() => showPhone = v)),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
+                title: const Text('دکمه‌ی واتساپ', style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: const Text('مشتری با یک لمس به واتساپ شما پیام می‌دهد', style: TextStyle(fontSize: 12)),
+                value: showWhatsapp,
+                onChanged: (v) => setState(() {
+                  showWhatsapp = v;
+                  if (v && whatsappNumber.text.trim().isEmpty) whatsappNumber.text = contactPhone.text.trim();
+                }),
+              ),
+              if (showWhatsapp) field(whatsappNumber, 'شماره واتساپ', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
             ]),
           );
@@ -10852,9 +11167,9 @@ class _AddProductSheetState extends State<AddProductSheet> {
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: const Icon(Icons.tune_rounded, color: Color(0xFF007185)),
           title: const Text('امکانات بیشتر (اختیاری)', style: TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: const Text('ویدیو، پیام صوتی، رنگ و سایز، تماس و ...', style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
+          subtitle: const Text('ویدیو، پیام صوتی، رنگ و سایز و ...', style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
           childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
-          children: [videoSection, audioSection, smartSection, contactSection],
+          children: [videoSection, audioSection, smartSection],
         ),
       ),
     );
@@ -10880,7 +11195,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
             ]),
           ),
           if (!professional) ...[audioSection, videoSection, introSection, priceSection, contactSection],
-          if (professional) ...[simpleMainCard, moreOptions],
+          if (professional) ...[simpleMainCard, contactSection, moreOptions],
           SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? 'در حال انتشار...' : (professional ? 'انتشار در فروشگاه' : 'ثبت و انتشار آگهی')), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
         ]),
       ),
