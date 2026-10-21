@@ -121,7 +121,7 @@ async function rest(env, table, params) {
 async function getStore(env, id) {
   const url = new URL("https://x.invalid/");
   applyIdFilter(url, id);
-  const params = [["select", "id,shop_name,full_name,city,bio,avatar_url,store_cover_url,store_category,updated_at"], ["limit", "1"]];
+  const params = [["select", "id,shop_name,full_name,city,bio,avatar_url,store_cover_url,store_category,updated_at,store_name,store_bio,store_logo_url,store_city"], ["limit", "1"]];
   for (const v of url.searchParams.getAll("id")) params.push(["id", v]);
   const rows = await rest(env, "profiles", params);
   const profile = rows && rows[0];
@@ -136,12 +136,12 @@ async function getStore(env, id) {
 }
 
 function buildSeo(shell, store, requestUrl) {
-  const name = cleanText(store.shop_name || store.full_name || "فروشگاه", 80);
+  const name = cleanText(store.store_name || store.shop_name || store.full_name || "فروشگاه", 80);
   const type = TYPE_FA[store.store_category] || "";
-  const city = cleanText(store.city, 60);
+  const city = cleanText(store.store_city || store.city, 60);
   const title = `${name}${type ? " | " + type : ""} | بازارک`;
-  const description = cleanText([type, city, store.bio].filter(Boolean).join(" • ") || `فروشگاه ${name} در بازارک؛ محصولات اصلی با قیمت مناسب.`, 220);
-  const image = String(store.store_cover_url || store.avatar_url || "");
+  const description = cleanText([type, city, store.store_bio || store.bio].filter(Boolean).join(" • ") || `فروشگاه ${name} در بازارک؛ محصولات اصلی با قیمت مناسب.`, 220);
+  const image = String(store.store_cover_url || store.store_logo_url || store.avatar_url || "");
   const canonical = `${requestUrl.origin}${storePath(store)}`;
 
   let html = shell;
