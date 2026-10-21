@@ -44,24 +44,36 @@ export async function onRequestGet({ params, env }) {
     'sizes','colors','material','condition','product_code','specifications','is_active'
   ].join(',');
 
-  try {
+  const authHeaders = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, Accept: 'application/json' };
+  const runQuery = async (select, applyFilter) => {
     const url = new URL(`${supabaseUrl}/rest/v1/products`);
-    url.searchParams.set('select', columns);
-    applyIdFilter(url, id);
+    url.searchParams.set('select', select);
+    applyFilter(url);
     url.searchParams.set('limit', '1');
+    const resp = await fetch(url, { headers: authHeaders });
+    const data = await resp.json().catch(() => []);
+    return { ok: resp.ok, status: resp.status, data };
+  };
 
-    const r = await fetch(url, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        Accept: 'application/json',
-      },
-    });
-    const rows = await r.json().catch(() => []);
+  try {
+    // اگر ستون video_url هنوز در دیتابیس ساخته نشده باشد (SQL اجرا نشده)، با ستون‌های قدیمی دوباره تلاش می‌کنیم
+    // تا لینک‌های اشتراکی هیچ‌وقت خراب نشوند.
+    const columnsNoVideo = columns.replace(',video_url', '');
+    let result = await runQuery(columns, (u) => applyIdFilter(u, id));
+    if (!result.ok) result = await runQuery(columnsNoVideo, (u) => applyIdFilter(u, id));
+    // اگر فیلتر بازه‌ای روی شناسه کوتاه خطا داد، شناسه کامل را از پیشوند پیدا می‌کنیم
+    if (!result.ok && /^[0-9a-f]{12}$/.test(id)) {
+      const full = await resolveFullId(supabaseUrl, supabaseKey, id);
+      if (full) {
+        result = await runQuery(columns, (u) => u.searchParams.set('id', `eq.${full}`));
+        if (!result.ok) result = await runQuery(columnsNoVideo, (u) => u.searchParams.set('id', `eq.${full}`));
+      }
+    }
+    const rows = result.data;
 
-    if (!r.ok) {
-      console.error('Supabase listing error:', r.status, rows);
-      return json({ error: 'خطا در ارتباط با پایگاه‌داده آگهی.', code: 'SUPABASE_QUERY_FAILED' }, 502);
+    if (!result.ok) {
+      console.error('Supabase listing error:', result.status, rows);
+      return json({ error: 'خطا در ارتباط با پایگاه‌داده آگهی.', code: 'SUPABASE_QUERY_FAILED', detail: String((rows && rows.message) || '').slice(0, 200) }, 502);
     }
 
     let product = Array.isArray(rows) ? rows[0] : null;
