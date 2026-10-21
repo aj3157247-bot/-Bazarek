@@ -192,7 +192,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
 
   @override void initState() {
     super.initState();
-    tabs = TabController(length: 9, vsync: this);
+    tabs = TabController(length: 10, vsync: this);
     _loadAll();
     _clockTimer = Timer.periodic(Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
@@ -397,10 +397,10 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       title: AdminText('مدیریت بازارک', style: TextStyle(fontWeight: FontWeight.bold)),
       actions: [IconButton(onPressed: _loadAll, icon: Icon(Icons.refresh), tooltip: _adminTranslate(context, 'به‌روزرسانی')), IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.logout), tooltip: _adminTranslate(context, 'خروج'))],
       bottom: TabBar(controller: tabs, isScrollable: true, tabs: [
-        Tab(text: _adminTranslate(context, 'داشبورد'), icon: Icon(Icons.dashboard_outlined)), Tab(text: _adminTranslate(context, 'آگهی‌ها'), icon: Icon(Icons.campaign_outlined)), Tab(text: _adminTranslate(context, 'کاربران'), icon: Icon(Icons.people_outline)), Tab(text: _adminTranslate(context, 'شکایات'), icon: Icon(Icons.report_problem_outlined)), Tab(text: _adminTranslate(context, 'پشتیبانی'), icon: Icon(Icons.support_agent_outlined)), Tab(text: _adminTranslate(context, 'هشدارها'), icon: Icon(Icons.notifications_outlined)), Tab(text: _adminTranslate(context, 'مالی'), icon: Icon(Icons.account_balance_wallet_outlined)), Tab(text: _adminTranslate(context, 'امنیت'), icon: Icon(Icons.security_outlined)), Tab(text: _adminTranslate(context, 'آمار'), icon: Icon(Icons.insights_outlined)),
+        Tab(text: _adminTranslate(context, 'داشبورد'), icon: Icon(Icons.dashboard_outlined)), Tab(text: _adminTranslate(context, 'آگهی‌ها'), icon: Icon(Icons.campaign_outlined)), Tab(text: _adminTranslate(context, 'کاربران'), icon: Icon(Icons.people_outline)), Tab(text: _adminTranslate(context, 'شکایات'), icon: Icon(Icons.report_problem_outlined)), Tab(text: _adminTranslate(context, 'پشتیبانی'), icon: Icon(Icons.support_agent_outlined)), Tab(text: _adminTranslate(context, 'هشدارها'), icon: Icon(Icons.notifications_outlined)), Tab(text: _adminTranslate(context, 'مالی'), icon: Icon(Icons.account_balance_wallet_outlined)), Tab(text: _adminTranslate(context, 'امنیت'), icon: Icon(Icons.security_outlined)), Tab(text: _adminTranslate(context, 'آمار'), icon: Icon(Icons.insights_outlined)), Tab(text: _adminTranslate(context, 'تأیید فروشگاه'), icon: Icon(Icons.verified_user_outlined)),
       ]),
     ),
-    body: loading ? Center(child: CircularProgressIndicator()) : loadError != null ? _ErrorState(error: loadError!, retry: _loadAll) : TabBarView(controller: tabs, children: [_overview(), _products(), _users(), _reports(), _support(), _warnings(), _finance(), _security(), _AnalyticsTab(token: widget.token)]),
+    body: loading ? Center(child: CircularProgressIndicator()) : loadError != null ? _ErrorState(error: loadError!, retry: _loadAll) : TabBarView(controller: tabs, children: [_overview(), _products(), _users(), _reports(), _support(), _warnings(), _finance(), _security(), _AnalyticsTab(token: widget.token), _StoreVerificationsTab(token: widget.token)]),
   );
 
   void _go(int index) => tabs.animateTo(index);
@@ -881,6 +881,150 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
           for (final s in searches) _rankRow('${(s as Map)['query']}', _n(s['count']), maxOf(searches, 'count')),
         ])),
         const SizedBox(height: 24),
+      ]),
+    );
+  }
+}
+
+
+// ───────────────────── تب «تأیید فروشگاه» (بررسی تذکره و سلفی) ─────────────────────
+class _StoreVerificationsTab extends StatefulWidget {
+  final String token;
+  const _StoreVerificationsTab({required this.token});
+  @override
+  State<_StoreVerificationsTab> createState() => _StoreVerificationsTabState();
+}
+
+class _StoreVerificationsTabState extends State<_StoreVerificationsTab> {
+  bool loading = true;
+  String? error;
+  String status = 'pending';
+  List<Map<String, dynamic>> rows = [];
+  final Set<String> busy = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final r = await _AdminApi.list('/admin/store-verifications?status=$status', widget.token);
+      if (!mounted) return;
+      setState(() { rows = r; loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { loading = false; error = _adminFriendlyError(e); });
+    }
+  }
+
+  void _toast(String t) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+
+  Future<void> _decide(Map<String, dynamic> row, String decision) async {
+    String note = '';
+    if (decision == 'rejected') {
+      final c = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('دلیل رد (برای کاربر نمایش داده می‌شود)'),
+          content: TextField(controller: c, maxLength: 200, decoration: const InputDecoration(hintText: 'مثلاً: عکس تذکره واضح نیست')),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('رد کردن'))],
+        ),
+      );
+      if (ok != true) return;
+      note = c.text.trim();
+    } else {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('تأیید فروشگاه'),
+          content: Text('فروشگاه «${row['shop_name'] ?? row['full_name'] ?? ''}» فعال می‌شود (یک سال رایگان) و عکس مدارک از سرور پاک می‌شود. ادامه می‌دهید؟'),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأیید و فعال‌سازی'))],
+        ),
+      );
+      if (ok != true) return;
+    }
+    final id = row['id'].toString();
+    setState(() => busy.add(id));
+    try {
+      await _AdminApi.patch('/admin/store-verifications/$id', widget.token, {'status': decision, 'note': note});
+      _toast(decision == 'approved' ? 'فروشگاه فعال شد.' : 'درخواست رد شد.');
+      await _load();
+    } catch (e) {
+      _toast(_adminFriendlyError(e));
+    } finally {
+      if (mounted) setState(() => busy.remove(id));
+    }
+  }
+
+  Widget _photo(String title, String url) => Expanded(
+        child: Column(children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: url.isEmpty
+                ? null
+                : () => showDialog(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 190,
+                width: double.infinity,
+                child: url.isEmpty
+                    ? const ColoredBox(color: Color(0xFFEEEEEE), child: Center(child: Text('بدون تصویر')))
+                    : Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFEEEEEE), child: Center(child: Icon(Icons.broken_image)))),
+              ),
+            ),
+          ),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (error != null) return _ErrorState(error: error!, retry: _load);
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(padding: const EdgeInsets.all(14), children: [
+        Wrap(spacing: 8, children: [
+          for (final p in const [['pending', 'در انتظار'], ['approved', 'تأیید شده'], ['rejected', 'رد شده']])
+            ChoiceChip(label: Text(p[1]), selected: status == p[0], onSelected: (_) { setState(() => status = p[0]); _load(); }),
+        ]),
+        const SizedBox(height: 12),
+        if (rows.isEmpty)
+          const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('درخواستی وجود ندارد.', style: TextStyle(color: Colors.black45, fontWeight: FontWeight.w700)))),
+        for (final r in rows)
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x22000000))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${r['full_name'] ?? ''}${(r['shop_name'] ?? '').toString().isNotEmpty ? '  •  ${r['shop_name']}' : ''}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+              const SizedBox(height: 3),
+              Text('${r['phone'] ?? ''}  ${r['city'] ?? ''}'.trim(), style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600)),
+              Text('${r['created_at'] ?? ''}'.split('T').first, style: const TextStyle(color: Colors.black45, fontSize: 12)),
+              const SizedBox(height: 10),
+              if (status == 'pending')
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _photo('تذکره', '${r['id_card_url'] ?? ''}'),
+                  const SizedBox(width: 10),
+                  _photo('سلفی', '${r['selfie_url'] ?? ''}'),
+                ])
+              else
+                Text(status == 'approved' ? '✅ تأیید شد' : '❌ رد شد${(r['admin_note'] ?? '').toString().isNotEmpty ? ' — ${r['admin_note']}' : ''}', style: const TextStyle(fontWeight: FontWeight.w800)),
+              if (status == 'pending') ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(child: FilledButton.icon(onPressed: busy.contains(r['id'].toString()) ? null : () => _decide(r, 'approved'), icon: const Icon(Icons.check_circle_outline), label: const Text('تأیید و فعال‌سازی'))),
+                  const SizedBox(width: 8),
+                  Expanded(child: OutlinedButton.icon(onPressed: busy.contains(r['id'].toString()) ? null : () => _decide(r, 'rejected'), icon: const Icon(Icons.cancel_outlined), label: const Text('رد'))),
+                ]),
+              ],
+            ]),
+          ),
       ]),
     );
   }
