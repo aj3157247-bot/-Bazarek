@@ -762,7 +762,7 @@ app.get('/api/listings', async (req, res) => {
     res.json(rows.map(x => {
       const level = Number(x.effective_boost_level || 0);
       const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
-      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: (x.is_store_product === true ? (pm[x.vendor_id]?.store_name || pm[x.vendor_id]?.shop_name) : pm[x.vendor_id]?.shop_name) || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
+      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: (x.is_store_product === true ? (pm[x.vendor_id]?.store_name || pm[x.vendor_id]?.shop_name) : (pm[x.vendor_id]?.store_name ? pm[x.vendor_id]?.full_name : pm[x.vendor_id]?.shop_name)) || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
@@ -793,7 +793,7 @@ app.get('/api/listings/:id', async (req,res)=>{
     res.set('Cache-Control', 'no-store');
     res.json({
       ...data,
-      seller_name: (data.is_store_product === true ? (seller.store_name || seller.shop_name) : seller.shop_name) || seller.full_name || 'فروشنده بازارک',
+      seller_name: (data.is_store_product === true ? (seller.store_name || seller.shop_name) : (seller.store_name ? seller.full_name : seller.shop_name)) || seller.full_name || 'فروشنده بازارک',
       seller_phone: data.show_phone ? (data.contact_phone || seller.phone || '') : '',
       store_description: (data.is_store_product === true ? (seller.store_bio || seller.bio) : seller.bio) || '',
       store_active: Boolean(storeSub),
@@ -893,7 +893,10 @@ app.get('/api/sellers/:id', async (req,res)=>{
       try { const {data:sv}=await db.from('saved_stores').select('user_id').eq('user_id',req.user.id).eq('seller_id',id).maybeSingle(); is_saved=!!sv; } catch (_) {}
     }
     const {count:products_count}=await db.from('products').select('*',{count:'exact',head:true}).eq('vendor_id',id).eq('is_active',true).eq('is_store_product',true);
-    res.json({...profile,shop_name:profile.store_name||profile.shop_name||'',bio:profile.store_bio||profile.bio||'',avatar_url:profile.store_logo_url||profile.avatar_url||'',city:profile.store_city||profile.city||'',followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
+    res.json({...profile,...(req.query.personal==='1'
+      // پروفایل شخصی (ورود از آگهی عادی): اطلاعات فروشگاه نمایش داده نمی‌شود
+      ? {shop_name:profile.store_name?'':(profile.shop_name||''),bio:profile.bio||'',avatar_url:profile.avatar_url||'',city:profile.city||'',store_category:'',store_cover_url:'',store_whatsapp:'',store_phone:'',store_address:''}
+      : {shop_name:profile.store_name||profile.shop_name||'',bio:profile.store_bio||profile.bio||'',avatar_url:profile.store_logo_url||profile.avatar_url||'',city:profile.store_city||profile.city||''}),followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
   }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پروفایل فروشنده.'});}
 });
 app.get('/api/sellers/:id/ads', async (req,res)=>{try{
@@ -937,8 +940,8 @@ app.post('/api/store/cover', requireUser, upload.single('cover'), async (req, re
     const db = getSupabaseAdmin();
     const storeSub = await getActiveStoreSubscription(db, req.user.id);
     if (!storeSub) return res.status(403).json({ error: 'برای افزودن عکس فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
-    // کاور افقی ۱۶:۹ — عکس‌های موبایل (EXIF) درست چرخانده و برش می‌خورند.
-    const processed = await sharp(req.file.buffer).rotate().resize(1280, 720, { fit: 'cover', position: 'attention' }).jpeg({ quality: 82 }).toBuffer();
+    // کاور بدون برش و بدون زوم: نسبت اصلی عکس حفظ می‌شود (فقط چرخش EXIF اصلاح و حجم کم می‌شود).
+    const processed = await sharp(req.file.buffer).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84 }).toBuffer();
     const buckets = await db.storage.listBuckets();
     if (!buckets.data?.some(b => b.name === AVATAR_BUCKET)) {
       const { error: be } = await db.storage.createBucket(AVATAR_BUCKET, { public: true, fileSizeLimit: '10MB' });
