@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -503,6 +504,11 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'فروشگاه‌های افغانستان': 'Afghanistan Stores',
+  'فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان': 'Trusted, verified stores across Afghanistan',
+  'فروشگاه خودت را رایگان بساز': 'Build your own store for free',
+  'ویترین اختصاصی، محصولات و تخفیف — بدون هیچ هزینه': 'Your own storefront, products and discounts — no cost at all',
+  'ساخت رایگان': 'Create free',
   'ظاهر فروشگاه': 'Store Appearance',
   'تکمیل کنید': 'Complete setup',
   'عکس زیبا و نوع فروشگاه شما در صفحه‌ی اصلی بازارک نمایش داده می‌شود.': 'Your store photo and type are shown on the Bazarek home page.',
@@ -649,6 +655,11 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'فروشگاه‌های افغانستان': 'د افغانستان پلورنځي',
+  'فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان': 'په ټول افغانستان کې باوري او تایید شوي پلورنځي',
+  'فروشگاه خودت را رایگان بساز': 'خپل پلورنځی وړیا جوړ کړئ',
+  'ویترین اختصاصی، محصولات و تخفیف — بدون هیچ هزینه': 'ځانګړې ویترین، محصولات او تخفیف — پرته له هیڅ لګښته',
+  'ساخت رایگان': 'وړیا جوړول',
   'ظاهر فروشگاه': 'د پلورنځي بڼه',
   'تکمیل کنید': 'بشپړ کړئ',
   'عکس زیبا و نوع فروشگاه شما در صفحه‌ی اصلی بازارک نمایش داده می‌شود.': 'ستاسو د پلورنځي انځور او ډول د بازارک په لومړي پاڼه کې ښودل کېږي.',
@@ -808,7 +819,7 @@ String _localizeStaticText(String value, String lang) {
 
   const enExtra = <String, String>{
     'فروشگاه‌های حرفه‌ای':'Professional Stores',
-    'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'Browse active and verified stores and enter a store.',
+    'فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان':'Browse active and verified stores and enter a store.',
     'فروشگاه حرفه‌ای':'Professional Store',
     'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'View this store’s products and information on its store page.',
     'فروشگاه بازارک':'Bazarek Store',
@@ -996,7 +1007,7 @@ String _localizeStaticText(String value, String lang) {
     'قیمت قابل مذاکره':'Negotiable Price',
   };
   const psExtra = <String, String>{
-    'فروشگاه‌های حرفه‌ای':'مسلکي پلورنځي','فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید':'فعال او تایید شوي پلورنځي وګورئ او پلورنځي ته ننوځئ.', 'فروشگاه حرفه‌ای':'مسلکي پلورنځی',
+    'فروشگاه‌های حرفه‌ای':'مسلکي پلورنځي','فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان':'فعال او تایید شوي پلورنځي وګورئ او پلورنځي ته ننوځئ.', 'فروشگاه حرفه‌ای':'مسلکي پلورنځی',
     'محصولات و اطلاعات این فروشگاه را در صفحه فروشگاه ببینید.':'د دې پلورنځي محصولات او معلومات د پلورنځي په پاڼه کې وګورئ.',
     'فروشگاه بازارک':'د بازارک پلورنځی','ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان':'ځانګړی ویترین، محصولات، تخفیفونه او د مشتریانو نظرونه',
     'همه':'ټول','جدیدترین':'نوي','ارزان‌ترین':'ارزانه','گران‌ترین':'ګران','ویژه‌سازی':'ځانګړی کول','آگهی':'اعلان','آگهی‌ها':'اعلانونه',
@@ -2007,16 +2018,7 @@ class StoreShowcaseCard extends StatelessWidget {
                   SizedBox(
                     height: coverHeight,
                     child: Stack(fit: StackFit.expand, children: [
-                      if (cover.isNotEmpty)
-                        Image.network(_optimizedImageUrl(cover, width: 900, quality: 80), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF172B3A)))
-                      else
-                        DecoratedBox(
-                          decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)])),
-                          child: Center(child: Icon(type?.icon ?? Icons.storefront_rounded, size: 70, color: Colors.white.withOpacity(.16))),
-                        ),
-                      const DecoratedBox(
-                        decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0x00000000), Color(0x40000000)])),
-                      ),
+                      StoreCoverImage(url: cover, height: coverHeight, fallbackIcon: type?.icon ?? Icons.storefront_rounded),
                       Positioned(
                         top: 10,
                         right: 10,
@@ -2102,8 +2104,40 @@ class StoreShowcaseCard extends StatelessWidget {
   }
 }
 
-/// بنر فروشگاه: عکس روی فروشگاه (کاور) + لوگو + نام + نوع فروشگاه + تعداد محصول.
-/// اگر کاور نبود، پس‌زمینه‌ی گرادینت با آیکن نوع فروشگاه نشان داده می‌شود.
+/// عکس کاور فروشگاه بدون زوم و بدون برش: عکس کامل با نسبت اصلی نمایش داده می‌شود
+/// و فضای خالی کنارش با نسخه‌ی محو‌شده‌ی خود عکس پر می‌شود (مثل اینستاگرام/eBay).
+class StoreCoverImage extends StatelessWidget {
+  final String url;
+  final double? height;
+  final double aspect;
+  final IconData fallbackIcon;
+  const StoreCoverImage({super.key, required this.url, this.height, this.aspect = 16 / 9, this.fallbackIcon = Icons.storefront_rounded});
+
+  @override
+  Widget build(BuildContext context) {
+    final has = url.trim().isNotEmpty;
+    final content = has
+        ? Stack(fit: StackFit.expand, children: [
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: Image.network(_optimizedImageUrl(url, width: 400, quality: 50), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EEF1))),
+            ),
+            const ColoredBox(color: Color(0x1F000000)),
+            Image.network(
+              _optimizedImageUrl(url, width: 1000, quality: 82, resize: 'contain'),
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, color: Colors.white70)),
+            ),
+          ])
+        : DecoratedBox(
+            decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)])),
+            child: Center(child: Icon(fallbackIcon, size: 64, color: Colors.white.withOpacity(.18))),
+          );
+    return height != null ? SizedBox(height: height, width: double.infinity, child: content) : AspectRatio(aspectRatio: aspect, child: content);
+  }
+}
+
+/// بنر فروشگاه (صفحه فروشگاه و «فروشگاه من»): کاور تمیز و کامل بالا، لوگو روی لبه، و اطلاعات زیر آن؛ هیچ نوشته‌ای روی عکس نیست.
 class StoreHeaderBanner extends StatelessWidget {
   final String name;
   final String coverUrl;
@@ -2128,127 +2162,61 @@ class StoreHeaderBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final type = storeTypeById(typeId);
-    final hasCover = coverUrl.trim().isNotEmpty;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: height,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasCover)
-              Image.network(
-                _optimizedImageUrl(coverUrl, width: 900, quality: 80),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF172B3A)),
-              )
-            else
-              DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)]),
-                ),
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Icon(type?.icon ?? Icons.storefront_rounded, size: 96, color: Colors.white.withOpacity(.10)),
-                  ),
-                ),
-              ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x00000000), Color(0x33000000), Color(0xCC000000)],
-                  stops: [0.25, 0.55, 1],
-                ),
-              ),
-            ),
-            Positioned(
-              left: 14,
-              right: 14,
-              bottom: 12,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: const [BoxShadow(color: Color(0x44000000), blurRadius: 8)],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: avatarUrl.trim().isNotEmpty
-                            ? Image.network(
-                                _optimizedImageUrl(avatarUrl, width: 160, quality: 80),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185)),
-                              )
-                            : Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185), size: 28),
-                      ),
-                      const SizedBox(width: 11),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900),
-                                  ),
-                                ),
-                                if (verified) ...[
-                                  const SizedBox(width: 5),
-                                  const Icon(Icons.verified_rounded, color: Color(0xFF55D7E6), size: 19),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 5),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: [
-                                if (type != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(color: Colors.white.withOpacity(.20), borderRadius: BorderRadius.circular(20)),
-                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                      Icon(type.icon, size: 13, color: Colors.white),
-                                      const SizedBox(width: 4),
-                                      Text(storeTypeTitle(context, type.id), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-                                    ]),
-                                  ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(color: Colors.white.withOpacity(.20), borderRadius: BorderRadius.circular(20)),
-                                  child: Text('$productCount ${uiText(context, 'محصول')}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (bottom != null) ...[const SizedBox(height: 10), bottom!],
-                ],
-              ),
-            ),
-          ],
-        ),
+    Widget chip(IconData icon, String text) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(color: const Color(0xFFEAF5F6), borderRadius: BorderRadius.circular(20)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: const Color(0xFF0F6B78)),
+            const SizedBox(width: 5),
+            Text(text, style: const TextStyle(color: Color(0xFF0F6B78), fontSize: 11.5, fontWeight: FontWeight.w800)),
+          ]),
+        );
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE3E6E8)),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 4))],
       ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Stack(clipBehavior: Clip.none, children: [
+          StoreCoverImage(url: coverUrl, fallbackIcon: type?.icon ?? Icons.storefront_rounded),
+          Positioned(
+            bottom: -30,
+            right: 16,
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 3))],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: avatarUrl.trim().isNotEmpty
+                  ? Image.network(_optimizedImageUrl(avatarUrl, width: 200, quality: 80), fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185), size: 30))
+                  : Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185), size: 30),
+            ),
+          ),
+        ]),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 38, 16, 14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Flexible(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF131921)))),
+              if (verified) ...[const SizedBox(width: 6), const Icon(Icons.verified_rounded, color: Color(0xFF0B8FA3), size: 21)],
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              if (type != null) chip(type.icon, storeTypeTitle(context, type.id)),
+              chip(Icons.inventory_2_outlined, '$productCount ${uiText(context, 'محصول')}'),
+            ]),
+            if (bottom != null) ...[const SizedBox(height: 12), bottom!],
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -2964,8 +2932,8 @@ class ApiService {
     return data is List ? data : List<dynamic>.from((data as Map)['data'] ?? const []);
   }
 
-  static Future<Map<String, dynamic>> getSellerProfile(String sellerId) async {
-    Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId'), headers: headers).timeout(const Duration(seconds: 15));
+  static Future<Map<String, dynamic>> getSellerProfile(String sellerId, {bool personal = false}) async {
+    Future<http.Response> request() => http.get(Uri.parse('${ApiConfig.baseUrl}/sellers/$sellerId${personal ? '?personal=1' : ''}'), headers: headers).timeout(const Duration(seconds: 15));
     var res = await request();
     if (res.statusCode == 401 && await refreshSession()) res = await request();
     dynamic data; try { data = jsonDecode(res.body); } catch (_) { data = null; }
@@ -5648,12 +5616,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isPs ? 'د بازارک مسلکي پلورنځي' : 'فروشگاه‌های حرفه‌ای',
+                      isPs ? 'د افغانستان پلورنځي' : 'فروشگاه‌های افغانستان',
                       style: TextStyle(fontSize: isMobile ? 20 : 26, fontWeight: FontWeight.w900, color: const Color(0xFF131921)),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      isPs ? 'یوازې فعال او تایید شوي مسلکي پلورنځي' : 'فروشگاه‌های فعال و تأییدشده را ببینید و وارد فروشگاه شوید',
+                      isPs ? 'یوازې فعال او تایید شوي مسلکي پلورنځي' : 'فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان',
                       style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.35),
                     ),
                   ],
@@ -5789,12 +5757,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isPs ? 'خپل مسلکي پلورنځی جوړ کړئ' : 'فروشگاه حرفه‌ای خودت را بساز',
+                        isPs ? 'خپل پلورنځی وړیا جوړ کړئ' : 'فروشگاه خودت را رایگان بساز',
                         style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        isPs ? 'محصولات، تخفیف او د مشتریانو نظرونه' : 'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان',
+                        isPs ? 'ځانګړې ویترین، محصولات او تخفیف — پرته له هیڅ لګښته' : 'ویترین اختصاصی، محصولات و تخفیف — بدون هیچ هزینه',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70, fontSize: 10, height: 1.35),
@@ -5814,7 +5782,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!context.mounted) return;
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
                   },
-                  child: Text(isPs ? 'وړیا فعالول' : 'فعال‌سازی رایگان', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                  child: Text(isPs ? 'وړیا جوړول' : 'ساخت رایگان', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900)),
                 ),
               ],
             ),
@@ -7349,7 +7317,7 @@ class _SellerCard extends StatelessWidget {
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
         subtitle: const Text('مشاهده پروفایل فروشنده، آگهی‌ها و امتیاز'),
         trailing: const Icon(Icons.chevron_left),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfileScreen(sellerId: sellerId, sellerName: name))),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerProfileScreen(sellerId: sellerId, sellerName: name, personalMode: product['is_store_product'] != true))),
       ),
     );
   }
@@ -8968,7 +8936,9 @@ class _StoreSubscriptionScreenState extends State<StoreSubscriptionScreen> {
 class SellerProfileScreen extends StatefulWidget {
   final String sellerId;
   final String sellerName;
-  const SellerProfileScreen({super.key, required this.sellerId, this.sellerName = 'فروشنده بازارک'});
+  /// true: پروفایل شخصی فروشنده (برای وقتی که از «آگهی عادی» وارد می‌شوید) نه پروفایل فروشگاه.
+  final bool personalMode;
+  const SellerProfileScreen({super.key, required this.sellerId, this.sellerName = 'فروشنده بازارک', this.personalMode = false});
   @override State<SellerProfileScreen> createState() => _SellerProfileScreenState();
 }
 class _SellerProfileScreenState extends State<SellerProfileScreen> {
@@ -8979,8 +8949,8 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
   @override void initState() { super.initState(); _load(); }
   Future<void> _load() async {
     try {
-      final p = await ApiService.getSellerProfile(widget.sellerId);
-      final isStore = p['is_store_active'] == true;
+      final p = await ApiService.getSellerProfile(widget.sellerId, personal: widget.personalMode);
+      final isStore = !widget.personalMode && p['is_store_active'] == true;
       final l = isStore ? await ApiService.getSellerListings(widget.sellerId) : await ApiService.getSellerAds(widget.sellerId);
       final c = isStore ? await ApiService.getSellerComments(widget.sellerId) : <dynamic>[];
       if (mounted) setState(() { profile=p; listings=l; comments=c; following=p['is_following']==true; loading=false; error=null; });
