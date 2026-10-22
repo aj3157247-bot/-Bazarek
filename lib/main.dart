@@ -502,8 +502,303 @@ String uiText(BuildContext context, String fa, [String? ps]) {
   return fa;
 }
 
+const Map<String, String> _extraUiEn = {
+  'ظاهر فروشگاه': 'Store Appearance',
+  'تکمیل کنید': 'Complete setup',
+  'عکس زیبا و نوع فروشگاه شما در صفحه‌ی اصلی بازارک نمایش داده می‌شود.': 'Your store photo and type are shown on the Bazarek home page.',
+  'افزودن عکس فروشگاه': 'Add store photo',
+  'تغییر عکس': 'Change photo',
+  'انتخاب نوع فروشگاه': 'Choose store type',
+  'نوع فروشگاه': 'Store type',
+  'تغییر': 'Change',
+  'ویرایش پروفایل فروشگاه': 'Edit store profile',
+  'فروشگاه شما چه چیزی می‌فروشد؟': 'What does your store sell?',
+  'یکی را انتخاب کنید؛ ثبت محصول برای شما ساده‌تر می‌شود.': 'Pick one; adding products becomes easier.',
+  'عکس فروشگاه ذخیره شد.': 'Store photo saved.',
+  'پروفایل فروشگاه': 'Store Profile',
+  'این اطلاعات فقط برای فروشگاه شماست و پروفایل شخصی شما را تغییر نمی‌دهد.': 'This information is only for your store and does not change your personal profile.',
+  'لوگوی فروشگاه': 'Store logo',
+  'نام فروشگاه': 'Store name',
+  'معرفی فروشگاه': 'Store description',
+  'چه چیزی می‌فروشید؟ چرا فروشگاه شما؟': 'What do you sell? Why your store?',
+  'شهر / ولایت': 'City / Province',
+  'آدرس فروشگاه': 'Store address',
+  'منطقه، سرک، مارکیت...': 'Area, street, market...',
+  'شماره تماس فروشگاه': 'Store phone number',
+  'شماره واتساپ فروشگاه': 'Store WhatsApp number',
+  'شماره واتساپ': 'WhatsApp number',
+  'ذخیره پروفایل فروشگاه': 'Save store profile',
+  'در حال ذخیره...': 'Saving...',
+  'پروفایل فروشگاه ذخیره شد.': 'Store profile saved.',
+  'نام فروشگاه را وارد کنید.': 'Enter the store name.',
+  'ذخیره پروفایل فروشگاه ناموفق بود.': 'Could not save the store profile.',
+  'ذخیره نوع فروشگاه ناموفق بود.': 'Could not save the store type.',
+  'آپلود عکس فروشگاه ناموفق بود.': 'Store photo upload failed.',
+  'آپلود لوگو ناموفق بود.': 'Logo upload failed.',
+  'فعال‌سازی فروشگاه حرفه‌ای': 'Activate Professional Store',
+  'فروشگاه حرفه‌ای — فعلاً رایگان 🎁': 'Professional Store — Free for now 🎁',
+  'برای اطمینان خریداران، هویت شما یک بار بررسی می‌شود. بعد از تأیید مدیریت، فروشگاه شما فعال می‌شود.': 'To build buyer trust, your identity is checked once. After admin approval, your store is activated.',
+  'فروشگاه شما فعال است': 'Your store is active',
+  'می‌توانید محصول اضافه کنید و ظاهر فروشگاه را تنظیم کنید.': 'You can add products and set up your store appearance.',
+  'رفتن به فروشگاه من': 'Go to my store',
+  'در انتظار تأیید مدیریت': 'Waiting for admin approval',
+  'مدارک شما دریافت شد و در حال بررسی است. بعد از تأیید، فروشگاه خودکار فعال می‌شود. (معمولاً چند ساعت)': 'Your documents were received and are under review. After approval your store is activated automatically (usually a few hours).',
+  'درخواست قبلی تأیید نشد': 'Your previous request was not approved',
+  'لطفاً عکس‌های واضح‌تر بفرستید و دوباره تلاش کنید.': 'Please send clearer photos and try again.',
+  '۱. عکس تذکره': '1. ID card photo',
+  'تمام تذکره، واضح و بدون انعکاس نور؛ اسم و عکس باید خوانا باشد.': 'The whole ID card, clear and without glare; name and photo must be readable.',
+  '۲. سلفی شما': '2. Your selfie',
+  'یک سلفی واضح از چهره‌ی خودتان (ترجیحاً در حالی که تذکره در دست شماست).': 'A clear selfie of your face (preferably holding your ID card).',
+  'گرفتن عکس': 'Take photo',
+  'از گالری': 'From gallery',
+  'مدارک شما فقط برای مدیریت بازارک دیده می‌شود، جایی نمایش داده نمی‌شود و بعد از تصمیم مدیریت از سرور پاک می‌شود.': 'Your documents are visible only to Bazarek admins, are not displayed anywhere, and are deleted from the server after the decision.',
+  'ارسال برای تأیید': 'Submit for approval',
+  'هر دو عکس (تذکره و سلفی) لازم است.': 'Both photos (ID card and selfie) are required.',
+  'ارسال مدارک ناموفق بود.': 'Sending documents failed.',
+  'ویرایش آگهی': 'Edit ad',
+  'ویرایش محصول': 'Edit product',
+  'عکس‌ها': 'Photos',
+  'عنوان': 'Title',
+  'قیمت': 'Price',
+  'تخفیف ٪': 'Discount %',
+  'اختیاری': 'Optional',
+  'افغانی': 'Afghani',
+  'دالر': 'Dollar',
+  'توضیحات': 'Description',
+  'موجود است': 'In stock',
+  'قیمت قابل مذاکره است': 'Price is negotiable',
+  'دکمه‌ی واتساپ': 'WhatsApp button',
+  'مشتری با یک لمس به واتساپ شما پیام می‌دهد': 'Customers can message you on WhatsApp with one tap',
+  'ذخیره تغییرات': 'Save changes',
+  'تغییرات ذخیره شد.': 'Changes saved.',
+  'عنوان را وارد کنید.': 'Enter the title.',
+  'حداقل یک عکس لازم است.': 'At least one photo is required.',
+  'ذخیره تغییرات ناموفق بود.': 'Could not save the changes.',
+  'اطلاعات محصول': 'Product information',
+  'فقط همین چند مورد کافی است؛ بقیه اختیاری است.': 'Only these few items are needed; the rest is optional.',
+  'نام محصول': 'Product name',
+  'مثلاً بخاری ترکی ۴ شعله': 'e.g. Turkish stove, 4 burners',
+  'مثلاً 12000': 'e.g. 12000',
+  'نوع محصول': 'Product type',
+  'دسته محصول': 'Product category',
+  'ولایت': 'Province',
+  'توضیحات (اختیاری)': 'Description (optional)',
+  'یک یا دو جمله درباره‌ی محصول': 'One or two sentences about the product',
+  'امکانات بیشتر (اختیاری)': 'More options (optional)',
+  'ویدیو، پیام صوتی، رنگ و سایز و ...': 'Video, voice message, color, size...',
+  'ویدیو (اختیاری)': 'Video (optional)',
+  'انتخاب ویدیو': 'Choose video',
+  'تغییر ویدیو': 'Change video',
+  'در حال آپلود ویدیو...': 'Uploading video...',
+  'ویدیو': 'Video',
+  'پیام صوتی': 'Voice message',
+  'پیام در واتساپ': 'Message on WhatsApp',
+  'واتساپ': 'WhatsApp',
+  'شماره‌ی واتساپ ثبت نشده یا نامعتبر است.': 'The WhatsApp number is missing or invalid.',
+  'باز کردن واتساپ ناموفق بود.': 'Could not open WhatsApp.',
+  'محصول': 'products',
+  'همه': 'All',
+  'ورود به فروشگاه': 'Visit store',
+  'تأیید شده': 'Verified',
+  'فروشگاه حرفه‌ای خودت را بساز': 'Build your own professional store',
+  'فعال‌سازی رایگان': 'Activate for free',
+  'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان': 'Dedicated storefront, products, discounts and customer reviews',
+  'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.': 'There is no active professional store to show right now.',
+  'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.': 'Set your contact details and how customers can reach you.',
+  'آگهی با موفقیت منتشر شد.': 'Ad published successfully.',
+  'آگهی پیدا نشد.': 'Ad not found.',
+  'فروشگاه پیدا نشد.': 'Store not found.',
+  'اتصال به سرور برقرار نشد.': 'Could not connect to the server.',
+  'رفتن به صفحه اصلی': 'Go to home page',
+  'ورود به حساب': 'Log in',
+  'ثبت‌نام حساب جدید': 'Create a new account',
+  'جدیدترین آگهی‌ها': 'Latest ads',
+  'جزئیات آگهی': 'Ad details',
+  'هنوز هیچ آگهی فعالی ثبت نشده است.': 'No active ads yet.',
+  'هنوز آگهی‌ای ذخیره نکرده‌اید.': 'You have not saved any ads yet.',
+  'نتایج جستجو': 'Search results',
+  'سایر': 'Other',
+  'سایر محصولات': 'Other products',
+  'خطا در انتشار آگهی.': 'Error publishing the ad.',
+  'خطا در ثبت محصول فروشگاه.': 'Error adding the store product.',
+  'خطا در دریافت آگهی‌ها.': 'Error loading ads.',
+  'خطا در دریافت اطلاعات.': 'Error loading data.',
+  'خطا در دریافت پیام‌ها.': 'Error loading messages.',
+  'خطا در دریافت گفتگوها.': 'Error loading chats.',
+  'خطا در دریافت فروشگاه‌ها.': 'Error loading stores.',
+  'خطا در ارسال پیام.': 'Error sending the message.',
+  'خطا در ذخیره پروفایل.': 'Error saving the profile.',
+  'خطا در ثبت‌نام.': 'Registration error.',
+  'ایمیل یا رمز عبور اشتباه است.': 'Incorrect email or password.',
+  'حذف آگهی ناموفق بود.': 'Could not delete the ad.',
+  'آپلود ویدیو ناموفق بود.': 'Video upload failed.',
+  'آپلود پیام صوتی ناموفق بود.': 'Voice message upload failed.',
+  'ضبط پیام صوتی': 'Record voice message',
+  'انتخاب فایل صوتی': 'Choose audio file',
+  'توقف ضبط': 'Stop recording',
+  'در حال ضبط...': 'Recording...',
+  'حذف صدا': 'Delete audio',
+  'ویژه‌سازی آگهی': 'Promote your ad',
+  'آگهی‌ات را ویژه کن!': 'Promote your ad!',
+  'با ویژه‌سازی، آگهی‌ات بیشتر دیده می‌شود و سریع‌تر مشتری پیدا می‌کنی.': 'Promoted ads get more views and find customers faster.',
+  'حالت شب': 'Night mode',
+  'دسته‌بندی پیدا نشد.': 'Category not found.',
+  'باز کردن صفحه': 'Open page',
+  'اختیاری؛ یک پیام صوتی کوتاه برای معرفی محصول یا آگهی اضافه کنید.': 'Optional: add a short voice message to introduce the product or ad.',
+  'فایل صوتی نباید بیشتر از ۸ مگابایت باشد.': 'The audio file must not exceed 8 MB.',
+  'عکس فروشگاه': 'Store photo',
+};
+const Map<String, String> _extraUiPs = {
+  'ظاهر فروشگاه': 'د پلورنځي بڼه',
+  'تکمیل کنید': 'بشپړ کړئ',
+  'عکس زیبا و نوع فروشگاه شما در صفحه‌ی اصلی بازارک نمایش داده می‌شود.': 'ستاسو د پلورنځي انځور او ډول د بازارک په لومړي پاڼه کې ښودل کېږي.',
+  'افزودن عکس فروشگاه': 'د پلورنځي انځور اضافه کړئ',
+  'تغییر عکس': 'انځور بدل کړئ',
+  'انتخاب نوع فروشگاه': 'د پلورنځي ډول وټاکئ',
+  'نوع فروشگاه': 'د پلورنځي ډول',
+  'تغییر': 'بدلول',
+  'ویرایش پروفایل فروشگاه': 'د پلورنځي پروفایل سمول',
+  'فروشگاه شما چه چیزی می‌فروشد؟': 'ستاسو پلورنځی څه پلوري؟',
+  'یکی را انتخاب کنید؛ ثبت محصول برای شما ساده‌تر می‌شود.': 'یو وټاکئ؛ د محصول ثبتول به لا اسانه شي.',
+  'عکس فروشگاه ذخیره شد.': 'د پلورنځي انځور خوندي شو.',
+  'پروفایل فروشگاه': 'د پلورنځي پروفایل',
+  'این اطلاعات فقط برای فروشگاه شماست و پروفایل شخصی شما را تغییر نمی‌دهد.': 'دا معلومات یوازې ستاسو د پلورنځي لپاره دي او ستاسو شخصي پروفایل نه بدلوي.',
+  'لوگوی فروشگاه': 'د پلورنځي لوګو',
+  'نام فروشگاه': 'د پلورنځي نوم',
+  'معرفی فروشگاه': 'د پلورنځي پېژندنه',
+  'چه چیزی می‌فروشید؟ چرا فروشگاه شما؟': 'څه پلورئ؟ ولې ستاسو پلورنځی؟',
+  'شهر / ولایت': 'ښار / ولایت',
+  'آدرس فروشگاه': 'د پلورنځي پته',
+  'منطقه، سرک، مارکیت...': 'سیمه، سړک، مارکېټ...',
+  'شماره تماس فروشگاه': 'د پلورنځي د اړیکې شمېره',
+  'شماره واتساپ فروشگاه': 'د پلورنځي د واټساپ شمېره',
+  'شماره واتساپ': 'د واټساپ شمېره',
+  'ذخیره پروفایل فروشگاه': 'د پلورنځي پروفایل خوندي کړئ',
+  'در حال ذخیره...': 'خوندي کېږي...',
+  'پروفایل فروشگاه ذخیره شد.': 'د پلورنځي پروفایل خوندي شو.',
+  'نام فروشگاه را وارد کنید.': 'د پلورنځي نوم ولیکئ.',
+  'ذخیره پروفایل فروشگاه ناموفق بود.': 'د پلورنځي پروفایل خوندي نه شو.',
+  'ذخیره نوع فروشگاه ناموفق بود.': 'د پلورنځي ډول خوندي نه شو.',
+  'آپلود عکس فروشگاه ناموفق بود.': 'د پلورنځي د انځور پورته کول ناکام شول.',
+  'آپلود لوگو ناموفق بود.': 'د لوګو پورته کول ناکام شول.',
+  'فعال‌سازی فروشگاه حرفه‌ای': 'مسلکي پلورنځی فعالول',
+  'فروشگاه حرفه‌ای — فعلاً رایگان 🎁': 'مسلکي پلورنځی — اوس وړیا 🎁',
+  'برای اطمینان خریداران، هویت شما یک بار بررسی می‌شود. بعد از تأیید مدیریت، فروشگاه شما فعال می‌شود.': 'د پېرودونکو د باور لپاره ستاسو هویت یو ځل ګورل کېږي. د مدیریت له تایید وروسته ستاسو پلورنځی فعالېږي.',
+  'فروشگاه شما فعال است': 'ستاسو پلورنځی فعال دی',
+  'می‌توانید محصول اضافه کنید و ظاهر فروشگاه را تنظیم کنید.': 'تاسو کولی شئ محصولات اضافه کړئ او د پلورنځي بڼه تنظیم کړئ.',
+  'رفتن به فروشگاه من': 'زما پلورنځي ته ورتلل',
+  'در انتظار تأیید مدیریت': 'د مدیریت تایید ته انتظار',
+  'مدارک شما دریافت شد و در حال بررسی است. بعد از تأیید، فروشگاه خودکار فعال می‌شود. (معمولاً چند ساعت)': 'ستاسو اسناد ترلاسه شول او څېړل کېږي. له تایید وروسته پلورنځی په اتوماتیک ډول فعالېږي. (معمولاً څو ساعته)',
+  'درخواست قبلی تأیید نشد': 'پخوانۍ غوښتنه ونه منل شوه',
+  'لطفاً عکس‌های واضح‌تر بفرستید و دوباره تلاش کنید.': 'مهرباني وکړئ روښانه انځورونه واستوئ او بیا هڅه وکړئ.',
+  '۱. عکس تذکره': '۱. د تذکرې انځور',
+  'تمام تذکره، واضح و بدون انعکاس نور؛ اسم و عکس باید خوانا باشد.': 'ټوله تذکره، روښانه او پرته له رڼا انعکاس؛ نوم او انځور باید ښه ولوستل شي.',
+  '۲. سلفی شما': '۲. ستاسو سلفي',
+  'یک سلفی واضح از چهره‌ی خودتان (ترجیحاً در حالی که تذکره در دست شماست).': 'د خپل مخ روښانه سلفي (غوره ده چې تذکره مو په لاس کې وي).',
+  'گرفتن عکس': 'انځور واخلئ',
+  'از گالری': 'له ګالرۍ',
+  'مدارک شما فقط برای مدیریت بازارک دیده می‌شود، جایی نمایش داده نمی‌شود و بعد از تصمیم مدیریت از سرور پاک می‌شود.': 'ستاسو اسناد یوازې د بازارک مدیریت ته ښکاري، هیڅ ځای نه ښودل کېږي او د مدیریت له پریکړې وروسته له سرور څخه ړنګېږي.',
+  'ارسال برای تأیید': 'د تایید لپاره ولېږئ',
+  'هر دو عکس (تذکره و سلفی) لازم است.': 'دواړه انځورونه (تذکره او سلفي) اړین دي.',
+  'ارسال مدارک ناموفق بود.': 'د اسنادو لېږل ناکام شول.',
+  'ویرایش آگهی': 'اعلان سمول',
+  'ویرایش محصول': 'محصول سمول',
+  'عکس‌ها': 'انځورونه',
+  'عنوان': 'سرلیک',
+  'قیمت': 'بیه',
+  'تخفیف ٪': 'تخفیف ٪',
+  'اختیاری': 'اختیاري',
+  'افغانی': 'افغانۍ',
+  'دالر': 'ډالر',
+  'توضیحات': 'تشریحات',
+  'موجود است': 'شتون لري',
+  'قیمت قابل مذاکره است': 'بیه د خبرو وړ ده',
+  'دکمه‌ی واتساپ': 'د واټساپ تڼۍ',
+  'مشتری با یک لمس به واتساپ شما پیام می‌دهد': 'پېرودونکی په یوه ټک ستاسو واټساپ ته پیغام لېږي',
+  'ذخیره تغییرات': 'بدلونونه خوندي کړئ',
+  'تغییرات ذخیره شد.': 'بدلونونه خوندي شول.',
+  'عنوان را وارد کنید.': 'سرلیک ولیکئ.',
+  'حداقل یک عکس لازم است.': 'لږ تر لږه یو انځور اړین دی.',
+  'ذخیره تغییرات ناموفق بود.': 'بدلونونه خوندي نه شول.',
+  'اطلاعات محصول': 'د محصول معلومات',
+  'فقط همین چند مورد کافی است؛ بقیه اختیاری است.': 'یوازې همدا څو شیان بس دي؛ پاتې اختیاري دي.',
+  'نام محصول': 'د محصول نوم',
+  'مثلاً بخاری ترکی ۴ شعله': 'لکه ترکي بخاري ۴ لمبې',
+  'مثلاً 12000': 'لکه 12000',
+  'نوع محصول': 'د محصول ډول',
+  'دسته محصول': 'د محصول کټګورۍ',
+  'ولایت': 'ولایت',
+  'توضیحات (اختیاری)': 'تشریحات (اختیاري)',
+  'یک یا دو جمله درباره‌ی محصول': 'د محصول په اړه یوه یا دوه جملې',
+  'امکانات بیشتر (اختیاری)': 'نور امکانات (اختیاري)',
+  'ویدیو، پیام صوتی، رنگ و سایز و ...': 'ویډیو، غږیز پیغام، رنګ او اندازه ...',
+  'ویدیو (اختیاری)': 'ویډیو (اختیاري)',
+  'انتخاب ویدیو': 'ویډیو وټاکئ',
+  'تغییر ویدیو': 'ویډیو بدل کړئ',
+  'در حال آپلود ویدیو...': 'ویډیو پورته کېږي...',
+  'ویدیو': 'ویډیو',
+  'پیام صوتی': 'غږیز پیغام',
+  'پیام در واتساپ': 'په واټساپ کې پیغام',
+  'واتساپ': 'واټساپ',
+  'شماره‌ی واتساپ ثبت نشده یا نامعتبر است.': 'د واټساپ شمېره نه ده ثبت شوې یا ناسمه ده.',
+  'باز کردن واتساپ ناموفق بود.': 'واټساپ پرانیستل نه شو.',
+  'محصول': 'محصول',
+  'همه': 'ټول',
+  'ورود به فروشگاه': 'پلورنځي ته ننوتل',
+  'تأیید شده': 'تایید شوی',
+  'فروشگاه حرفه‌ای خودت را بساز': 'خپل مسلکي پلورنځی جوړ کړئ',
+  'فعال‌سازی رایگان': 'وړیا فعالول',
+  'ویترین اختصاصی، محصولات، تخفیف و نظر مشتریان': 'ځانګړې ویترین، محصولات، تخفیف او د پېرودونکو نظرونه',
+  'فعلاً فروشگاه حرفه‌ای فعالی برای نمایش وجود ندارد.': 'اوس مهال د ښودلو لپاره کوم فعال مسلکي پلورنځی نشته.',
+  'اطلاعات تماس و نحوه ارتباط با مشتری را تنظیم کنید.': 'د اړیکې معلومات او د پېرودونکي سره د اړیکې طریقه تنظیم کړئ.',
+  'آگهی با موفقیت منتشر شد.': 'اعلان په بریالیتوب خپور شو.',
+  'آگهی پیدا نشد.': 'اعلان ونه موندل شو.',
+  'فروشگاه پیدا نشد.': 'پلورنځی ونه موندل شو.',
+  'اتصال به سرور برقرار نشد.': 'له سرور سره اړیکه نه جوړېږي.',
+  'رفتن به صفحه اصلی': 'لومړۍ پاڼې ته ورتلل',
+  'ورود به حساب': 'حساب ته ننوتل',
+  'ثبت‌نام حساب جدید': 'نوی حساب جوړ کړئ',
+  'جدیدترین آگهی‌ها': 'تازه اعلانونه',
+  'جزئیات آگهی': 'د اعلان تفصیلات',
+  'هنوز هیچ آگهی فعالی ثبت نشده است.': 'تر اوسه کوم فعال اعلان نشته.',
+  'هنوز آگهی‌ای ذخیره نکرده‌اید.': 'تاسو تر اوسه کوم اعلان نه دی خوندي کړی.',
+  'نتایج جستجو': 'د لټون پایلې',
+  'سایر': 'نور',
+  'سایر محصولات': 'نور محصولات',
+  'خطا در انتشار آگهی.': 'د اعلان په خپرولو کې ستونزه.',
+  'خطا در ثبت محصول فروشگاه.': 'د پلورنځي د محصول په ثبتولو کې ستونزه.',
+  'خطا در دریافت آگهی‌ها.': 'د اعلانونو په ترلاسه کولو کې ستونزه.',
+  'خطا در دریافت اطلاعات.': 'د معلوماتو په ترلاسه کولو کې ستونزه.',
+  'خطا در دریافت پیام‌ها.': 'د پیغامونو په ترلاسه کولو کې ستونزه.',
+  'خطا در دریافت گفتگوها.': 'د ګفتګوګانو په ترلاسه کولو کې ستونزه.',
+  'خطا در دریافت فروشگاه‌ها.': 'د پلورنځیو په ترلاسه کولو کې ستونزه.',
+  'خطا در ارسال پیام.': 'د پیغام په لېږلو کې ستونزه.',
+  'خطا در ذخیره پروفایل.': 'د پروفایل په خوندي کولو کې ستونزه.',
+  'خطا در ثبت‌نام.': 'د ثبت نام ستونزه.',
+  'ایمیل یا رمز عبور اشتباه است.': 'بریښنالیک یا پټنوم ناسم دی.',
+  'حذف آگهی ناموفق بود.': 'د اعلان ړنګول ناکام شول.',
+  'آپلود ویدیو ناموفق بود.': 'د ویډیو پورته کول ناکام شول.',
+  'آپلود پیام صوتی ناموفق بود.': 'د غږیز پیغام پورته کول ناکام شول.',
+  'ضبط پیام صوتی': 'غږیز پیغام ثبت کړئ',
+  'انتخاب فایل صوتی': 'غږیز فایل وټاکئ',
+  'توقف ضبط': 'ثبت ودروئ',
+  'در حال ضبط...': 'ثبتېږي...',
+  'حذف صدا': 'غږ ړنګ کړئ',
+  'ویژه‌سازی آگهی': 'اعلان ځانګړی کړئ',
+  'آگهی‌ات را ویژه کن!': 'خپل اعلان ځانګړی کړئ!',
+  'با ویژه‌سازی، آگهی‌ات بیشتر دیده می‌شود و سریع‌تر مشتری پیدا می‌کنی.': 'ځانګړي اعلانونه ډېر کتل کېږي او ژر پېرودونکي مومي.',
+  'حالت شب': 'شپنی حالت',
+  'دسته‌بندی پیدا نشد.': 'کټګورۍ ونه موندل شوه.',
+  'باز کردن صفحه': 'پاڼه پرانیستل',
+  'اختیاری؛ یک پیام صوتی کوتاه برای معرفی محصول یا آگهی اضافه کنید.': 'اختیاري؛ د محصول یا اعلان د پېژندنې لپاره یو لنډ غږیز پیغام اضافه کړئ.',
+  'فایل صوتی نباید بیشتر از ۸ مگابایت باشد.': 'غږیز فایل باید له ۸ مېګابایټه زیات نه وي.',
+  'عکس فروشگاه': 'د پلورنځي انځور',
+};
+
 String _localizeStaticText(String value, String lang) {
   if (lang != 'en' && lang != 'ps') return value;
+  final extraTranslation = (lang == 'en' ? _extraUiEn : _extraUiPs)[value];
+  if (extraTranslation != null) return extraTranslation;
   // First use the main app dictionaries so fixed UI text never depends on
   // the translation API being online.
   final maps = lang == 'en' ? _enMap : _psMap;
@@ -1668,6 +1963,145 @@ String storeTypeTitle(BuildContext context, String id) {
   return lang == 'en' ? t.en : (lang == 'ps' ? t.ps : t.fa);
 }
 
+
+/// کارت فروشگاه در صفحه اصلی: عکس کاور تمیز بالا، لوگوی روی لبه، نام و نوع فروشگاه و دکمه‌های ورود/واتساپ.
+class StoreShowcaseCard extends StatelessWidget {
+  final Map<String, dynamic> store;
+  final String name;
+  final VoidCallback? onOpen;
+  const StoreShowcaseCard({super.key, required this.store, required this.name, this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = store['store_cover_url']?.toString().trim() ?? '';
+    final avatar = store['avatar_url']?.toString().trim() ?? '';
+    final typeId = store['store_category']?.toString() ?? '';
+    final type = storeTypeById(typeId);
+    final city = store['city']?.toString().trim() ?? '';
+    final desc = store['description']?.toString().trim() ?? '';
+    final count = int.tryParse(store['products_count']?.toString() ?? '') ?? 0;
+    final wa = store['store_whatsapp']?.toString().trim() ?? '';
+    const coverHeight = 170.0;
+
+    Widget meta(IconData icon, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14, color: const Color(0xFF007185)),
+          const SizedBox(width: 4),
+          Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF4B5563)))),
+        ]);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(5, 4, 5, 8),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Material(
+              color: Colors.white,
+              elevation: 3,
+              shadowColor: const Color(0x33000000),
+              borderRadius: BorderRadius.circular(22),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onOpen,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  SizedBox(
+                    height: coverHeight,
+                    child: Stack(fit: StackFit.expand, children: [
+                      if (cover.isNotEmpty)
+                        Image.network(_optimizedImageUrl(cover, width: 900, quality: 80), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF172B3A)))
+                      else
+                        DecoratedBox(
+                          decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)])),
+                          child: Center(child: Icon(type?.icon ?? Icons.storefront_rounded, size: 70, color: Colors.white.withOpacity(.16))),
+                        ),
+                      const DecoratedBox(
+                        decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0x00000000), Color(0x40000000)])),
+                      ),
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(.95), borderRadius: BorderRadius.circular(20)),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.verified_rounded, size: 14, color: Color(0xFF0B8FA3)),
+                            SizedBox(width: 4),
+                            Text('تأیید شده', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF0B6B78))),
+                          ]),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 38, 16, 14),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF131921))),
+                        const SizedBox(height: 6),
+                        Wrap(spacing: 12, runSpacing: 4, children: [
+                          if (type != null) meta(type.icon, storeTypeTitle(context, type.id)),
+                          if (city.isNotEmpty) meta(Icons.location_on_outlined, city),
+                          meta(Icons.inventory_2_outlined, '$count ${uiText(context, 'محصول')}'),
+                        ]),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: desc.isEmpty
+                              ? const SizedBox.shrink()
+                              : Text(desc, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, height: 1.5, color: Color(0xFF6B7280), fontWeight: FontWeight.w600)),
+                        ),
+                        Row(children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: onOpen,
+                              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F6B78), foregroundColor: Colors.white, minimumSize: const Size.fromHeight(46), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                              icon: const Icon(Icons.storefront_rounded, size: 19),
+                              label: const Text('ورود به فروشگاه', style: TextStyle(fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                          if (normalizeWhatsappNumber(wa) != null) ...[
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 46,
+                              height: 46,
+                              child: IconButton.filled(
+                                style: IconButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                                onPressed: () => openWhatsapp(context, wa, 'سلام، فروشگاه «$name» را در بازارک دیدم.'),
+                                icon: const Icon(Icons.chat_rounded, size: 22),
+                              ),
+                            ),
+                          ],
+                        ]),
+                      ]),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          Positioned(
+            top: coverHeight - 32,
+            right: 16,
+            child: Container(
+              width: 66,
+              height: 66,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 3))],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: avatar.isNotEmpty
+                  ? Image.network(_optimizedImageUrl(avatar, width: 200, quality: 80), fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185), size: 30))
+                  : Icon(type?.icon ?? Icons.storefront_rounded, color: const Color(0xFF007185), size: 30),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// بنر فروشگاه: عکس روی فروشگاه (کاور) + لوگو + نام + نوع فروشگاه + تعداد محصول.
 /// اگر کاور نبود، پس‌زمینه‌ی گرادینت با آیکن نوع فروشگاه نشان داده می‌شود.
 class StoreHeaderBanner extends StatelessWidget {
@@ -1799,7 +2233,7 @@ class StoreHeaderBanner extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(color: Colors.white.withOpacity(.20), borderRadius: BorderRadius.circular(20)),
-                                  child: Text('$productCount محصول', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                                  child: Text('$productCount ${uiText(context, 'محصول')}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
                                 ),
                               ],
                             ),
@@ -1932,8 +2366,8 @@ class _EditListingScreenState extends State<EditListingScreen> {
   }
 
   InputDecoration _deco(String label, {String? hint}) => InputDecoration(
-        labelText: label,
-        hintText: hint,
+        labelText: uiText(context, label),
+        hintText: hint == null ? null : uiText(context, hint),
         filled: true,
         fillColor: const Color(0xFFF8FAFB),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -2183,8 +2617,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 
   InputDecoration _deco(String label, {String? hint, IconData? icon}) => InputDecoration(
-        labelText: label,
-        hintText: hint,
+        labelText: uiText(context, label),
+        hintText: hint == null ? null : uiText(context, hint),
         prefixIcon: icon == null ? null : Icon(icon),
         filled: true,
         fillColor: const Color(0xFFF8FAFB),
@@ -3798,7 +4232,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String? loadError;
   List<Map<String, dynamic>> professionalStores = [];
-  final PageController _storePageController = PageController();
+  final PageController _storePageController = PageController(viewportFraction: 0.92);
   Timer? _storeAutoTimer;
   int _storePageIndex = 0;
   String _storeTypeFilter = '';
@@ -5279,96 +5713,31 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           else
             SizedBox(
-              height: isMobile ? 245 : 255,
-              child: Stack(
-                children: [
-                  PageView.builder(
-                    controller: _storePageController,
-                    itemCount: shownStores.length,
-                    physics: const BouncingScrollPhysics(),
-                    onPageChanged: (index) {
-                      if (mounted) setState(() => _storePageIndex = index);
-                    },
-                    itemBuilder: (context, index) {
-                      final store = shownStores[index];
-                      final vendorId = store['vendor_id']?.toString() ?? '';
-                      final shopName = (store['shop_name']?.toString().trim().isNotEmpty == true)
-                          ? store['shop_name'].toString().trim()
-                          : (store['seller_name']?.toString().trim().isNotEmpty == true
-                              ? store['seller_name'].toString().trim()
-                              : 'فروشگاه بازارک');
-                      final count = int.tryParse(store['products_count']?.toString() ?? '') ?? 0;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: StoreHeaderBanner(
-                          name: shopName,
-                          coverUrl: store['store_cover_url']?.toString() ?? '',
-                          avatarUrl: store['avatar_url']?.toString() ?? '',
-                          typeId: store['store_category']?.toString() ?? '',
-                          productCount: count,
-                          verified: true,
-                          height: isMobile ? 245 : 255,
-                          bottom: SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFFFFD814),
-                                foregroundColor: const Color(0xFF111111),
-                                minimumSize: const Size.fromHeight(40),
-                              ),
-                              onPressed: vendorId.isEmpty
-                                  ? null
-                                  : () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName),
-                                        ),
-                                      ),
-                              icon: const Icon(Icons.storefront_rounded, size: 18),
-                              label: Text(isPs ? 'ننوتل به پلورنځي' : 'ورود به فروشگاه', style: const TextStyle(fontWeight: FontWeight.w900)),
+              height: isMobile ? 372 : 384,
+              child: PageView.builder(
+                controller: _storePageController,
+                itemCount: shownStores.length,
+                physics: const BouncingScrollPhysics(),
+                onPageChanged: (index) {
+                  if (mounted) setState(() => _storePageIndex = index);
+                },
+                itemBuilder: (context, index) {
+                  final store = shownStores[index];
+                  final vendorId = store['vendor_id']?.toString() ?? '';
+                  final shopName = (store['shop_name']?.toString().trim().isNotEmpty == true)
+                      ? store['shop_name'].toString().trim()
+                      : (store['seller_name']?.toString().trim().isNotEmpty == true ? store['seller_name'].toString().trim() : 'فروشگاه بازارک');
+                  return StoreShowcaseCard(
+                    store: store,
+                    name: shopName,
+                    onOpen: vendorId.isEmpty
+                        ? null
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => ProfessionalStoreCatalogScreen(sellerId: vendorId, sellerName: shopName)),
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  if (shownStores.length > 1) ...[
-                    Positioned(
-                      left: 6,
-                      top: 92,
-                      child: Material(
-                        color: Colors.white,
-                        elevation: 3,
-                        shape: const CircleBorder(),
-                        child: IconButton(
-                          tooltip: isPs ? 'مخکینی پلورنځی' : 'فروشگاه قبلی',
-                          onPressed: () {
-                            final previous = (_storePageIndex - 1 + shownStores.length) % shownStores.length;
-                            _storePageController.animateToPage(previous, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
-                          },
-                          icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF172B3A)),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 6,
-                      top: 92,
-                      child: Material(
-                        color: Colors.white,
-                        elevation: 3,
-                        shape: const CircleBorder(),
-                        child: IconButton(
-                          tooltip: isPs ? 'راتلونکی پلورنځی' : 'فروشگاه بعدی',
-                          onPressed: () {
-                            final next = (_storePageIndex + 1) % shownStores.length;
-                            _storePageController.animateToPage(next, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
-                          },
-                          icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF172B3A)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                  );
+                },
               ),
             ),
           if (shownStores.length > 1) ...[
@@ -5388,13 +5757,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
               ],
-            ),
-            const SizedBox(height: 4),
-            Center(
-              child: Text(
-                isPs ? 'د چپ او راست په کش کولو پلورنځي بدل کړئ • هر ۴ ثانیې اتومات بدلېږي' : 'با کشیدن چپ و راست فروشگاه را عوض کنید • هر ۴ ثانیه خودکار تغییر می‌کند',
-                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
-              ),
             ),
           ],
           const SizedBox(height: 12),
@@ -5452,7 +5814,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!context.mounted) return;
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen()));
                   },
-                  child: Text(isPs ? 'فعالول' : 'خرید / فعال‌سازی', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+                  child: Text(isPs ? 'وړیا فعالول' : 'فعال‌سازی رایگان', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
                 ),
               ],
             ),
@@ -7847,7 +8209,7 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
           child: OutlinedButton.icon(
             onPressed: _savingIdentity ? null : _chooseStoreType,
             icon: Icon(storeTypeById(typeId)?.icon ?? Icons.category_outlined, size: 19),
-            label: Text(typeId.isEmpty ? 'انتخاب نوع فروشگاه' : 'نوع فروشگاه: ${storeTypeById(typeId)?.fa ?? ''}  (تغییر)'),
+            label: Text(typeId.isEmpty ? 'انتخاب نوع فروشگاه' : '${uiText(context, 'نوع فروشگاه')}: ${storeTypeTitle(context, typeId)}  (${uiText(context, 'تغییر')})'),
           ),
         ),
         const SizedBox(height: 8),
@@ -11113,7 +11475,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
           );
 
     final proTypeSubs = subcategories[category] ?? const <Map<String, String>>[];
-    InputDecoration proDeco(String label) => InputDecoration(labelText: label, filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)));
+    InputDecoration proDeco(String label) => InputDecoration(labelText: uiText(context, label), filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)));
     final simpleMainCard = section('اطلاعات محصول', 'فقط همین چند مورد کافی است؛ بقیه اختیاری است.', Icons.inventory_2_rounded,
       Column(children: [
         field(title, 'نام محصول', hint: 'مثلاً بخاری ترکی ۴ شعله'),
