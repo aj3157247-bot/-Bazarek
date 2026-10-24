@@ -115,7 +115,9 @@ function requireConfig(res) {
 }
 
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
-app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
+// build: شناسه‌ی نسخه‌ی بک‌اند؛ با باز کردن /api/health مطمئن می‌شوید Deploy آخرین نسخه انجام شده.
+const BACKEND_BUILD = 'all-categories-open-2026-10-24';
+app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0', build: BACKEND_BUILD, active_ad_categories: String(process.env.ACTIVE_AD_CATEGORIES || '*') }));
 app.get('/api/version', (_, res) => res.json({ version: '2.6.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone','voice-audio','english-us'] }));
 
 // Phone numbers are stored as a private, deterministic Supabase email alias so
@@ -1593,14 +1595,14 @@ app.post('/api/products', requireUser, async (req, res) => {
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
-    // تمرکز موقت بازار عمومی: ثبت آگهی عادی فقط در دسته‌های فعال مجاز است (آگهی‌های قبلی دست‌نخورده می‌مانند).
-    // برای باز کردن دسته‌های بیشتر، در Render متغیر ACTIVE_AD_CATEGORIES را بگذارید، مثلاً:
+    // همه‌ی دسته‌ها برای آگهی عادی باز است (پیش‌فرض *).
+    // اگر خواستید فقط چند دسته فعال باشد، در Render متغیر ACTIVE_AD_CATEGORIES را بگذارید، مثلاً:
     //   ACTIVE_AD_CATEGORIES=vehicles,heating_winter
-    // (برای باز کردن همه‌ی دسته‌ها مقدار را * بگذارید.)
-    const activeAdCategories = String(process.env.ACTIVE_AD_CATEGORIES || 'vehicles').split(',').map(x => x.trim()).filter(Boolean);
+    // (اگر این متغیر را قبلاً گذاشته‌اید، آن را حذف کنید یا مقدارش را * بگذارید.)
+    const activeAdCategories = String(process.env.ACTIVE_AD_CATEGORIES || '*').split(',').map(x => x.trim()).filter(Boolean);
     const allCategoriesOpen = activeAdCategories.includes('*');
     if (!forceStoreProduct && !allCategoriesOpen && !activeAdCategories.includes(String(category))) {
-      return res.status(400).json({ error: 'فعلاً ثبت آگهی در این دسته فعال نیست. دسته‌های فعال: وسایط نقلیه (موتر، موترسایکل، بایسکل، ریکشا و ...).' });
+      return res.status(400).json({ error: 'فعلاً ثبت آگهی در این دسته فعال نیست. لطفاً دسته‌ی دیگری انتخاب کنید.' });
     }
     const cleanCode = String(product_code || '').trim().slice(0,80);
     const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
