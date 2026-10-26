@@ -3629,27 +3629,6 @@ class ApiService {
     return url;
   }
 
-  static Future<Map<String, dynamic>> getLoyaltyStatus() async {
-    var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/loyalty/status'), headers: headers).timeout(const Duration(seconds: 15));
-    if (res.statusCode == 401 && await refreshSession()) {
-      res = await http.get(Uri.parse('${ApiConfig.baseUrl}/loyalty/status'), headers: headers).timeout(const Duration(seconds: 15));
-    }
-    final data = jsonDecode(res.body);
-    if (res.statusCode != 200) throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت امتیازها.') : 'خطا در دریافت امتیازها.');
-    return Map<String, dynamic>.from(data);
-  }
-
-  static Future<void> requestMobileCredit({required String phone, required String carrier}) async {
-    var res = await http.post(Uri.parse('${ApiConfig.baseUrl}/loyalty/mobile-credit-requests'), headers: headers,
-      body: jsonEncode({'phone': phone.trim(), 'carrier': carrier})).timeout(const Duration(seconds: 20));
-    if (res.statusCode == 401 && await refreshSession()) {
-      res = await http.post(Uri.parse('${ApiConfig.baseUrl}/loyalty/mobile-credit-requests'), headers: headers,
-        body: jsonEncode({'phone': phone.trim(), 'carrier': carrier})).timeout(const Duration(seconds: 20));
-    }
-    final data = jsonDecode(res.body);
-    if (res.statusCode != 201) throw Exception(data is Map ? (data['error'] ?? 'ثبت درخواست ناموفق بود.') : 'ثبت درخواست ناموفق بود.');
-  }
-
   static Future<List<dynamic>> getBoostPackages() async {
     var res = await http.get(Uri.parse('${ApiConfig.baseUrl}/monetization/packages'), headers: headers).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401 && await refreshSession()) {
@@ -4431,37 +4410,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// نوار ابزار ساده زیر هدر (موبایل): «زبان» و «دانلود اپ» با نوشته‌ی واضح؛ هر کسی با یک نگاه می‌فهمد.
-  Widget _headerUtilityStrip(bool isPs) {
-    Widget chip({required IconData icon, required String label, required VoidCallback onTap, bool accent = false}) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: accent ? const Color(0xFF00A878) : Colors.white.withOpacity(.10),
-            borderRadius: BorderRadius.circular(20),
-            border: accent ? null : Border.all(color: Colors.white24),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: Colors.white, size: 16),
-            const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800)),
-            if (!accent) const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 18),
-          ]),
-        ),
-      );
-    }
-
-    return Row(children: [
-      chip(icon: Icons.language_rounded, label: _currentLanguageName(), onTap: _showLanguagePicker),
-      const Spacer(),
-      chip(icon: Icons.install_mobile_rounded, label: isPs ? 'اپ ډاونلوډ' : 'دانلود اپ', onTap: _openDownloadApp, accent: true),
-    ]);
-  }
-
   Future<void> _showLanguagePicker() async {
     final current = Localizations.localeOf(context).languageCode;
     final selected = await showModalBottomSheet<String>(
@@ -4840,39 +4788,40 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () => _openCategory(category),
         borderRadius: BorderRadius.circular(4),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+          padding: EdgeInsets.fromLTRB(isMobile ? 6 : 12, isMobile ? 8 : 12, isMobile ? 6 : 12, isMobile ? 7 : 10),
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: const Color(0xFFE3E6E8)),
-            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE5E9EC)),
+            borderRadius: BorderRadius.circular(isMobile ? 12 : 14),
+            boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: isMobile ? 64 : 76,
-                height: isMobile ? 64 : 76,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEAF0FF),
-                  shape: BoxShape.circle,
+                width: isMobile ? 42 : 58,
+                height: isMobile ? 42 : 58,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF5F4),
+                  borderRadius: BorderRadius.circular(isMobile ? 13 : 17),
                 ),
                 child: Icon(
                   icon,
-                  size: isMobile ? 34 : 39,
-                  color: const Color(0xFF4F659B),
+                  size: isMobile ? 25 : 32,
+                  color: const Color(0xFF14747C),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: isMobile ? 5 : 8),
               Text(
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
+                style: TextStyle(
+                  fontSize: isMobile ? 11.5 : 13,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF111111),
-                  height: 1.2,
+                  color: const Color(0xFF263238),
+                  height: 1.15,
                 ),
               ),
             ],
@@ -5148,7 +5097,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            SizedBox(width: isMobile ? 4 : 16),
                             if (!isMobile)
                               InkWell(
                                 onTap: () async {
@@ -5244,7 +5193,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             const Spacer(),
-                            // Amazon-style account entry: always visible at the top.
+                            if (isMobile) ...[
+                              IconButton(
+                                tooltip: isPs ? 'ژبه بدلول' : 'تغییر زبان',
+                                visualDensity: VisualDensity.compact,
+                                constraints: const BoxConstraints.tightFor(width: 32, height: 36),
+                                padding: EdgeInsets.zero,
+                                onPressed: _showLanguagePicker,
+                                icon: const Icon(Icons.language_rounded, color: Colors.white, size: 20),
+                              ),
+                              IconButton(
+                                tooltip: isPs ? 'اپ ډاونلوډ' : 'دانلود اپ',
+                                visualDensity: VisualDensity.compact,
+                                constraints: const BoxConstraints.tightFor(width: 32, height: 36),
+                                padding: EdgeInsets.zero,
+                                onPressed: _openDownloadApp,
+                                icon: const Icon(Icons.download_rounded, color: Color(0xFF7CF0C8), size: 20),
+                              ),
+                            ],
+                            // Account entry remains available; login and profile flows are unchanged.
                             Builder(
                               builder: (_) {
                                 Future<void> openAccount() async {
@@ -5287,9 +5254,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 height: 36,
                                 margin: const EdgeInsets.symmetric(horizontal: 3),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(colors: [Color(0xFFFFB703), Color(0xFFFB5607)]),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: const [BoxShadow(color: Color(0x33FB5607), blurRadius: 8, offset: Offset(0, 3))],
+                                  color: const Color(0xFFFFD814),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Material(
                                   color: Colors.transparent,
@@ -5306,9 +5272,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.add_circle_rounded, color: Colors.white, size: 18),
+                                          Icon(Icons.add_circle_rounded, color: Color(0xFF17232D), size: 18),
                                           SizedBox(width: 4),
-                                          Text('آگهی رایگان', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                                          Text('ثبت آگهی', style: TextStyle(color: Color(0xFF17232D), fontSize: 11, fontWeight: FontWeight.w900)),
                                         ],
                                       ),
                                     ),
@@ -5398,11 +5364,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                           ],
                         ),
-                        if (isMobile) ...[
-                          const SizedBox(height: 8),
-                          _headerUtilityStrip(isPs),
-                        ],
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 9),
                         Row(
                           children: [
                             if (!isMobile)
@@ -5466,12 +5428,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       horizontal: 13,
                                       vertical: 13,
                                     ),
-                                    prefixIcon: isMobile
-                                        ? const Icon(
-                                            Icons.search,
-                                            color: Colors.black54,
-                                          )
-                                        : null,
+                                    prefixIcon: null,
                                   ),
                                 ),
                               ),
@@ -5538,50 +5495,39 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 22),
-                        Expanded(
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: visibleCategories.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 20),
-                            itemBuilder: (_, i) {
-                              final c = visibleCategories[i];
-                              return Center(
-                                child: InkWell(
-                                  onTap: () => _openCategory(c),
-                                  child: Text(
-                                    localizedCategoryTitle(
-                                      context,
-                                      c['id'] as String,
-                                      c['title'] as String,
-                                    ),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
+                        if (!isMobile) ...[
+                          const SizedBox(width: 22),
+                          Expanded(
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: visibleCategories.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 20),
+                              itemBuilder: (_, i) {
+                                final c = visibleCategories[i];
+                                return Center(
+                                  child: InkWell(
+                                    onTap: () => _openCategory(c),
+                                    child: Text(
+                                      localizedCategoryTitle(context, c['id'] as String, c['title'] as String),
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CategoriesScreen(),
+                                );
+                              },
                             ),
                           ),
-                          child: Text(
-                            isPs ? 'ټول' : 'همه',
-                            style: const TextStyle(
-                              color: Color(0xFFFFD814),
-                              fontWeight: FontWeight.w900,
-                            ),
+                          TextButton(
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
+                            child: Text(isPs ? 'ټول' : 'همه', style: const TextStyle(color: Color(0xFFFFD814), fontWeight: FontWeight.w900)),
                           ),
-                        ),
+                        ] else ...[
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreDirectoryScreen(stores: professionalStores))),
+                            icon: const Icon(Icons.storefront_outlined, color: Color(0xFFFFD814), size: 18),
+                            label: Text(isPs ? 'پلورنځي' : 'فروشگاه‌ها', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -5593,6 +5539,105 @@ class _HomeScreenState extends State<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 1500),
                 child: Column(
                   children: [
+                    if (isMobile) ...[
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(10, 12, 10, 0),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 15),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                            colors: [Color(0xFF1C4650), Color(0xFF142A35)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isPs ? 'په بازارک کې یې پیدا کړه' : 'هرچه می‌خواهی، در بازارک پیدا کن',
+                              style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900, height: 1.25),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              isPs ? 'په اسانه وپلټئ، واخلئ او وپلورئ.' : 'آسان بگرد، قیمت‌ها را ببین و خرید و فروش کن.',
+                              style: const TextStyle(color: Color(0xFFD9E8E9), fontSize: 12, height: 1.5),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFFD814), foregroundColor: const Color(0xFF17232D), padding: const EdgeInsets.symmetric(vertical: 11)),
+                                    onPressed: () {
+                                      setState(() { selectedCategory = ''; selectedProvince = ''; searchQuery = ''; _searchController.clear(); });
+                                      _loadProducts();
+                                    },
+                                    icon: const Icon(Icons.search_rounded, size: 18),
+                                    label: Text(isPs ? 'اعلانونه وګوره' : 'دیدن آگهی‌ها', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54), padding: const EdgeInsets.symmetric(vertical: 11)),
+                                    onPressed: () async {
+                                      if (!await requireAccount(context)) return;
+                                      if (!context.mounted) return;
+                                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
+                                      if (mounted) _loadProducts();
+                                    },
+                                    icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                                    label: Text(isPs ? 'اعلان درج کړه' : 'فروش رایگان', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(10, 12, 10, 0),
+                        padding: const EdgeInsets.fromLTRB(10, 13, 10, 12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE5E9EC))),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.category_outlined, color: Color(0xFF14747C), size: 20),
+                                const SizedBox(width: 7),
+                                Expanded(child: Text(isPs ? 'د خپلې خوښې برخه وټاکئ' : 'دستهٔ موردنظرت را انتخاب کن', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF17232D)))),
+                                TextButton(
+                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
+                                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 7), minimumSize: const Size(0, 32)),
+                                  child: Text(isPs ? 'ټولې' : 'همه', style: const TextStyle(color: Color(0xFF14747C), fontWeight: FontWeight.w900, fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            GridView.count(
+                              crossAxisCount: 3,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 1.02,
+                              children: visibleCategories.take(6).map(categoryTile).toList(),
+                            ),
+                            const SizedBox(height: 9),
+                            Row(
+                              children: [
+                                const Icon(Icons.check_circle_outline_rounded, size: 15, color: Color(0xFF14747C)),
+                                const SizedBox(width: 5),
+                                Expanded(child: Text(isPs ? 'لټون اسانه، پېر او پلور ساده' : 'جستجوی آسان، خرید و فروش ساده', style: const TextStyle(fontSize: 10.5, color: Color(0xFF59666D), fontWeight: FontWeight.w600))),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (!isMobile) ...[
                     // Hero/banner section.
                     Container(
@@ -9953,16 +9998,6 @@ String _dateTimeForUser(dynamic value) {
             const SizedBox(height: 7),
             Text(ps ? 'هر څومره Boost لوړ وي، اعلان مو په لوړه درجه کې ښکاري او ځانګړی نښان اخلي.' : 'هرچه سطح Boost بالاتر باشد، آگهی در جایگاه بالاتری نمایش داده می‌شود و برچسپ مخصوص خودش را می‌گیرد.'),
           ])),
-          Card(
-            elevation: 1,
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.card_giftcard)),
-              title: const Text('باشگاه امتیاز بازارک', style: TextStyle(fontWeight: FontWeight.w900)),
-              subtitle: const Text('ویژه‌سازی آگهی با امتیاز و دریافت کریدیت کارت موبایل'),
-              trailing: const Icon(Icons.chevron_left),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoyaltyClubScreen())),
-            ),
-          ),
           const SizedBox(height: 22),
           Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant)), child: Text(ps ? '💳 د تادیې طریقه: د Boost د انتخاب پر مهال به د بازارک د کارت/حساب معلومات درښکاره شي. مبلغ ولېږئ، د رسید شمېره ولیکئ، او د مدیریت تایید ته انتظار وباسئ.' : '💳 روش پرداخت: هنگام انتخاب Boost، شماره کارت/حساب بازارک نمایش داده می‌شود. مبلغ را انتقال دهید، شماره رسید را وارد کنید و منتظر تأیید مدیریت بمانید.')),
           const SizedBox(height: 18),
@@ -10172,101 +10207,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           );
         },
       ),
-    );
-  }
-}
-
-class LoyaltyClubScreen extends StatefulWidget {
-  const LoyaltyClubScreen({super.key});
-  @override State<LoyaltyClubScreen> createState() => _LoyaltyClubScreenState();
-}
-
-class _LoyaltyClubScreenState extends State<LoyaltyClubScreen> {
-  static const int mobileCreditThreshold = 1000;
-  static const Map<String, String> carriers = {
-    'AWCC': 'افغان وایرلس (AWCC)',
-    'Roshan': 'روشن (Roshan)',
-    'Etisalat': 'اتصالات افغانستان (Etisalat)',
-    'Salaam': 'سلام (افغان تیلیکام)',
-    'ATOMA': 'اتما (ATOMA)',
-  };
-  final phoneController = TextEditingController();
-  String carrier = 'AWCC';
-  int points = 0;
-  bool loading = true;
-  bool sending = false;
-  String? loadError;
-
-  @override void initState() { super.initState(); _load(); }
-  @override void dispose() { phoneController.dispose(); super.dispose(); }
-
-  Future<void> _load() async {
-    try {
-      final d = await ApiService.getLoyaltyStatus();
-      if (mounted) setState(() { points = int.tryParse('${d['points'] ?? 0}') ?? 0; loading = false; loadError = null; });
-    } catch (e) {
-      if (mounted) setState(() { loading = false; loadError = friendlyNetworkError(context, e); });
-    }
-  }
-
-  Future<void> _requestCredit() async {
-    final phone = phoneController.text.trim();
-    final digits = phone.replaceAll(RegExp(r'[^0-9۰-۹٠-٩+]'), '');
-    if (digits.length < 9) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شماره تلفن را درست وارد کنید.')));
-      return;
-    }
-    if (points < mobileCreditThreshold) return;
-    setState(() => sending = true);
-    try {
-      await ApiService.requestMobileCredit(phone: phone, carrier: carrier);
-      if (!mounted) return;
-      await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
-        title: const Text('این بخش هنوز در حال توسعه است'),
-        content: const Text('درخواست شما ثبت شد، اما شارژ کریدیت کارت موبایل هنوز فعال نیست. می‌توانید امتیاز خود را فعلاً در بخش ویژه‌سازی آگهی استفاده کنید.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('متوجه شدم'))],
-      ));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
-    } finally { if (mounted) setState(() => sending = false); }
-  }
-
-  @override Widget build(BuildContext context) {
-    final unlocked = points >= mobileCreditThreshold;
-    return Scaffold(
-      appBar: AppBar(title: const Text('باشگاه امتیاز بازارک')),
-      body: loading ? const Center(child: CircularProgressIndicator()) : ListView(padding: const EdgeInsets.all(16), children: [
-        Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primaryContainer, Theme.of(context).colorScheme.secondaryContainer])), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('🎁 امتیازهایت را به مزیت تبدیل کن', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          const Text('با فعالیت‌های معتبر در بازارک امتیاز بگیر و از آن برای ویژه‌سازی آگهی‌ها استفاده کن.'),
-          const SizedBox(height: 14),
-          Row(children: [const Icon(Icons.stars_rounded, size: 30), const SizedBox(width: 8), Text('$points امتیاز', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900))]),
-        ])),
-        const SizedBox(height: 16),
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [Icon(Icons.campaign_outlined), SizedBox(width: 8), Expanded(child: Text('ویژه‌سازی آگهی با امتیاز', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)))]),
-          const SizedBox(height: 8),
-          const Text('امتیازهایت را برای برجسته‌کردن آگهی‌ها مصرف کن. بسته‌ها و هزینهٔ امتیاز در زمان فعال‌شدن سیستم نمایش داده می‌شود.'),
-          const SizedBox(height: 12),
-          FilledButton.icon(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.auto_awesome), label: const Text('رفتن به بخش ویژه‌سازی آگهی')),
-        ]))),
-        const SizedBox(height: 12),
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [const Icon(Icons.phone_android), const SizedBox(width: 8), const Expanded(child: Text('دریافت کریدیت کارت موبایل', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900))), if (!unlocked) const Chip(label: Text('قفل است'))]),
-          const SizedBox(height: 8),
-          Text(unlocked ? 'شرط امتیاز تکمیل شده است؛ این خدمت هنوز در حال توسعه است.' : 'برای فعال‌شدن این بخش حداقل $mobileCreditThreshold امتیاز لازم داری. فعلاً $points امتیاز داری.'),
-          const SizedBox(height: 12),
-          TextField(controller: phoneController, keyboardType: TextInputType.phone, enabled: unlocked, decoration: const InputDecoration(labelText: 'شماره تلفن موبایل', hintText: 'مثلاً 07XXXXXXXX', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone))),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(value: carrier, decoration: const InputDecoration(labelText: 'شرکت مخابراتی', border: OutlineInputBorder(), prefixIcon: Icon(Icons.cell_tower)), items: carriers.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(), onChanged: unlocked ? (v) { if (v != null) setState(() => carrier = v); } : null),
-          const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: unlocked && !sending ? _requestCredit : null, icon: sending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.card_giftcard), label: Text(sending ? 'در حال ثبت...' : 'دریافت کریدیت کارت'))),
-          const SizedBox(height: 8),
-          const Text('یادآوری: این بخش هنوز فعال نشده و فعلاً هیچ شارژ واقعی به شماره تلفن ارسال نمی‌شود.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-        ]))),
-        if (loadError != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(loadError!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
-      ]),
     );
   }
 }
