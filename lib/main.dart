@@ -504,6 +504,15 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'تخفیف': 'Discount',
+  'روی صفحه گوشی': 'On your home screen',
+  'اعلان پیام': 'Message alerts',
+  'سریع‌تر': 'Faster',
+  'دانلود اپ': 'Get the app',
+  'نصب اپلیکیشن': 'Install the app',
+  'زبان': 'Language',
+  'ورود': 'Log in',
+  'حساب من': 'My Account',
   'فروشگاه‌های افغانستان': 'Afghanistan Stores',
   'فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان': 'Trusted, verified stores across Afghanistan',
   'فروشگاه خودت را رایگان بساز': 'Build your own store for free',
@@ -655,6 +664,15 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'تخفیف': 'تخفیف',
+  'روی صفحه گوشی': 'ستاسو د ګوشۍ په پاڼه',
+  'اعلان پیام': 'د پیغام خبرتیاوې',
+  'سریع‌تر': 'چټک',
+  'دانلود اپ': 'اپ ډاونلوډ',
+  'نصب اپلیکیشن': 'اپ نصبول',
+  'زبان': 'ژبه',
+  'ورود': 'ننوتل',
+  'حساب من': 'زما حساب',
   'فروشگاه‌های افغانستان': 'د افغانستان پلورنځي',
   'فروشگاه‌های معتبر و تأییدشده‌ی سراسر افغانستان': 'په ټول افغانستان کې باوري او تایید شوي پلورنځي',
   'فروشگاه خودت را رایگان بساز': 'خپل پلورنځی وړیا جوړ کړئ',
@@ -2111,28 +2129,35 @@ class StoreCoverImage extends StatelessWidget {
   final double? height;
   final double aspect;
   final IconData fallbackIcon;
-  const StoreCoverImage({super.key, required this.url, this.height, this.aspect = 16 / 9, this.fallbackIcon = Icons.storefront_rounded});
+  /// false: پس‌زمینه‌ی ساده‌ی خاکستری به‌جای محو‌شده (برای لیست محصولات سبک‌تر است).
+  final bool blur;
+  const StoreCoverImage({super.key, required this.url, this.height, this.aspect = 16 / 9, this.fallbackIcon = Icons.storefront_rounded, this.blur = true});
 
   @override
   Widget build(BuildContext context) {
     final has = url.trim().isNotEmpty;
     final content = has
         ? Stack(fit: StackFit.expand, children: [
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-              child: Image.network(_optimizedImageUrl(url, width: 400, quality: 50), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EEF1))),
-            ),
-            const ColoredBox(color: Color(0x1F000000)),
+            if (blur) ...[
+              ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                child: Image.network(_optimizedImageUrl(url, width: 400, quality: 50), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFE9EEF1))),
+              ),
+              const ColoredBox(color: Color(0x1F000000)),
+            ] else
+              const ColoredBox(color: Color(0xFFF4F6F8)),
             Image.network(
               _optimizedImageUrl(url, width: 1000, quality: 82, resize: 'contain'),
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, color: Colors.white70)),
             ),
           ])
-        : DecoratedBox(
-            decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)])),
-            child: Center(child: Icon(fallbackIcon, size: 64, color: Colors.white.withOpacity(.18))),
-          );
+        : (blur
+            ? DecoratedBox(
+                decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF0F6B78), Color(0xFF172B3A)])),
+                child: Center(child: Icon(fallbackIcon, size: 64, color: Colors.white.withOpacity(.18))),
+              )
+            : ColoredBox(color: const Color(0xFFF4F6F8), child: Center(child: Icon(fallbackIcon, size: 42, color: Colors.black26))));
     return height != null ? SizedBox(height: height, width: double.infinity, child: content) : AspectRatio(aspectRatio: aspect, child: content);
   }
 }
@@ -4374,6 +4399,61 @@ class _HomeScreenState extends State<HomeScreen> {
     _showLanguagePicker();
   }
 
+  String _currentLanguageName() {
+    switch (Localizations.localeOf(context).languageCode) {
+      case 'ps':
+        return 'پښتو';
+      case 'en':
+        return 'English';
+      default:
+        return 'فارسی';
+    }
+  }
+
+  /// نوار ابزار ساده زیر هدر (موبایل): «زبان» و «دانلود اپ» با نوشته‌ی واضح؛ هر کسی با یک نگاه می‌فهمد.
+  Widget _headerUtilityStrip(bool isPs) {
+    Widget pill({required IconData icon, required String title, String? value, required VoidCallback onTap, required bool accent}) {
+      return Expanded(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              gradient: accent ? const LinearGradient(colors: [Color(0xFF00B386), Color(0xFF007E68)]) : null,
+              color: accent ? null : Colors.white.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: accent ? Colors.transparent : Colors.white24),
+            ),
+            child: Row(children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(color: Colors.white.withOpacity(.2), shape: BoxShape.circle),
+                child: Icon(icon, color: Colors.white, size: 17),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(.78), fontSize: 9.5, fontWeight: FontWeight.w700, height: 1.1)),
+                  if (value != null) Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900, height: 1.2)),
+                ]),
+              ),
+              Icon(accent ? Icons.arrow_circle_down_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 20),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    return Row(children: [
+      pill(icon: Icons.language_rounded, title: isPs ? 'ژبه' : 'زبان', value: _currentLanguageName(), onTap: _showLanguagePicker, accent: false),
+      const SizedBox(width: 8),
+      pill(icon: Icons.install_mobile_rounded, title: isPs ? 'اپ ډاونلوډ' : 'نصب اپلیکیشن', value: isPs ? 'ډاونلوډ' : 'دانلود اپ', onTap: _openDownloadApp, accent: true),
+    ]);
+  }
+
   Future<void> _showLanguagePicker() async {
     final current = Localizations.localeOf(context).languageCode;
     final selected = await showModalBottomSheet<String>(
@@ -4396,24 +4476,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Text('🇦🇫', style: TextStyle(fontSize: 24)),
-              title: const Text('فارسی / دری'),
-              trailing: current == 'fa' ? const Icon(Icons.check_circle, color: Color(0xFF007185)) : null,
-              onTap: () => Navigator.pop(sheetContext, 'fa'),
-            ),
-            ListTile(
-              leading: const Text('🇦🇫', style: TextStyle(fontSize: 24)),
-              title: const Text('پښتو'),
-              trailing: current == 'ps' ? const Icon(Icons.check_circle, color: Color(0xFF007185)) : null,
-              onTap: () => Navigator.pop(sheetContext, 'ps'),
-            ),
-            ListTile(
-              leading: const Text('🇺🇸', style: TextStyle(fontSize: 24)),
-              title: const Text('English (US)'),
-              trailing: current == 'en' ? const Icon(Icons.check_circle, color: Color(0xFF007185)) : null,
-              onTap: () => Navigator.pop(sheetContext, 'en'),
-            ),
+            for (final lang in const [
+              ['fa', '🇦🇫', 'فارسی / دری', 'Dari'],
+              ['ps', '🇦🇫', 'پښتو', 'Pashto'],
+              ['en', '🇺🇸', 'English', 'انگلیسی'],
+            ])
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => Navigator.pop(sheetContext, lang[0]),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: current == lang[0] ? const Color(0xFFE7F6F5) : const Color(0xFFF6F8F9),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: current == lang[0] ? const Color(0xFF007185) : const Color(0xFFE1E6EA), width: current == lang[0] ? 2 : 1),
+                    ),
+                    child: Row(children: [
+                      Text(lang[1], style: const TextStyle(fontSize: 28)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(lang[2], style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                          Text(lang[3], style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                      if (current == lang[0]) const Icon(Icons.check_circle_rounded, color: Color(0xFF007185), size: 26),
+                    ]),
+                  ),
+                ),
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -4473,7 +4566,16 @@ class _HomeScreenState extends State<HomeScreen> {
               const Text('دریافت اپلیکیشن بازارک', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
               const SizedBox(height: 5),
               const Text('نسخه مناسب دستگاه خود را انتخاب کنید.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 6, children: [
+                for (final b in const [['⚡', 'سریع‌تر'], ['🔔', 'اعلان پیام'], ['🏠', 'روی صفحه گوشی']])
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE1E6EA))),
+                    child: Text('${b[0]} ${uiText(context, b[1])}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                  ),
+              ]),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
@@ -5148,10 +5250,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                   if (mounted) setState(() {});
                                 }
                                 return isMobile
-                                    ? IconButton(
-                                        tooltip: AuthService.isLoggedIn ? 'حساب من' : 'ثبت‌نام / ورود',
-                                        onPressed: openAccount,
-                                        icon: const Icon(Icons.person_outline, color: Colors.white),
+                                    ? InkWell(
+                                        onTap: openAccount,
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          height: 36,
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          decoration: BoxDecoration(color: Colors.white.withOpacity(.14), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white24)),
+                                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                            const Icon(Icons.person_rounded, color: Colors.white, size: 19),
+                                            const SizedBox(width: 5),
+                                            Text(AuthService.isLoggedIn ? (isPs ? 'زما حساب' : 'حساب من') : (isPs ? 'ننوتل' : 'ورود'), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+                                          ]),
+                                        ),
                                       )
                                     : TextButton.icon(
                                         onPressed: openAccount,
@@ -5258,22 +5369,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ],
                             // One account icon only. The old duplicate person icon is removed.
-                            IconButton(
-                              tooltip: isPs ? 'ژبه بدلول' : 'انتخاب زبان',
-                              onPressed: _showLanguagePicker,
-                              icon: const Icon(
-                                Icons.language_rounded,
-                                color: Colors.white,
+                            if (!isMobile) ...[
+                              TextButton.icon(
+                                onPressed: _showLanguagePicker,
+                                icon: const Icon(Icons.language_rounded, color: Colors.white, size: 20),
+                                label: Text(_currentLanguageName(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
                               ),
-                            ),
-                            IconButton(
-                              tooltip: tr(context, 'download'),
-                              onPressed: _openDownloadApp,
-                              icon: const Icon(
-                                Icons.download_for_offline_outlined,
-                                color: Colors.white,
+                              TextButton.icon(
+                                onPressed: _openDownloadApp,
+                                icon: const Icon(Icons.download_for_offline_outlined, color: Color(0xFF7CF0C8), size: 20),
+                                label: const Text('دانلود اپ', style: TextStyle(color: Color(0xFF7CF0C8), fontSize: 12, fontWeight: FontWeight.w900)),
                               ),
-                            ),
+                            ],
                             if (!isMobile)
                               const Padding(
                                 padding: EdgeInsets.only(left: 3),
@@ -5285,6 +5392,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                           ],
                         ),
+                        if (isMobile) ...[
+                          const SizedBox(height: 8),
+                          _headerUtilityStrip(isPs),
+                        ],
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -7571,134 +7682,64 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
     final rating = double.tryParse('${item['average_rating'] ?? item['rating'] ?? 0}') ?? 0;
     final reviewsCount = int.tryParse('${item['reviews_count'] ?? item['review_count'] ?? 0}') ?? 0;
 
+    final title = item['title']?.toString().trim() ?? '';
+    final hasDiscount = discount > 0 && discount < 100;
     return Material(
       color: Colors.white,
+      elevation: 1.5,
+      shadowColor: const Color(0x33000000),
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openListing(context, item),
-        child: AspectRatio(
-          aspectRatio: .82,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (image.isNotEmpty)
-                Image.network(
-                  _optimizedImageUrl(image),
-                  fit: BoxFit.cover,
-                  loadingBuilder: _bazarekImageLoading,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Color(0xFFF3F5F6),
-                    child: Icon(Icons.image_not_supported_outlined, size: 42, color: Colors.black38),
-                  ),
-                )
-              else
-                const ColoredBox(
-                  color: Color(0xFFF3F5F6),
-                  child: Icon(Icons.image_outlined, size: 42, color: Colors.black38),
-                ),
-
-              // سایه‌ی پایین برای خوانایی قیمت روی خود عکس.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 86,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withOpacity(.82)],
-                    ),
-                  ),
-                ),
-              ),
-
-              // واترمارک تخفیف روی خود عکس.
-              if (discount > 0 && discount < 100)
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // عکس کامل و بدون برش (افقی یا عمودی)؛ فضای خالی خاکستری روشن است.
+          AspectRatio(
+            aspectRatio: 1,
+            child: Stack(fit: StackFit.expand, children: [
+              StoreCoverImage(url: image, aspect: 1, blur: false, fallbackIcon: Icons.image_outlined),
+              if (hasDiscount)
                 Positioned(
-                  top: 10,
-                  left: 10,
+                  top: 8,
+                  left: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE53935),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.20), blurRadius: 8, offset: const Offset(0, 3))],
-                    ),
-                    child: Text(
-                      '${NumberFormatHelper.format(discount)}٪ تخفیف',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(color: const Color(0xFFE53935), borderRadius: BorderRadius.circular(10)),
+                    child: Text('${NumberFormatHelper.format(discount)}٪ تخفیف', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
                   ),
                 ),
-
               Positioned(
-                top: 10,
-                right: 10,
+                top: 8,
+                right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.92),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(code, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900)),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0x14000000))),
+                  child: Text(code, style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Color(0xFF374151))),
                 ),
               ),
-
-              if (rating > 0)
-                Positioned(
-                  right: 10,
-                  bottom: 54,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.black.withOpacity(.58), borderRadius: BorderRadius.circular(10)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.star_rounded, color: Color(0xFFFFD54F), size: 14),
-                      const SizedBox(width: 2),
-                      Text(rating.toStringAsFixed(1), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
-                      if (reviewsCount > 0) Text(' ($reviewsCount)', style: const TextStyle(color: Colors.white70, fontSize: 8)),
-                    ]),
-                  ),
-                ),
-
-              Positioned(
-                left: 11,
-                right: 11,
-                bottom: 9,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (discount > 0 && discount < 100 && originalPrice > 0)
-                            Text(
-                              '${NumberFormatHelper.format(originalPrice)} $currency',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white70, fontSize: 10, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w700),
-                            ),
-                          Text(
-                            price,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.touch_app_rounded, color: Colors.white70, size: 18),
-                  ],
-                ),
-              ),
-            ],
+            ]),
           ),
-        ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (title.isNotEmpty)
+                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w800, color: Color(0xFF1F2937))),
+                const Spacer(),
+                if (rating > 0)
+                  Row(children: [
+                    const Icon(Icons.star_rounded, color: Color(0xFFF5A623), size: 14),
+                    const SizedBox(width: 2),
+                    Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                    if (reviewsCount > 0) Text(' ($reviewsCount)', style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                  ]),
+                if (hasDiscount && originalPrice > 0)
+                  Text('${NumberFormatHelper.format(originalPrice)} $currency', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.black45, fontSize: 10.5, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w700)),
+                Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: hasDiscount ? const Color(0xFFD32F2F) : const Color(0xFF0F6B78), fontSize: 15.5, fontWeight: FontWeight.w900)),
+              ]),
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -7766,7 +7807,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _visibleListings.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: width < 600 ? .70 : .78),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: width < 600 ? .66 : .74),
                           itemBuilder: (_, i) => _productCard(context, _visibleListings[i]),
                         ),
                     ],
@@ -8624,8 +8665,8 @@ class _MyStoreScreenState extends State<MyStoreScreen> {
                       children: [
                         imageUrl.isNotEmpty
                             ? Image.network(
-                                _optimizedImageUrl(imageUrl),
-                                fit: BoxFit.cover,
+                                _optimizedImageUrl(imageUrl, resize: 'contain'),
+                                fit: BoxFit.contain,
                                 errorBuilder: (_, __, ___) => const ColoredBox(
                                   color: Color(0xFFF0F2F3),
                                   child: Icon(Icons.image_not_supported_outlined, size: 34, color: Colors.black38),
