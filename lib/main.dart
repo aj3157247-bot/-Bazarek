@@ -4412,45 +4412,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// نوار ابزار ساده زیر هدر (موبایل): «زبان» و «دانلود اپ» با نوشته‌ی واضح؛ هر کسی با یک نگاه می‌فهمد.
   Widget _headerUtilityStrip(bool isPs) {
-    Widget pill({required IconData icon, required String title, String? value, required VoidCallback onTap, required bool accent}) {
-      return Expanded(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            height: 42,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              gradient: accent ? const LinearGradient(colors: [Color(0xFF00B386), Color(0xFF007E68)]) : null,
-              color: accent ? null : Colors.white.withOpacity(.12),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: accent ? Colors.transparent : Colors.white24),
-            ),
-            child: Row(children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(.2), shape: BoxShape.circle),
-                child: Icon(icon, color: Colors.white, size: 17),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(.78), fontSize: 9.5, fontWeight: FontWeight.w700, height: 1.1)),
-                  if (value != null) Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900, height: 1.2)),
-                ]),
-              ),
-              Icon(accent ? Icons.arrow_circle_down_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 20),
-            ]),
+    Widget chip({required IconData icon, required String label, required VoidCallback onTap, bool accent = false}) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: accent ? const Color(0xFF00A878) : Colors.white.withOpacity(.10),
+            borderRadius: BorderRadius.circular(20),
+            border: accent ? null : Border.all(color: Colors.white24),
           ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800)),
+            if (!accent) const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 18),
+          ]),
         ),
       );
     }
 
     return Row(children: [
-      pill(icon: Icons.language_rounded, title: isPs ? 'ژبه' : 'زبان', value: _currentLanguageName(), onTap: _showLanguagePicker, accent: false),
-      const SizedBox(width: 8),
-      pill(icon: Icons.install_mobile_rounded, title: isPs ? 'اپ ډاونلوډ' : 'نصب اپلیکیشن', value: isPs ? 'ډاونلوډ' : 'دانلود اپ', onTap: _openDownloadApp, accent: true),
+      chip(icon: Icons.language_rounded, label: _currentLanguageName(), onTap: _showLanguagePicker),
+      const Spacer(),
+      chip(icon: Icons.install_mobile_rounded, label: isPs ? 'اپ ډاونلوډ' : 'دانلود اپ', onTap: _openDownloadApp, accent: true),
     ]);
   }
 
@@ -4729,8 +4716,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   : (Localizations.localeOf(context).languageCode == 'ps' ? 'د اعلانونو پایلې' : 'نتایج جستجو'),
                               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                             )),
-                            if (products.isNotEmpty)
-                              Text('${normalProducts.length} ${Localizations.localeOf(context).languageCode == 'ps' ? 'اعلان' : 'آگهی'}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
                           ],
                         ),
                         const SizedBox(height: 7),
@@ -5741,7 +5726,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          if (professionalStores.any((s) => (s['store_category']?.toString() ?? '').isNotEmpty)) ...[
+          if (professionalStores.map((s) => s['store_category']?.toString() ?? '').where((t) => t.isNotEmpty).toSet().length >= 2) ...[
             SizedBox(
               height: 38,
               child: ListView(
@@ -5928,15 +5913,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-                              if (products.isNotEmpty)
-                                Text(
-                                  '${normalProducts.length} ${isPs ? 'اعلان' : 'آگهی'}',
-                                  style: const TextStyle(
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                  ),
-                                ),
                             ],
                           ),
                           const SizedBox(height: 9),
