@@ -1468,6 +1468,35 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
   }
 });
 
+// Loyalty points and mobile-credit placeholder. Mobile top-ups are NOT sent to telecoms yet.
+const MOBILE_CREDIT_MIN_POINTS = Math.max(1000, Number(process.env.MOBILE_CREDIT_MIN_POINTS || 1000));
+app.get('/api/loyalty/status', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const {data,error}=await db.from('loyalty_wallets').select('points').eq('user_id',req.user.id).maybeSingle();
+    if(error)throw error;
+    res.json({points:Math.max(0,Number(data?.points||0)),mobile_credit_min_points:MOBILE_CREDIT_MIN_POINTS});
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت امتیازهای باشگاه.'}); }
+});
+app.post('/api/loyalty/mobile-credit-requests', requireUser, async (req,res)=>{
+  try {
+    const phone=String(req.body?.phone||'').trim();
+    const carrier=String(req.body?.carrier||'').trim();
+    const allowed=['AWCC','Roshan','Etisalat','Salaam','ATOMA'];
+    const digits=phone.replace(/[^0-9]/g,'');
+    if(digits.length<9||digits.length>15)return res.status(400).json({error:'شماره تلفن معتبر نیست.'});
+    if(!allowed.includes(carrier))return res.status(400).json({error:'شرکت مخابراتی را از فهرست انتخاب کنید.'});
+    const db=getSupabaseAdmin();
+    const {data:wallet,error:we}=await db.from('loyalty_wallets').select('points').eq('user_id',req.user.id).maybeSingle();
+    if(we)throw we;
+    const points=Math.max(0,Number(wallet?.points||0));
+    if(points<MOBILE_CREDIT_MIN_POINTS)return res.status(403).json({error:`برای بازشدن این بخش حداقل ${MOBILE_CREDIT_MIN_POINTS} امتیاز لازم است.`});
+    const {data,error}=await db.from('mobile_credit_requests').insert([{user_id:req.user.id,phone:phone.slice(0,32),carrier,points_at_request:points,status:'development_placeholder'}]).select('id,status,created_at').single();
+    if(error)throw error;
+    res.status(201).json({request:data,message:'این بخش هنوز در حال توسعه است؛ می‌توانید امتیاز خود را در ویژه‌سازی آگهی استفاده کنید.'});
+  } catch(e) { console.error(e); res.status(500).json({error:'ثبت درخواست انجام نشد؛ لطفاً بعداً دوباره تلاش کنید.'}); }
+});
+
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
 app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
 app.get('/api/promotions/orders', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_orders').select('*,promotion_packages(title),products(title)').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت سفارش‌ها.'});}});
