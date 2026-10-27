@@ -243,9 +243,32 @@ void _restoreSeoForPath(String path) {
   );
 }
 
+/// لینک دعوت (?ref=CODE) را نگه می‌دارد تا بعد از ثبت‌نام اعمال شود.
+Future<void> captureReferralFromUrl() async {
+  try {
+    final ref = Uri.base.queryParameters['ref'];
+    if (ref != null && ref.trim().isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pending_ref', ref.trim().toUpperCase());
+    }
+  } catch (_) {}
+}
+
+Future<void> tryApplyPendingReferral() async {
+  try {
+    if (!AuthService.isLoggedIn) return;
+    final prefs = await SharedPreferences.getInstance();
+    final ref = prefs.getString('pending_ref');
+    if (ref == null || ref.isEmpty) return;
+    try { await ApiService.applyReferral(ref); } catch (_) {}
+    await prefs.remove('pending_ref');
+  } catch (_) {}
+}
+
 void main() {
   Analytics.endpoint = '${ApiConfig.baseUrl}/analytics/event';
   WidgetsFlutterBinding.ensureInitialized();
+  captureReferralFromUrl();
   runApp(const BazarekEntryApp());
 }
 
@@ -504,6 +527,34 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'شماره‌ی موبایل برای شارژ': 'Phone number to top up',
+  'شبکه‌ی مخابراتی': 'Mobile network',
+  'ثبت درخواست کریدت': 'Submit credit request',
+  'به‌زودی': 'Coming soon',
+  'تاریخچه‌ی امتیاز': 'Points history',
+  'انتخاب آگهی': 'Choose ad',
+  'آگهی ویژه بالاتر دیده می‌شود و سریع‌تر مشتری پیدا می‌کند.': 'Boosted ads are seen first and find customers faster.',
+  '🚀 ویژه کردن آگهی با امتیاز': '🚀 Boost your ad with points',
+  'ثبت کد': 'Apply code',
+  'کد دعوت دوستم را دارم': 'I have a friend\'s invite code',
+  'فروشگاه': 'Store',
+  'پروفایل': 'Profile',
+  'تکمیل پروفایل': 'Complete profile',
+  'ثبت آگهی': 'Post an ad',
+  'چطور امتیاز بگیرم؟': 'How do I earn points?',
+  'در انتظار شارژ': 'Waiting for top-up',
+  'رد شد و امتیاز برگشت': 'Rejected, points refunded',
+  'شارژ شد': 'Topped up',
+  'درخواست‌های شما': 'Your requests',
+  'آماده‌ی دریافت ✓': 'Ready to claim ✓',
+  'دریافت کریدت': 'Get credit',
+  'با امتیازهای خودت، کریدت همه‌ی شبکه‌های افغانستان را بگیر.': 'Use your points to get credit on every Afghan network.',
+  'کریدت موبایل رایگان': 'Free mobile credit',
+  'امتیاز شما': 'Your points',
+  'شروع کن': 'Start',
+  'با دعوت دوستان و ثبت آگهی امتیاز جمع کن؛ آگهی‌ات را ویژه کن یا کریدت موبایل بگیر.': 'Collect points by inviting friends and posting ads; boost your ad or get mobile credit.',
+  'امتیاز بگیر، کریدت موبایل رایگان ببر!': 'Earn points, win free mobile credit!',
+  'باشگاه امتیاز': 'Rewards Club',
   'تخفیف': 'Discount',
   'روی صفحه گوشی': 'On your home screen',
   'اعلان پیام': 'Message alerts',
@@ -664,6 +715,34 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'شماره‌ی موبایل برای شارژ': 'د چارج لپاره د موبایل شمېره',
+  'شبکه‌ی مخابراتی': 'مخابراتي شبکه',
+  'ثبت درخواست کریدت': 'د کریډیټ غوښتنه ثبت کړئ',
+  'به‌زودی': 'ډېر ژر',
+  'تاریخچه‌ی امتیاز': 'د امتیاز تاریخچه',
+  'انتخاب آگهی': 'اعلان وټاکئ',
+  'آگهی ویژه بالاتر دیده می‌شود و سریع‌تر مشتری پیدا می‌کند.': 'ځانګړي اعلانونه لومړی لیدل کېږي او ژر پېرودونکي مومي.',
+  '🚀 ویژه کردن آگهی با امتیاز': '🚀 په امتیازو اعلان ځانګړی کړئ',
+  'ثبت کد': 'کوډ ثبتول',
+  'کد دعوت دوستم را دارم': 'زما د ملګري د بلنې کوډ شته',
+  'فروشگاه': 'پلورنځی',
+  'پروفایل': 'پروفایل',
+  'تکمیل پروفایل': 'پروفایل بشپړول',
+  'ثبت آگهی': 'اعلان ثبتول',
+  'چطور امتیاز بگیرم؟': 'څنګه امتیاز ترلاسه کړم؟',
+  'در انتظار شارژ': 'د چارج ته انتظار',
+  'رد شد و امتیاز برگشت': 'رد شو او امتیاز بېرته شو',
+  'شارژ شد': 'چارج شو',
+  'درخواست‌های شما': 'ستاسو غوښتنې',
+  'آماده‌ی دریافت ✓': 'د ترلاسه کولو لپاره چمتو ✓',
+  'دریافت کریدت': 'کریډیټ ترلاسه کړئ',
+  'با امتیازهای خودت، کریدت همه‌ی شبکه‌های افغانستان را بگیر.': 'د خپلو امتیازونو په مرسته د افغانستان د ټولو شبکو کریډیټ واخلئ.',
+  'کریدت موبایل رایگان': 'وړیا موبایل کریډیټ',
+  'امتیاز شما': 'ستاسو امتیاز',
+  'شروع کن': 'پیل کړئ',
+  'با دعوت دوستان و ثبت آگهی امتیاز جمع کن؛ آگهی‌ات را ویژه کن یا کریدت موبایل بگیر.': 'د ملګرو په بلنې او د اعلان په ثبتولو امتیاز ټول کړئ؛ خپل اعلان ځانګړی کړئ یا موبایل کریډیټ واخلئ.',
+  'امتیاز بگیر، کریدت موبایل رایگان ببر!': 'امتیاز واخله، وړیا موبایل کریډیټ ګټه!',
+  'باشگاه امتیاز': 'د امتیاز کلب',
   'تخفیف': 'تخفیف',
   'روی صفحه گوشی': 'ستاسو د ګوشۍ په پاڼه',
   'اعلان پیام': 'د پیغام خبرتیاوې',
@@ -2689,6 +2768,498 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 }
 
+
+/// بنر باشگاه امتیاز در صفحه اصلی؛ پررنگ و قابل‌دیدن ولی جمع‌وجور.
+class RewardsBanner extends StatelessWidget {
+  final double horizontal;
+  final bool isMobile;
+  const RewardsBanner({super.key, this.horizontal = 0, this.isMobile = true});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontal),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(isMobile ? 0 : 18),
+        onTap: () async {
+          if (!await requireAccount(context)) return;
+          if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardsScreen()));
+        },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(isMobile ? 0 : 18),
+            gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [Color(0xFF3D1A9E), Color(0xFF7B3FE4), Color(0xFFFF8A1F)]),
+            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 4))],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(color: Colors.white.withOpacity(.2), shape: BoxShape.circle),
+                child: const Center(child: Text('🎁', style: TextStyle(fontSize: 24))),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('امتیاز بگیر، کریدت موبایل رایگان ببر!', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900, height: 1.3)),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            const Text('با دعوت دوستان و ثبت آگهی امتیاز جمع کن؛ آگهی‌ات را ویژه کن یا کریدت موبایل بگیر.', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.5)),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final c in const ['AWCC', 'Roshan', 'Etisalat', 'Salaam', 'ATOMA'])
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(.18), borderRadius: BorderRadius.circular(20)),
+                      child: Text(c, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                    ),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(color: const Color(0xFFFFD814), borderRadius: BorderRadius.circular(14)),
+                child: const Text('شروع کن', style: TextStyle(color: Color(0xFF111111), fontWeight: FontWeight.w900, fontSize: 13)),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// باشگاه امتیاز: کسب امتیاز، ویژه کردن آگهی و دریافت کریدت موبایل.
+class RewardsScreen extends StatefulWidget {
+  const RewardsScreen({super.key});
+  @override
+  State<RewardsScreen> createState() => _RewardsScreenState();
+}
+
+class _RewardsScreenState extends State<RewardsScreen> {
+  bool loading = true;
+  String? error;
+  Map<String, dynamic> d = {};
+  List<dynamic> creditRequests = [];
+  bool busy = false;
+  final refCtl = TextEditingController();
+
+  static int _n(dynamic v) => v is num ? v.toInt() : (int.tryParse('${v ?? 0}') ?? 0);
+  int get points => _n(d['points']);
+  List<Map<String, dynamic>> _list(String key) => ((d[key] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    refCtl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() { loading = d.isEmpty; error = null; });
+    try {
+      await tryApplyPendingReferral();
+      final r = await ApiService.getRewardsSummary();
+      List<dynamic> req = const [];
+      try { req = await ApiService.getCreditRequests(); } catch (_) {}
+      if (!mounted) return;
+      setState(() { d = r; creditRequests = req; loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = friendlyNetworkError(context, e); });
+    }
+  }
+
+  void _toast(String t) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+
+  String _fmt(int v) {
+    final s = v.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+
+  Future<void> _checkin() async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      final r = await ApiService.rewardsCheckin();
+      _toast('+${_n(r['gained'])} امتیاز گرفتید 🎉');
+      await _load();
+    } catch (e) {
+      _toast(friendlyNetworkError(context, e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _applyRef() async {
+    final code = refCtl.text.trim();
+    if (code.isEmpty || busy) return;
+    setState(() => busy = true);
+    try {
+      final r = await ApiService.applyReferral(code);
+      _toast('کد دعوت ثبت شد؛ +${_n(r['gained'])} امتیاز هدیه 🎁');
+      refCtl.clear();
+      await _load();
+    } catch (e) {
+      _toast(friendlyNetworkError(context, e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _shareInvite() async {
+    final code = d['referral_code']?.toString() ?? '';
+    if (code.isEmpty) return;
+    final url = 'https://bazarek.pages.dev/?ref=$code';
+    final text = 'من در بازارک امتیاز جمع می‌کنم و کریدت موبایل می‌گیرم! با کد دعوت من ثبت‌نام کن: $code';
+    final ok = await shareWeb(title: 'دعوت به بازارک', text: text, url: url);
+    if (!ok) {
+      await Clipboard.setData(ClipboardData(text: '$text\n$url'));
+      _toast('لینک دعوت کپی شد؛ برای دوستانتان بفرستید.');
+    }
+  }
+
+  Future<void> _redeemBoost(Map<String, dynamic> option) async {
+    final cost = _n(option['cost']);
+    if (points < cost) { _toast('برای این بسته $cost امتیاز لازم است.'); return; }
+    List<dynamic> ads = [];
+    try { ads = await ApiService.getMyProducts(); } catch (_) {}
+    ads = ads.where((a) => a is Map && a['is_store_product'] != true && a['is_active'] != false).toList();
+    if (ads.isEmpty) { _toast('اول یک آگهی فعال ثبت کنید.'); return; }
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .75),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('کدام آگهی ویژه شود؟ (${option['title']} • $cost امتیاز)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            ),
+            Flexible(
+              child: ListView(shrinkWrap: true, children: [
+                for (final a in ads)
+                  ListTile(
+                    leading: const Icon(Icons.campaign_outlined),
+                    title: Text('${(a as Map)['title'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                    onTap: () => Navigator.pop(ctx, Map<String, dynamic>.from(a)),
+                  ),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() => busy = true);
+    try {
+      await ApiService.redeemBoostWithPoints(picked['id'].toString(), option['id'].toString());
+      listingsVersion.value++;
+      _toast('آگهی شما ویژه شد 🚀');
+      await _load();
+    } catch (e) {
+      _toast(friendlyNetworkError(context, e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _redeemCredit(Map<String, dynamic> option) async {
+    final cost = _n(option['cost']);
+    if (points < cost) { _toast('برای این کریدت $cost امتیاز لازم است.'); return; }
+    final carriers = ((d['credit_carriers'] as List?) ?? const []).map((e) => e.toString()).toList();
+    var carrier = carriers.isNotEmpty ? carriers.first : 'AWCC';
+    final phone = TextEditingController();
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('کریدت ${option['amount_afn']} افغانی', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text('$cost امتیاز از حساب شما کم می‌شود.', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            const Text('شبکه‌ی مخابراتی', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 6, children: [
+              for (final c in carriers) ChoiceChip(label: Text(c), selected: carrier == c, onSelected: (_) => setSheet(() => carrier = c)),
+            ]),
+            const SizedBox(height: 12),
+            TextField(controller: phone, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'شماره‌ی موبایل برای شارژ', hintText: '07xxxxxxxx', filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)))),
+            const SizedBox(height: 8),
+            const Text('درخواست شما بعد از بررسی مدیریت شارژ می‌شود. اگر رد شود، امتیازتان برمی‌گردد.', style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600, height: 1.5)),
+            const SizedBox(height: 12),
+            SizedBox(width: double.infinity, height: 50, child: FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ثبت درخواست کریدت'))),
+          ]),
+        ),
+      ),
+    );
+    final number = phone.text.trim();
+    phone.dispose();
+    if (ok != true) return;
+    setState(() => busy = true);
+    try {
+      await ApiService.redeemMobileCredit(option['id'].toString(), carrier, number);
+      _toast('درخواست ثبت شد؛ بعد از بررسی شارژ می‌شود 📱');
+      await _load();
+    } catch (e) {
+      _toast(friendlyNetworkError(context, e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Widget _card({required Widget child, Color? color, EdgeInsets? margin}) => Container(
+        margin: margin ?? const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: color ?? Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE6E9EC))),
+        child: child,
+      );
+
+  Widget _title(String t, {String? sub}) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(t, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          if (sub != null) Text(sub, style: const TextStyle(fontSize: 12.5, color: Colors.black54, fontWeight: FontWeight.w600)),
+        ]),
+      );
+
+  static const _reasonLabels = {
+    'ad_published': 'ثبت آگهی', 'daily_checkin': 'ورود روزانه', 'referral': 'دعوت دوست', 'referral_welcome': 'هدیه‌ی کد دعوت',
+    'profile_complete': 'تکمیل پروفایل', 'store_verified': 'تأیید فروشگاه', 'boost_redeem': 'ویژه کردن آگهی', 'boost_refund': 'برگشت امتیاز',
+    'credit_redeem': 'درخواست کریدت موبایل', 'credit_refund': 'برگشت امتیاز',
+  };
+
+  Widget _hero() {
+    final credits = _list('credit_options');
+    final next = credits.firstWhere((o) => _n(o['cost']) > points, orElse: () => credits.isNotEmpty ? credits.last : {'cost': 1, 'amount_afn': 0});
+    final goal = _n(next['cost']);
+    final reached = credits.isNotEmpty && points >= _n(credits.first['cost']);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [Color(0xFF3D1A9E), Color(0xFF7B3FE4), Color(0xFFFF8A1F)]),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('امتیاز شما', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800)),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text(_fmt(points), style: const TextStyle(color: Colors.white, fontSize: 46, fontWeight: FontWeight.w900, height: 1.1)),
+          const SizedBox(width: 8),
+          const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('⭐', style: TextStyle(fontSize: 22))),
+        ]),
+        const SizedBox(height: 8),
+        if (credits.isNotEmpty) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(value: goal <= 0 ? 0 : (points / goal).clamp(0.0, 1.0), minHeight: 9, backgroundColor: Colors.white24, color: const Color(0xFFFFD814)),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            reached && points >= goal ? '🎉 می‌توانید کریدت ${next['amount_afn']} افغانی بگیرید' : '${_fmt(goal - points)} امتیاز تا کریدت ${next['amount_afn']} افغانی',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+          ),
+        ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: (busy || d['checked_in_today'] == true) ? null : _checkin,
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFFD814), foregroundColor: const Color(0xFF111111), disabledBackgroundColor: Colors.white24, disabledForegroundColor: Colors.white70, minimumSize: const Size.fromHeight(46)),
+            icon: Icon(d['checked_in_today'] == true ? Icons.check_circle : Icons.today_rounded),
+            label: Text(d['checked_in_today'] == true ? 'امروز امتیازت را گرفتی ✓' : 'ورود روزانه +${_n((d['earn'] as Map?)?['daily_checkin'])} امتیاز', style: const TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _creditSection() {
+    final enabled = d['mobile_credit_enabled'] == true;
+    final carriers = ((d['credit_carriers'] as List?) ?? const []).map((e) => e.toString()).toList();
+    return _card(
+      color: const Color(0xFFF6F1FF),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('📱', style: TextStyle(fontSize: 26)),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('کریدت موبایل رایگان', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+          if (!enabled) Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFFE9B5), borderRadius: BorderRadius.circular(20)), child: const Text('به‌زودی', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12))),
+        ]),
+        const SizedBox(height: 4),
+        const Text('با امتیازهای خودت، کریدت همه‌ی شبکه‌های افغانستان را بگیر.', style: TextStyle(fontSize: 12.5, color: Colors.black54, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final c in carriers)
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFD9CCF7))), child: Text(c, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12))),
+        ]),
+        const SizedBox(height: 12),
+        for (final o in _list('credit_options')) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE6DDF8))),
+            child: Column(children: [
+              Row(children: [
+                Text('${o['amount_afn']} افغانی', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF4A1FA8))),
+                const Spacer(),
+                Text('${_fmt(_n(o['cost']))} ⭐', style: const TextStyle(fontWeight: FontWeight.w900)),
+              ]),
+              const SizedBox(height: 8),
+              ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: (points / _n(o['cost'])).clamp(0.0, 1.0), minHeight: 7, backgroundColor: const Color(0xFFEEE8FB), color: const Color(0xFF7B3FE4))),
+              const SizedBox(height: 4),
+              Row(children: [
+                Expanded(child: Text(points >= _n(o['cost']) ? 'آماده‌ی دریافت ✓' : '${_fmt(_n(o['cost']) - points)} امتیاز مانده', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: points >= _n(o['cost']) ? const Color(0xFF1B7F3B) : Colors.black54))),
+                FilledButton(
+                  onPressed: (!enabled || busy || points < _n(o['cost'])) ? null : () => _redeemCredit(o),
+                  child: const Text('دریافت کریدت'),
+                ),
+              ]),
+            ]),
+          ),
+        ],
+        if (creditRequests.isNotEmpty) ...[
+          const Divider(),
+          const Text('درخواست‌های شما', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          for (final r in creditRequests.take(5))
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(r['status'] == 'completed' ? Icons.check_circle : (r['status'] == 'rejected' ? Icons.undo_rounded : Icons.hourglass_top_rounded), color: r['status'] == 'completed' ? const Color(0xFF1B7F3B) : (r['status'] == 'rejected' ? Colors.redAccent : const Color(0xFFB45309))),
+              title: Text('${r['carrier']} • ${r['amount_afn']} افغانی • ${r['phone']}'),
+              subtitle: Text(r['status'] == 'completed' ? 'شارژ شد' : (r['status'] == 'rejected' ? 'رد شد و امتیاز برگشت' : 'در انتظار شارژ')),
+            ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _earnSection() {
+    final earn = Map<String, dynamic>.from((d['earn'] as Map?) ?? const {});
+    final code = d['referral_code']?.toString() ?? '';
+    Widget row(IconData icon, String title, String sub, {String? action, VoidCallback? onTap}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            Container(width: 42, height: 42, decoration: BoxDecoration(color: const Color(0xFFF1ECFF), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: const Color(0xFF6A35D8))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w900)), Text(sub, style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600))])),
+            if (action != null) OutlinedButton(onPressed: onTap, child: Text(action)),
+          ]),
+        );
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _title('چطور امتیاز بگیرم؟'),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFD58A))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('👥 دعوت دوستان: +${_n(earn['referral_inviter'])} امتیاز برای هر دوست', style: const TextStyle(fontWeight: FontWeight.w900)),
+            Text('دوست شما هم +${_n(earn['referral_invitee'])} امتیاز هدیه می‌گیرد (وقتی اولین آگهی‌اش منتشر شد، امتیاز شما ثبت می‌شود).', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600, height: 1.5)),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 11), alignment: Alignment.center, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFFD58A))), child: Text(code.isEmpty ? '...' : code, style: const TextStyle(fontSize: 20, letterSpacing: 3, fontWeight: FontWeight.w900)))),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(onPressed: code.isEmpty ? null : () async { await Clipboard.setData(ClipboardData(text: code)); _toast('کد دعوت کپی شد.'); }, icon: const Icon(Icons.copy_rounded)),
+              IconButton.filled(onPressed: code.isEmpty ? null : _shareInvite, icon: const Icon(Icons.share_rounded)),
+            ]),
+            const SizedBox(height: 6),
+            Text('دعوت‌شده: ${_n(d['invited_count'])} نفر • امتیازدار: ${_n(d['referral_rewarded_count'])}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          ]),
+        ),
+        const SizedBox(height: 6),
+        row(Icons.campaign_rounded, 'ثبت آگهی', '+${_n(earn['ad_published'])} امتیاز برای هر آگهی (تا ${_n(earn['ad_daily_cap'])} آگهی در روز)', action: 'ثبت آگهی', onTap: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())); _load(); }),
+        row(Icons.person_rounded, 'تکمیل پروفایل', '+${_n(earn['welcome_profile'])} امتیاز (یک‌بار)', action: 'پروفایل', onTap: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())); _load(); }),
+        row(Icons.storefront_rounded, 'فعال‌سازی فروشگاه', '+${_n(earn['store_verified'])} امتیاز بعد از تأیید', action: 'فروشگاه', onTap: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreSubscriptionScreen())); _load(); }),
+        if (d['has_referrer'] != true) ...[
+          const Divider(),
+          const Text('کد دعوت دوستم را دارم', style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(child: TextField(controller: refCtl, textCapitalization: TextCapitalization.characters, decoration: InputDecoration(hintText: 'مثلاً K7M2QX9', isDense: true, filled: true, fillColor: const Color(0xFFF8FAFB), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+            const SizedBox(width: 8),
+            FilledButton(onPressed: busy ? null : _applyRef, child: const Text('ثبت کد')),
+          ]),
+        ],
+      ]),
+    );
+  }
+
+  Widget _boostSection() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _title('🚀 ویژه کردن آگهی با امتیاز', sub: 'آگهی ویژه بالاتر دیده می‌شود و سریع‌تر مشتری پیدا می‌کند.'),
+        for (final o in _list('boost_options'))
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: const Color(0xFFF6F8F9), borderRadius: BorderRadius.circular(14)),
+            child: Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${o['title']}', style: const TextStyle(fontWeight: FontWeight.w900)), Text('${_fmt(_n(o['cost']))} امتیاز', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w700))])),
+              FilledButton(onPressed: (busy || points < _n(o['cost'])) ? null : () => _redeemBoost(o), child: const Text('انتخاب آگهی')),
+            ]),
+          ),
+      ]),
+    );
+  }
+
+  Widget _history() {
+    final tx = _list('transactions');
+    if (tx.isEmpty) return const SizedBox.shrink();
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _title('تاریخچه‌ی امتیاز'),
+        for (final t in tx.take(12))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(children: [
+              Expanded(child: Text(_reasonLabels[t['reason']] ?? '${t['reason']}', style: const TextStyle(fontWeight: FontWeight.w700))),
+              Text('${_n(t['points_delta']) > 0 ? '+' : ''}${_n(t['points_delta'])}', style: TextStyle(fontWeight: FontWeight.w900, color: _n(t['points_delta']) >= 0 ? const Color(0xFF1B7F3B) : const Color(0xFFC62828))),
+            ]),
+          ),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
+      appBar: AppBar(title: const Text('باشگاه امتیاز')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Text(error!, textAlign: TextAlign.center), const SizedBox(height: 12), FilledButton(onPressed: _load, child: const Text('تلاش دوباره'))])))
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(padding: const EdgeInsets.all(14), children: [_hero(), _creditSection(), _earnSection(), _boostSection(), _history(), const SizedBox(height: 20)]),
+                ),
+    );
+  }
+}
+
 /// هر بار آگهی ساخته، حذف یا فعال/غیرفعال شود این عدد زیاد می‌شود تا صفحه‌ی اصلی خودکار تازه شود.
 final ValueNotifier<int> listingsVersion = ValueNotifier<int>(0);
 
@@ -3562,6 +4133,32 @@ class ApiService {
     return url;
   }
 
+  static Future<Map<String, dynamic>> _rewardsCall(String method, String path, [Map<String, dynamic>? body]) async {
+    Future<http.Response> send() {
+      final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+      switch (method) {
+        case 'POST':
+          return http.post(uri, headers: headers, body: jsonEncode(body ?? {})).timeout(const Duration(seconds: 25));
+        default:
+          return http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+      }
+    }
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    dynamic data; try { data = jsonDecode(res.body); } catch (_) {}
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(data is Map ? (data['error'] ?? 'خطا در ارتباط با باشگاه امتیاز.') : 'خطا در ارتباط با باشگاه امتیاز.');
+    }
+    return data is Map ? Map<String, dynamic>.from(data) : {'items': data};
+  }
+
+  static Future<Map<String, dynamic>> getRewardsSummary() => _rewardsCall('GET', '/rewards/summary');
+  static Future<Map<String, dynamic>> rewardsCheckin() => _rewardsCall('POST', '/rewards/checkin');
+  static Future<Map<String, dynamic>> applyReferral(String code) => _rewardsCall('POST', '/rewards/apply-referral', {'code': code});
+  static Future<Map<String, dynamic>> redeemBoostWithPoints(String listingId, String optionId) => _rewardsCall('POST', '/rewards/redeem-boost', {'listing_id': listingId, 'option_id': optionId});
+  static Future<Map<String, dynamic>> redeemMobileCredit(String optionId, String carrier, String phone) => _rewardsCall('POST', '/rewards/redeem-credit', {'option_id': optionId, 'carrier': carrier, 'phone': phone});
+  static Future<List<dynamic>> getCreditRequests() async => (await _rewardsCall('GET', '/rewards/credit-requests'))['items'] as List<dynamic>? ?? const [];
+
   static Future<void> saveStoreType(String typeId) async {
     Future<http.Response> send() => http.patch(
           Uri.parse('${ApiConfig.baseUrl}/store/identity'),
@@ -4237,6 +4834,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     listingsVersion.addListener(_onListingsChanged);
+    tryApplyPendingReferral();
     _loadProducts();
     _loadProfessionalStores();
     _startStoreAutoRotation();
@@ -5747,6 +6345,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 14),
 
                     ],
+
+                    RewardsBanner(horizontal: horizontal, isMobile: isMobile),
+                    const SizedBox(height: 10),
 
                     // Professional stores: active paid stores only. Store products are not shown here;
     // customers enter the store to browse its products.
@@ -10603,6 +11204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             menuTile(Icons.support_agent_outlined, 'پشتیبانی و ارتباط با ما', 'کمک و گزارش مشکل', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen())), color: const Color(0xFF0F766E)),
             const Divider(height: 1),
             const Divider(height: 1),
+            menuTile(Icons.card_giftcard_rounded, 'باشگاه امتیاز', 'امتیاز بگیر، آگهی را ویژه کن، کریدت موبایل ببر', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardsScreen())); }, color: const Color(0xFF7B3FE4)),
             menuTile(Icons.rocket_launch_rounded, 'Boost آگهی‌ها', 'افزایش نمایش آگهی‌های شما', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }, color: const Color(0xFFB45309)),
             const Divider(height: 1),
             SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),

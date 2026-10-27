@@ -192,7 +192,7 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
 
   @override void initState() {
     super.initState();
-    tabs = TabController(length: 10, vsync: this);
+    tabs = TabController(length: 11, vsync: this);
     _loadAll();
     _clockTimer = Timer.periodic(Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
@@ -397,10 +397,10 @@ class _AdminDashboardState extends State<_AdminDashboard> with SingleTickerProvi
       title: AdminText('مدیریت بازارک', style: TextStyle(fontWeight: FontWeight.bold)),
       actions: [IconButton(onPressed: _loadAll, icon: Icon(Icons.refresh), tooltip: _adminTranslate(context, 'به‌روزرسانی')), IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.logout), tooltip: _adminTranslate(context, 'خروج'))],
       bottom: TabBar(controller: tabs, isScrollable: true, tabs: [
-        Tab(text: _adminTranslate(context, 'داشبورد'), icon: Icon(Icons.dashboard_outlined)), Tab(text: _adminTranslate(context, 'آگهی‌ها'), icon: Icon(Icons.campaign_outlined)), Tab(text: _adminTranslate(context, 'کاربران'), icon: Icon(Icons.people_outline)), Tab(text: _adminTranslate(context, 'شکایات'), icon: Icon(Icons.report_problem_outlined)), Tab(text: _adminTranslate(context, 'پشتیبانی'), icon: Icon(Icons.support_agent_outlined)), Tab(text: _adminTranslate(context, 'هشدارها'), icon: Icon(Icons.notifications_outlined)), Tab(text: _adminTranslate(context, 'مالی'), icon: Icon(Icons.account_balance_wallet_outlined)), Tab(text: _adminTranslate(context, 'امنیت'), icon: Icon(Icons.security_outlined)), Tab(text: _adminTranslate(context, 'آمار'), icon: Icon(Icons.insights_outlined)), Tab(text: _adminTranslate(context, 'تأیید فروشگاه'), icon: Icon(Icons.verified_user_outlined)),
+        Tab(text: _adminTranslate(context, 'داشبورد'), icon: Icon(Icons.dashboard_outlined)), Tab(text: _adminTranslate(context, 'آگهی‌ها'), icon: Icon(Icons.campaign_outlined)), Tab(text: _adminTranslate(context, 'کاربران'), icon: Icon(Icons.people_outline)), Tab(text: _adminTranslate(context, 'شکایات'), icon: Icon(Icons.report_problem_outlined)), Tab(text: _adminTranslate(context, 'پشتیبانی'), icon: Icon(Icons.support_agent_outlined)), Tab(text: _adminTranslate(context, 'هشدارها'), icon: Icon(Icons.notifications_outlined)), Tab(text: _adminTranslate(context, 'مالی'), icon: Icon(Icons.account_balance_wallet_outlined)), Tab(text: _adminTranslate(context, 'امنیت'), icon: Icon(Icons.security_outlined)), Tab(text: _adminTranslate(context, 'آمار'), icon: Icon(Icons.insights_outlined)), Tab(text: _adminTranslate(context, 'تأیید فروشگاه'), icon: Icon(Icons.verified_user_outlined)), Tab(text: _adminTranslate(context, 'کریدت موبایل'), icon: Icon(Icons.phone_android_outlined)),
       ]),
     ),
-    body: loading ? Center(child: CircularProgressIndicator()) : loadError != null ? _ErrorState(error: loadError!, retry: _loadAll) : TabBarView(controller: tabs, children: [_overview(), _products(), _users(), _reports(), _support(), _warnings(), _finance(), _security(), _AnalyticsTab(token: widget.token), _StoreVerificationsTab(token: widget.token)]),
+    body: loading ? Center(child: CircularProgressIndicator()) : loadError != null ? _ErrorState(error: loadError!, retry: _loadAll) : TabBarView(controller: tabs, children: [_overview(), _products(), _users(), _reports(), _support(), _warnings(), _finance(), _security(), _AnalyticsTab(token: widget.token), _StoreVerificationsTab(token: widget.token), _CreditRequestsTab(token: widget.token)]),
   );
 
   void _go(int index) => tabs.animateTo(index);
@@ -1023,6 +1023,120 @@ class _StoreVerificationsTabState extends State<_StoreVerificationsTab> {
                   Expanded(child: OutlinedButton.icon(onPressed: busy.contains(r['id'].toString()) ? null : () => _decide(r, 'rejected'), icon: const Icon(Icons.cancel_outlined), label: const Text('رد'))),
                 ]),
               ],
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+
+// ───────────────────── تب «کریدت موبایل» (درخواست‌های امتیاز) ─────────────────────
+class _CreditRequestsTab extends StatefulWidget {
+  final String token;
+  const _CreditRequestsTab({required this.token});
+  @override
+  State<_CreditRequestsTab> createState() => _CreditRequestsTabState();
+}
+
+class _CreditRequestsTabState extends State<_CreditRequestsTab> {
+  bool loading = true;
+  String? error;
+  String status = 'pending';
+  List<Map<String, dynamic>> rows = [];
+  final Set<String> busy = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final r = await _AdminApi.list('/admin/credit-requests?status=$status', widget.token);
+      if (!mounted) return;
+      setState(() { rows = r; loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { loading = false; error = _adminFriendlyError(e); });
+    }
+  }
+
+  void _toast(String t) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+
+  Future<void> _decide(Map<String, dynamic> r, String decision) async {
+    String note = '';
+    if (decision == 'rejected') {
+      final c = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('دلیل رد (امتیاز کاربر برمی‌گردد)'),
+          content: TextField(controller: c, maxLength: 200),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('رد کردن'))],
+        ),
+      );
+      if (ok != true) return;
+      note = c.text.trim();
+    } else {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('تأیید شارژ'),
+          content: Text('آیا کریدت ${r['amount_afn']} افغانی را به شماره‌ی ${r['phone']} (${r['carrier']}) واقعاً شارژ کرده‌اید؟'),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('هنوز نه')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('بله، شارژ شد'))],
+        ),
+      );
+      if (ok != true) return;
+    }
+    final id = r['id'].toString();
+    setState(() => busy.add(id));
+    try {
+      await _AdminApi.patch('/admin/credit-requests/$id', widget.token, {'status': decision, 'note': note});
+      _toast(decision == 'completed' ? 'ثبت شد؛ به کاربر اطلاع داده شد.' : 'رد شد و امتیاز برگشت.');
+      await _load();
+    } catch (e) {
+      _toast(_adminFriendlyError(e));
+    } finally {
+      if (mounted) setState(() => busy.remove(id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (error != null) return _ErrorState(error: error!, retry: _load);
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(padding: const EdgeInsets.all(14), children: [
+        Wrap(spacing: 8, children: [
+          for (final p in const [['pending', 'در انتظار شارژ'], ['completed', 'شارژ شده'], ['rejected', 'رد شده']])
+            ChoiceChip(label: Text(p[1]), selected: status == p[0], onSelected: (_) { setState(() => status = p[0]); _load(); }),
+        ]),
+        const SizedBox(height: 12),
+        if (rows.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Center(child: Text('درخواستی وجود ندارد.', style: TextStyle(color: Colors.black45, fontWeight: FontWeight.w700)))),
+        for (final r in rows)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x22000000))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${r['carrier']} • ${r['amount_afn']} افغانی', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+              const SizedBox(height: 4),
+              SelectableText('شماره‌ی شارژ: ${r['phone']}', style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text('کاربر: ${r['full_name'] ?? ''}  ${r['account_phone'] ?? ''}', style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600)),
+              Text('${r['points_spent']} امتیاز • ${'${r['created_at'] ?? ''}'.split('T').first}', style: const TextStyle(color: Colors.black45, fontSize: 12)),
+              if (status == 'pending') ...[
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: FilledButton.icon(onPressed: busy.contains(r['id'].toString()) ? null : () => _decide(r, 'completed'), icon: const Icon(Icons.check_circle_outline), label: const Text('شارژ شد'))),
+                  const SizedBox(width: 8),
+                  Expanded(child: OutlinedButton.icon(onPressed: busy.contains(r['id'].toString()) ? null : () => _decide(r, 'rejected'), icon: const Icon(Icons.undo_rounded), label: const Text('رد + برگشت امتیاز'))),
+                ]),
+              ] else if ((r['admin_note'] ?? '').toString().isNotEmpty)
+                Text('یادداشت: ${r['admin_note']}'),
             ]),
           ),
       ]),
