@@ -316,6 +316,7 @@ app.patch('/api/me', requireUser, async (req, res) => {
     const { full_name, shop_name, phone, city, bio } = req.body || {};
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('profiles').update({ full_name: String(full_name||'').trim().slice(0,120), shop_name: String(shop_name||'').trim().slice(0,120), phone: String(phone||'').trim().slice(0,30), city: String(city||'').trim().slice(0,120), bio: String(bio||'').trim().slice(0,500), updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
+    if (!error && data && data.full_name && data.phone && data.city) adjustPoints(db, req.user.id, POINTS.welcome_profile, 'profile_complete', 'self'); // امتیاز باشگاه (یک‌بار)
     if (error) throw error;
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
@@ -1060,6 +1061,7 @@ app.patch('/api/admin/store-verifications/:id', requireAdmin, async (req, res) =
     }
     const { error: ue } = await db.from('store_verifications').update({ status: decision, admin_note: note, reviewed_at: new Date().toISOString(), id_card_path: '', selfie_path: '' }).eq('id', v.id);
     if (ue) throw ue;
+    if (decision === 'approved') adjustPoints(db, v.user_id, POINTS.store_verified, 'store_verified', v.user_id);
     // حریم خصوصی: بعد از تصمیم مدیریت، عکس‌های مدارک از سرور پاک می‌شوند.
     const files = [v.id_card_path, v.selfie_path].filter(Boolean);
     if (files.length) await db.storage.from(KYC_BUCKET).remove(files);
@@ -1468,33 +1470,228 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
   }
 });
 
-// Loyalty points and mobile-credit placeholder. Mobile top-ups are NOT sent to telecoms yet.
-const MOBILE_CREDIT_MIN_POINTS = Math.max(1000, Number(process.env.MOBILE_CREDIT_MIN_POINTS || 1000));
-app.get('/api/loyalty/status', requireUser, async (req,res)=>{
+// ═════════════════════ باشگاه امتیاز بازارک (Rewards) ═════════════════════
+// امتیازها فقط توسط سرور تغییر می‌کنند (تابع loyalty_adjust). هر رویداد فقط یک‌بار امتیاز می‌دهد.
+const POINTS = {
+  welcome_profile: 20,    // تکمیل پروفایل (یک‌بار)
+  ad_published: 10,       // هر آگهی عادی (حداکثر ۳ آگهی در روز)
+  ad_daily_cap: 3,
+  daily_checkin: 3,       // ورود روزانه
+  referral_inviter: 50,   // وقتی دوست دعوت‌شده اولین آگهی‌اش را منتشر کرد
+  referral_invitee: 20,   // هدیه‌ی کسی که با کد دعوت ثبت‌نام کرده
+  referral_max: 50,       // حداکثر دعوت امتیازدار برای هر نفر
+  store_verified: 100,    // تأیید فروشگاه
+};
+const BOOST_OPTIONS = [
+  { id: 'boost3', days: 3, cost: 150, title: 'ویژه ۳ روزه' },
+  { id: 'boost7', days: 7, cost: 300, title: 'ویژه ۷ روزه' },
+  { id: 'boost30', days: 30, cost: 1000, title: 'ویژه ۳۰ روزه' },
+];
+const CREDIT_OPTIONS = [
+  { id: 'credit50', amount_afn: 50, cost: 2000 },
+  { id: 'credit100', amount_afn: 100, cost: 3800 },
+  { id: 'credit200', amount_afn: 200, cost: 7000 },
+];
+const CREDIT_CARRIERS = ['AWCC', 'Roshan', 'Etisalat', 'Salaam', 'ATOMA'];
+// فقط وقتی true است که واقعاً کریدت را برای کاربران شارژ می‌کنید. اگر false باشد در اپ «به‌زودی» نشان داده می‌شود و امتیازی کم نمی‌شود.
+const MOBILE_CREDIT_ENABLED = String(process.env.MOBILE_CREDIT_ENABLED || 'true').toLowerCase() !== 'false';
+
+function kabulDay(d = new Date()) {
+  return new Date(d.getTime() + 4.5 * 3600000).toISOString().slice(0, 10);
+}
+async function adjustPoints(db, userId, delta, reason, ref) {
+  const { data, error } = await db.rpc('loyalty_adjust', { p_user: userId, p_delta: delta, p_reason: reason, p_ref: ref == null ? null : String(ref) });
+  if (error) { console.error('loyalty_adjust error:', error.message); return { ok: false, error: 'db' }; }
+  return data || { ok: false };
+}
+function makeReferralCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  const bytes = crypto.randomBytes(7);
+  for (let i = 0; i < 7; i++) c += alphabet[bytes[i] % alphabet.length];
+  return c;
+}
+async function ensureReferralCode(db, userId) {
+  const { data: p } = await db.from('profiles').select('referral_code').eq('id', userId).maybeSingle();
+  if (p?.referral_code) return p.referral_code;
+  for (let i = 0; i < 5; i++) {
+    const code = makeReferralCode();
+    const { error } = await db.from('profiles').update({ referral_code: code }).eq('id', userId).is('referral_code', null);
+    if (!error) {
+      const { data: again } = await db.from('profiles').select('referral_code').eq('id', userId).maybeSingle();
+      if (again?.referral_code) return again.referral_code;
+    }
+  }
+  return '';
+}
+// بعد از ثبت آگهی عادی: امتیاز آگهی + (اگر اولین آگهی کاربرِ دعوت‌شده بود) امتیاز دعوت‌کننده
+async function awardForPublishedAd(db, userId, productId) {
   try {
-    const db=getSupabaseAdmin();
-    const {data,error}=await db.from('loyalty_wallets').select('points').eq('user_id',req.user.id).maybeSingle();
-    if(error)throw error;
-    res.json({points:Math.max(0,Number(data?.points||0)),mobile_credit_min_points:MOBILE_CREDIT_MIN_POINTS});
-  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت امتیازهای باشگاه.'}); }
+    const today = kabulDay();
+    const { count } = await db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('reason', 'ad_published').gte('created_at', new Date(Date.now() - 86400000).toISOString());
+    if ((count || 0) < POINTS.ad_daily_cap) await adjustPoints(db, userId, POINTS.ad_published, 'ad_published', productId);
+    const { data: me } = await db.from('profiles').select('referred_by').eq('id', userId).maybeSingle();
+    if (me?.referred_by && me.referred_by !== userId) {
+      const { count: rewarded } = await db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true })
+        .eq('user_id', me.referred_by).eq('reason', 'referral');
+      if ((rewarded || 0) < POINTS.referral_max) await adjustPoints(db, me.referred_by, POINTS.referral_inviter, 'referral', userId);
+    }
+  } catch (e) { console.warn('awardForPublishedAd error:', e?.message || e); }
+}
+
+app.get('/api/rewards/summary', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const [{ data: wallet }, { data: txs }, code, { count: invited }, { count: rewardedCount }, { data: me }] = await Promise.all([
+      db.from('loyalty_wallets').select('points').eq('user_id', req.user.id).maybeSingle(),
+      db.from('loyalty_point_transactions').select('points_delta,reason,created_at').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(25),
+      ensureReferralCode(db, req.user.id),
+      db.from('profiles').select('id', { count: 'exact', head: true }).eq('referred_by', req.user.id),
+      db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true }).eq('user_id', req.user.id).eq('reason', 'referral'),
+      db.from('profiles').select('referred_by').eq('id', req.user.id).maybeSingle(),
+    ]);
+    const today = kabulDay();
+    const checkedIn = (txs || []).some(t => t.reason === 'daily_checkin' && kabulDay(new Date(t.created_at)) === today);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      points: Math.max(0, Number(wallet?.points || 0)),
+      referral_code: code,
+      invited_count: invited || 0,
+      referral_rewarded_count: rewardedCount || 0,
+      has_referrer: Boolean(me?.referred_by),
+      checked_in_today: checkedIn,
+      earn: POINTS,
+      boost_options: BOOST_OPTIONS,
+      credit_options: CREDIT_OPTIONS,
+      credit_carriers: CREDIT_CARRIERS,
+      mobile_credit_enabled: MOBILE_CREDIT_ENABLED,
+      transactions: txs || [],
+    });
+  } catch (e) { console.error('rewards summary error:', e); res.status(500).json({ error: 'خطا در دریافت اطلاعات باشگاه امتیاز.' }); }
 });
-app.post('/api/loyalty/mobile-credit-requests', requireUser, async (req,res)=>{
+
+app.post('/api/rewards/checkin', requireUser, async (req, res) => {
+  const db = getSupabaseAdmin();
+  const r = await adjustPoints(db, req.user.id, POINTS.daily_checkin, 'daily_checkin', kabulDay());
+  if (r.error === 'duplicate') return res.status(409).json({ error: 'امتیاز امروز را قبلاً گرفته‌اید. فردا دوباره بیایید.' });
+  if (!r.ok) return res.status(500).json({ error: 'ثبت امتیاز روزانه انجام نشد.' });
+  res.json({ points: r.points, gained: POINTS.daily_checkin });
+});
+
+app.post('/api/rewards/apply-referral', requireUser, async (req, res) => {
   try {
-    const phone=String(req.body?.phone||'').trim();
-    const carrier=String(req.body?.carrier||'').trim();
-    const allowed=['AWCC','Roshan','Etisalat','Salaam','ATOMA'];
-    const digits=phone.replace(/[^0-9]/g,'');
-    if(digits.length<9||digits.length>15)return res.status(400).json({error:'شماره تلفن معتبر نیست.'});
-    if(!allowed.includes(carrier))return res.status(400).json({error:'شرکت مخابراتی را از فهرست انتخاب کنید.'});
-    const db=getSupabaseAdmin();
-    const {data:wallet,error:we}=await db.from('loyalty_wallets').select('points').eq('user_id',req.user.id).maybeSingle();
-    if(we)throw we;
-    const points=Math.max(0,Number(wallet?.points||0));
-    if(points<MOBILE_CREDIT_MIN_POINTS)return res.status(403).json({error:`برای بازشدن این بخش حداقل ${MOBILE_CREDIT_MIN_POINTS} امتیاز لازم است.`});
-    const {data,error}=await db.from('mobile_credit_requests').insert([{user_id:req.user.id,phone:phone.slice(0,32),carrier,points_at_request:points,status:'development_placeholder'}]).select('id,status,created_at').single();
-    if(error)throw error;
-    res.status(201).json({request:data,message:'این بخش هنوز در حال توسعه است؛ می‌توانید امتیاز خود را در ویژه‌سازی آگهی استفاده کنید.'});
-  } catch(e) { console.error(e); res.status(500).json({error:'ثبت درخواست انجام نشد؛ لطفاً بعداً دوباره تلاش کنید.'}); }
+    const db = getSupabaseAdmin();
+    const code = String(req.body?.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+    if (code.length < 5) return res.status(400).json({ error: 'کد دعوت معتبر نیست.' });
+    const { data: me } = await db.from('profiles').select('id,referred_by,created_at').eq('id', req.user.id).maybeSingle();
+    if (!me) return res.status(404).json({ error: 'پروفایل پیدا نشد.' });
+    if (me.referred_by) return res.status(409).json({ error: 'قبلاً کد دعوت ثبت کرده‌اید.' });
+    // کد فقط برای حساب‌های تازه (۱۴ روز اول) معتبر است تا سوءاستفاده نشود
+    if (Date.now() - new Date(me.created_at).getTime() > 14 * 86400000) return res.status(403).json({ error: 'کد دعوت فقط در ۱۴ روز اول ثبت‌نام قابل ثبت است.' });
+    const { data: inviter } = await db.from('profiles').select('id').eq('referral_code', code).maybeSingle();
+    if (!inviter) return res.status(404).json({ error: 'این کد دعوت پیدا نشد.' });
+    if (inviter.id === req.user.id) return res.status(400).json({ error: 'نمی‌توانید کد خودتان را وارد کنید.' });
+    const { error } = await db.from('profiles').update({ referred_by: inviter.id }).eq('id', req.user.id).is('referred_by', null);
+    if (error) throw error;
+    const r = await adjustPoints(db, req.user.id, POINTS.referral_invitee, 'referral_welcome', 'self');
+    res.json({ ok: true, gained: r.ok ? POINTS.referral_invitee : 0, points: r.points });
+  } catch (e) { console.error('apply referral error:', e); res.status(500).json({ error: 'ثبت کد دعوت انجام نشد.' }); }
+});
+
+app.post('/api/rewards/redeem-boost', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const option = BOOST_OPTIONS.find(o => o.id === String(req.body?.option_id || ''));
+    const listingId = String(req.body?.listing_id || '');
+    if (!option || !listingId) return res.status(400).json({ error: 'آگهی و بسته را انتخاب کنید.' });
+    const { data: listing } = await db.from('products').select('id,vendor_id,is_active,is_store_product,featured_until').eq('id', listingId).maybeSingle();
+    if (!listing || listing.vendor_id !== req.user.id) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (listing.is_store_product === true) return res.status(400).json({ error: 'محصول فروشگاهی قابل ویژه‌سازی نیست.' });
+    if (listing.is_active === false) return res.status(400).json({ error: 'فقط آگهی فعال را می‌توان ویژه کرد.' });
+    const ref = `${listingId}:${Date.now()}`;
+    const spent = await adjustPoints(db, req.user.id, -option.cost, 'boost_redeem', ref);
+    if (spent.error === 'insufficient') return res.status(402).json({ error: `برای این بسته ${option.cost} امتیاز لازم است.` });
+    if (!spent.ok) return res.status(500).json({ error: 'کم کردن امتیاز انجام نشد.' });
+    const start = Math.max(Date.now(), listing.featured_until ? new Date(listing.featured_until).getTime() : 0);
+    const until = new Date(start + option.days * 86400000).toISOString();
+    const { error } = await db.from('products').update({ is_featured: true, featured_until: until, updated_at: new Date().toISOString() }).eq('id', listingId);
+    if (error) {
+      await adjustPoints(db, req.user.id, option.cost, 'boost_refund', ref);
+      throw error;
+    }
+    res.json({ ok: true, points: spent.points, featured_until: until, days: option.days });
+  } catch (e) { console.error('redeem boost error:', e); res.status(500).json({ error: 'ویژه‌سازی انجام نشد؛ امتیاز شما کم نشده است.' }); }
+});
+
+app.post('/api/rewards/redeem-credit', requireUser, async (req, res) => {
+  try {
+    if (!MOBILE_CREDIT_ENABLED) return res.status(403).json({ error: 'دریافت کریدت موبایل به‌زودی فعال می‌شود.' });
+    const db = getSupabaseAdmin();
+    const option = CREDIT_OPTIONS.find(o => o.id === String(req.body?.option_id || ''));
+    const carrier = String(req.body?.carrier || '');
+    const digits = String(req.body?.phone || '').replace(/[^0-9]/g, '');
+    if (!option) return res.status(400).json({ error: 'مبلغ کریدت را انتخاب کنید.' });
+    if (!CREDIT_CARRIERS.includes(carrier)) return res.status(400).json({ error: 'شبکه‌ی مخابراتی را انتخاب کنید.' });
+    if (digits.length < 9 || digits.length > 13) return res.status(400).json({ error: 'شماره‌ی موبایل معتبر نیست.' });
+    const { count: openCount } = await db.from('mobile_credit_requests').select('id', { count: 'exact', head: true }).eq('user_id', req.user.id).eq('status', 'pending');
+    if ((openCount || 0) >= 2) return res.status(429).json({ error: 'دو درخواست شما در انتظار شارژ است؛ بعد از انجام آن‌ها دوباره درخواست بدهید.' });
+    const ref = `credit:${Date.now()}`;
+    const spent = await adjustPoints(db, req.user.id, -option.cost, 'credit_redeem', ref);
+    if (spent.error === 'insufficient') return res.status(402).json({ error: `برای این کریدت ${option.cost} امتیاز لازم است.` });
+    if (!spent.ok) return res.status(500).json({ error: 'کم کردن امتیاز انجام نشد.' });
+    const { data, error } = await db.from('mobile_credit_requests').insert([{
+      user_id: req.user.id, phone: digits.slice(0, 15), carrier, amount_afn: option.amount_afn, points_spent: option.cost,
+      points_at_request: Math.max(0, Number(spent.points || 0)) + option.cost, status: 'pending',
+    }]).select('id,status,created_at').single();
+    if (error) { await adjustPoints(db, req.user.id, option.cost, 'credit_refund', ref); throw error; }
+    res.status(201).json({ ok: true, request: data, points: spent.points });
+  } catch (e) { console.error('redeem credit error:', e); res.status(500).json({ error: 'ثبت درخواست انجام نشد؛ امتیاز شما کم نشده است.' }); }
+});
+
+app.get('/api/rewards/credit-requests', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('mobile_credit_requests').select('id,carrier,phone,amount_afn,points_spent,status,admin_note,created_at')
+      .eq('user_id', req.user.id).neq('status', 'development_placeholder').order('created_at', { ascending: false }).limit(20);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: 'خطا در دریافت درخواست‌ها.' }); }
+});
+
+app.get('/api/admin/credit-requests', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const status = ['pending', 'completed', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
+    const { data, error } = await db.from('mobile_credit_requests').select('*').eq('status', status).order('created_at', { ascending: status === 'pending' }).limit(100);
+    if (error) throw error;
+    const ids = [...new Set((data || []).map(r => r.user_id))];
+    const { data: profiles } = ids.length ? await db.from('profiles').select('id,full_name,phone').in('id', ids) : { data: [] };
+    const pm = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    res.set('Cache-Control', 'no-store');
+    res.json((data || []).map(r => ({ ...r, full_name: pm[r.user_id]?.full_name || '', account_phone: pm[r.user_id]?.phone || '' })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت درخواست‌های کریدت.' }); }
+});
+
+app.patch('/api/admin/credit-requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const decision = String(req.body?.status || '');
+    if (!['completed', 'rejected'].includes(decision)) return res.status(400).json({ error: 'وضعیت نامعتبر است.' });
+    const note = String(req.body?.note || '').trim().slice(0, 300);
+    const { data: r } = await db.from('mobile_credit_requests').select('*').eq('id', req.params.id).maybeSingle();
+    if (!r) return res.status(404).json({ error: 'درخواست پیدا نشد.' });
+    if (r.status !== 'pending') return res.status(409).json({ error: 'این درخواست قبلاً بررسی شده است.' });
+    const { error } = await db.from('mobile_credit_requests').update({ status: decision, admin_note: note, updated_at: new Date().toISOString() }).eq('id', r.id).eq('status', 'pending');
+    if (error) throw error;
+    // رد شدن = برگشت امتیاز به کاربر
+    if (decision === 'rejected' && r.points_spent > 0) await adjustPoints(db, r.user_id, r.points_spent, 'credit_refund', `admin:${r.id}`);
+    try {
+      await db.from('user_notifications').insert([{ user_id: r.user_id, type: 'credit_request', title: decision === 'completed' ? 'کریدت موبایل شما ارسال شد 🎉' : 'درخواست کریدت رد شد',
+        message: decision === 'completed' ? `کریدت ${r.amount_afn} افغانی برای شماره‌ی ${r.phone} شارژ شد.` : `امتیاز شما برگردانده شد.${note ? ' ' + note : ''}` }]);
+    } catch (_) {}
+    res.json({ ok: true, status: decision });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'ثبت تصمیم انجام نشد.' }); }
 });
 
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
@@ -1647,6 +1844,7 @@ app.post('/api/products', requireUser, async (req, res) => {
     const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
+    if (data && data.is_store_product !== true) awardForPublishedAd(db, req.user.id, data.id); // امتیاز باشگاه (بدون انتظار)
     try {
       const { data: followers } = await db.from('seller_follows').select('user_id').eq('seller_id', req.user.id);
       if (followers?.length) {
