@@ -1897,90 +1897,111 @@ const Map<String, List<Map<String, String>>> subcategories = {
     {'id':'rickshaw','title':'ریکشا'}, {'id':'trucks','title':'لاری و موتر باربری'}, {'id':'buses','title':'بس و مینی‌بس'},
     {'id':'heavy_machinery','title':'ماشین‌آلات سنگین'}, {'id':'parts','title':'پرزه‌جات'}, {'id':'tires_batteries','title':'تایر، بیتری و روغن'},
     {'id':'car_accessories','title':'لوازم و تزئینات موتر'},
+    {'id':'car_rent','title':'موتر کرایی'}, {'id':'motorcycle_parts','title':'پرزه‌جات موترسایکل'}, {'id':'bicycle_parts','title':'پرزه‌جات بایسکل'}, {'id':'helmets_safety','title':'کلاه و وسایل ایمنی'}, {'id':'vehicle_audio','title':'سیستم صوتی و تصویری موتر'}, {'id':'vehicle_documents','title':'خدمات و اسناد وسایط'}, {'id':'agricultural_vehicles','title':'تراکتور و وسایط زراعتی'}, {'id':'boats_other_vehicles','title':'سایر وسایط نقلیه'}
   ],
   'real_estate': [
     {'id':'house_rent','title':'خانه کرایی'}, {'id':'house_mortgage','title':'خانه گروی'}, {'id':'house_sale','title':'خانه فروشی'},
     {'id':'apartment','title':'آپارتمان'}, {'id':'land_sale','title':'زمین فروشی'}, {'id':'land_rent','title':'زمین کرایی'},
     {'id':'shop','title':'دکان'}, {'id':'office','title':'دفتر'}, {'id':'garden','title':'باغ'},
     {'id':'warehouse','title':'گدام و فابریکه'}, {'id':'room_rent','title':'اتاق و کوټه کرایی'},
+    {'id':'commercial_property','title':'ملکیت تجارتی'}, {'id':'villa','title':'ویلا و خانه حویلی‌دار'}, {'id':'shared_room','title':'اتاق مشترک و لیلیه'}, {'id':'farm_land','title':'زمین زراعتی'}, {'id':'parking','title':'پارکینگ و گراج'}, {'id':'property_exchange','title':'معاوضه ملکیت'}, {'id':'construction_project','title':'پروژه‌های ساختمانی'}, {'id':'other_property','title':'سایر ملکیت‌ها'}
   ],
   'mobile_tablets': [
     {'id':'mobile','title':'موبایل'}, {'id':'tablet','title':'تبلت'}, {'id':'smartwatch','title':'ساعت هوشمند'},
     {'id':'mobile_accessories','title':'لوازم جانبی موبایل'}, {'id':'mobile_parts','title':'پرزه و لوازم تعمیر موبایل'},
+    {'id':'chargers_cables','title':'چارجر، کیبل و آداپتر'}, {'id':'cases_protection','title':'قاب، گلس و محافظ صفحه'}, {'id':'power_banks','title':'پاوربانک'}, {'id':'headphones_mobile','title':'هندزفری و هدفون'}, {'id':'memory_cards','title':'کارت حافظه و فلش OTG'}, {'id':'mobile_speakers','title':'اسپیکر بلوتوث'}, {'id':'mobile_network_devices','title':'مودم و دستگاه‌های اینترنت همراه'}, {'id':'mobile_other','title':'سایر لوازم موبایل'}
   ],
   'electronics': [
     {'id':'laptop','title':'لپ‌تاپ'}, {'id':'computer','title':'کمپیوتر'}, {'id':'tv','title':'تلویزیون'},
     {'id':'camera','title':'دوربین و کمره امنیتی'}, {'id':'printer_network','title':'پرینتر و شبکه'}, {'id':'gaming','title':'گیم و کنسول'},
     {'id':'audio','title':'اسپیکر و سیستم صوتی'}, {'id':'satellite','title':'ریسیور و ستلایت'},
+    {'id':'usb_flash_memory','title':'فلش مموری، کارت حافظه و USB'}, {'id':'hard_drives_ssd','title':'هارددیسک، SSD و حافظه ذخیره‌سازی'}, {'id':'computer_accessories','title':'لوازم جانبی کمپیوتر و لپ‌تاپ'}, {'id':'monitors','title':'مانیتور و صفحه‌نمایش'}, {'id':'keyboards_mice','title':'کیبورد، ماوس و پد'}, {'id':'components','title':'قطعات کمپیوتر (RAM، مادربورد، گرافیک)'}, {'id':'cables_adapters','title':'کابل، تبدیل‌کننده و هب USB'}, {'id':'routers_modems','title':'مودم، روتر و تجهیزات اینترنت'}, {'id':'software','title':'نرم‌افزار و لایسنس'}, {'id':'office_equipment','title':'تجهیزات اداری'}, {'id':'projectors','title':'پروژکتور و پرده نمایش'}, {'id':'accessories','title':'سایر لوازم الکترونیکی'}
   ],
   'energy_solar': [
     {'id':'solar_panels','title':'پنل سولر'}, {'id':'batteries_inverters','title':'بیتری و انورتر'}, {'id':'generators','title':'جنراتور'},
     {'id':'solar_pumps','title':'پمپ آب سولری'}, {'id':'electric_supplies','title':'سیم و لوازم برق'},
+    {'id':'solar_complete_systems','title':'سیستم کامل سولری'}, {'id':'charge_controllers','title':'کنترولر و شارژکنترولر'}, {'id':'solar_lights','title':'چراغ و روشنایی سولری'}, {'id':'solar_cables','title':'کیبل و کانکتور سولر'}, {'id':'voltage_stabilizers','title':'استابلایزر و محافظ برق'}, {'id':'ups','title':'UPS و برق اضطراری'}, {'id':'electric_motors','title':'موتور و تجهیزات برقی'}, {'id':'energy_other','title':'سایر تجهیزات انرژی و برق'}
   ],
   'heating_winter': [
     {'id':'turkish_stove','title':'بخاری ترکی'}, {'id':'simple_stove','title':'بخاری ساده'}, {'id':'electric_heater','title':'بخاری برقی'},
     {'id':'gas_oil_heater','title':'بخاری گازی و نفتی'}, {'id':'chimney','title':'دودکش و لوازم بخاری'}, {'id':'fuel','title':'هیزم، ذغال و سوخت'},
     {'id':'winter_bedding','title':'کمبل، تشک و لحاف'}, {'id':'winter_clothes','title':'لباس و بوت زمستانی'},
+    {'id':'gas_stoves','title':'اجاق گازی و پیک‌نیک'}, {'id':'water_heaters','title':'آب‌گرم‌کن'}, {'id':'radiators','title':'رادیاتور و سیستم گرمایش مرکزی'}, {'id':'insulation','title':'عایق حرارتی و درزگیر'}, {'id':'winter_accessories','title':'لوازم زمستانی دیگر'}
   ],
   'home_goods': [
     {'id':'furniture','title':'مبلمان'}, {'id':'carpets','title':'قالین و فرش'}, {'id':'appliances','title':'لوازم برقی'},
     {'id':'kitchen','title':'لوازم آشپزخانه'}, {'id':'curtains_decor','title':'پرده و دکوراسیون'},
+    {'id':'refrigerators_freezers','title':'یخچال و فریزر'}, {'id':'washing_machines','title':'ماشین لباس‌شویی'}, {'id':'dishwashers','title':'ماشین ظرف‌شویی'}, {'id':'ovens_microwaves','title':'اجاق، فر و مایکروویو'}, {'id':'vacuum_cleaners','title':'جاروبرقی و وسایل نظافت'}, {'id':'fans_cooling','title':'پنکه و وسایل سرمایشی'}, {'id':'beds_mattresses','title':'تخت، تشک و بالش'}, {'id':'tables_chairs','title':'میز و چوکی'}, {'id':'lighting','title':'چراغ و روشنایی'}, {'id':'bathroom_goods','title':'لوازم تشناب و حمام'}, {'id':'storage_organization','title':'قفسه و وسایل نظم‌دهی'}, {'id':'home_other','title':'سایر لوازم خانه'}
   ],
   'fashion': [
     {'id':'mens','title':'لباس مردانه'}, {'id':'womens','title':'لباس زنانه'}, {'id':'kids','title':'لباس کودک'},
     {'id':'shoes','title':'کفش'}, {'id':'traditional','title':'لباس محلی و افغانی'}, {'id':'accessories','title':'ساعت، عینک و کیف'},
+    {'id':'mens_traditional','title':'لباس سنتی مردانه'}, {'id':'womens_traditional','title':'لباس سنتی زنانه'}, {'id':'bags_backpacks','title':'بکس و کوله‌پشتی'}, {'id':'belts_wallets','title':'کمربند و بکس پول'}, {'id':'watches','title':'ساعت مچی'}, {'id':'eyewear','title':'عینک آفتابی و طبی'}, {'id':'beauty_personal','title':'لوازم آرایش و مراقبت شخصی'}, {'id':'fabric_sewing','title':'تکه، پارچه و لوازم خیاطی'}, {'id':'uniforms','title':'یونیفورم و لباس کاری'}, {'id':'fashion_other','title':'سایر لباس و پوشاک'}
   ],
   'jewelry_gems': [
     {'id':'gold_silver','title':'طلا و نقره'}, {'id':'gemstones','title':'سنگ‌های قیمتی (لاجورد، یاقوت، عقیق)'}, {'id':'jewelry','title':'انگشتر و زیورآلات'},
+    {'id':'watches_jewelry','title':'ساعت و زیورآلات'}, {'id':'pearls','title':'مروارید و سنگ‌های تزئینی'}, {'id':'jewelry_tools','title':'ابزار و لوازم زرگری'}, {'id':'gold_coins','title':'سکه و شمش طلا'}, {'id':'jewelry_other','title':'سایر جواهرات و سنگ‌ها'}
   ],
   'food_grocery': [
     {'id':'grocery','title':'مواد غذایی'}, {'id':'dry_fruits','title':'میوه خشک و مغزیجات'}, {'id':'fruit_vegetables','title':'میوه و سبزی'},
     {'id':'meat_dairy','title':'گوشت، لبنیات و تخم'}, {'id':'honey_saffron','title':'عسل و زعفران'}, {'id':'water_drinks','title':'آب و نوشیدنی'},
     {'id':'bakery','title':'نان و شیرینی'},
+    {'id':'rice_flour_grains','title':'برنج، آرد و غله'}, {'id':'oil_spices','title':'روغن، ادویه و مصالح'}, {'id':'tea_coffee','title':'چای و قهوه'}, {'id':'canned_food','title':'مواد غذایی کنسروی و بسته‌بندی'}, {'id':'pulses','title':'حبوبات'}, {'id':'frozen_food','title':'مواد غذایی منجمد'}, {'id':'baby_food','title':'غذای کودک'}, {'id':'restaurant_catering','title':'غذای آماده و کیترینگ'}, {'id':'food_other','title':'سایر مواد غذایی'}
   ],
   'agriculture_livestock': [
     {'id':'cattle','title':'گاو و گوساله'}, {'id':'sheep_goats','title':'گوسفند و بز'}, {'id':'horses','title':'اسب'},
     {'id':'poultry','title':'مرغ و پرنده'}, {'id':'farm_equipment','title':'ماشین‌آلات و ابزار زراعت'}, {'id':'seeds_fertilizer','title':'تخم، کود و دوا'},
     {'id':'irrigation','title':'پمپ و لوازم آبیاری'},
+    {'id':'tractors','title':'تراکتور و ماشین‌آلات زراعت'}, {'id':'livestock_feed','title':'خوراک حیوانات'}, {'id':'veterinary','title':'دارو و خدمات وترنری'}, {'id':'dairy_equipment','title':'تجهیزات لبنیات'}, {'id':'greenhouses','title':'گلخانه و تجهیزات آن'}, {'id':'farm_tools','title':'ابزار دستی زراعت'}, {'id':'beekeeping','title':'زنبورداری و عسل'}, {'id':'fish_farming','title':'ماهی‌پروری'}, {'id':'agriculture_other','title':'سایر لوازم زراعت و مالداری'}
   ],
   'construction_tools': [
     {'id':'building_materials','title':'مصالح ساختمانی'}, {'id':'tools','title':'ابزار و ماشین‌آلات'}, {'id':'doors_windows','title':'در، کلکین و شیشه'},
     {'id':'plumbing_electric','title':'لوله، سینیتری و برق'}, {'id':'paint_tiles','title':'رنگ، کاشی و سرامیک'},
+    {'id':'cement_bricks','title':'سمنت، خشت و بلاک'}, {'id':'steel_iron','title':'سیخ، آهن و فلزات ساختمانی'}, {'id':'wood_timber','title':'چوب و نجاری'}, {'id':'roofing','title':'مواد پوشش بام'}, {'id':'power_tools','title':'ابزار برقی و شارژی'}, {'id':'hand_tools','title':'ابزار دستی'}, {'id':'safety_equipment','title':'وسایل ایمنی کار'}, {'id':'bathroom_fittings','title':'تجهیزات تشناب و حمام'}, {'id':'water_tanks_pipes','title':'تانک آب و پایپ'}, {'id':'construction_other','title':'سایر مصالح و ابزار ساختمانی'}
   ],
   'services': [
     {'id':'repair','title':'تعمیرات'}, {'id':'transport','title':'ترانسپورت و باربری'}, {'id':'home_services','title':'خدمات منزل و ساختمانی'},
     {'id':'visa_documents','title':'ویزا و خدمات اسناد'}, {'id':'design_digital','title':'دیزاین و خدمات آنلاین'}, {'id':'translation_typing','title':'ترجمه و تایپ'},
+    {'id':'car_repair','title':'تعمیر موتر و موترسایکل'}, {'id':'phone_computer_repair','title':'تعمیر موبایل و کمپیوتر'}, {'id':'electrical_services','title':'خدمات برق‌کاری'}, {'id':'plumbing_services','title':'لوله‌کشی و نلدوانی'}, {'id':'cleaning_services','title':'نظافت و پاک‌کاری'}, {'id':'moving_services','title':'اسباب‌کشی'}, {'id':'photography_services','title':'عکاسی و فیلم‌برداری'}, {'id':'marketing_services','title':'تبلیغات و بازاریابی'}, {'id':'web_it_services','title':'طراحی سایت و خدمات IT'}, {'id':'legal_accounting','title':'خدمات حقوقی و حسابداری'}, {'id':'beauty_services','title':'آرایشگری و زیبایی'}, {'id':'other_services','title':'سایر خدمات'}
   ],
   'jobs': [
     {'id':'full_time','title':'کار تمام‌وقت'}, {'id':'part_time','title':'کار نیمه‌وقت'}, {'id':'remote','title':'کار آنلاین'},
     {'id':'daily_labor','title':'کار روزمزد'}, {'id':'job_seekers','title':'کارجو (جستجوی کار)'},
+    {'id':'engineering_jobs','title':'وظایف انجنیری و تخنیکی'}, {'id':'teaching_jobs','title':'وظایف معلمی و آموزشی'}, {'id':'medical_jobs','title':'وظایف صحی و طبی'}, {'id':'office_jobs','title':'وظایف اداری و دفتری'}, {'id':'sales_jobs','title':'فروش و بازاریابی'}, {'id':'driver_jobs','title':'راننده‌گی'}, {'id':'construction_jobs','title':'کارهای ساختمانی'}, {'id':'hotel_jobs','title':'هوتل و رستورانت'}, {'id':'internships','title':'کارآموزی'}, {'id':'other_jobs','title':'سایر وظایف'}
   ],
   'education': [
     {'id':'courses','title':'کورس و آموزش'}, {'id':'kankor','title':'کورس کانکور'}, {'id':'language','title':'کورس زبان'},
     {'id':'books','title':'کتاب و جزوه'}, {'id':'school_supplies','title':'لوازم مکتب'}, {'id':'tutoring','title':'استاد خصوصی'},
+    {'id':'university_books','title':'کتاب‌های پوهنتون و دانشگاه'}, {'id':'computers_learning','title':'آموزش کمپیوتر و برنامه‌نویسی'}, {'id':'exam_prep','title':'آمادگی امتحانات'}, {'id':'online_courses','title':'آموزش آنلاین'}, {'id':'musical_lessons','title':'آموزش موسیقی'}, {'id':'art_courses','title':'هنر و صنایع دستی'}, {'id':'certificates','title':'مدارک و مواد آموزشی'}, {'id':'education_other','title':'سایر لوازم و خدمات آموزشی'}
   ],
   'health': [
     {'id':'pharmacy','title':'محصولات صحی'}, {'id':'medical_equipment','title':'تجهیزات طبی'}, {'id':'herbal','title':'عطاری و گیاهان دارویی'},
     {'id':'fitness_wellness','title':'ورزش و تندرستی'},
+    {'id':'medical_devices','title':'دستگاه‌های اندازه‌گیری صحی'}, {'id':'mobility_aids','title':'وسایل کمکی و توان‌بخشی'}, {'id':'dental_equipment','title':'تجهیزات دندان‌پزشکی'}, {'id':'optical','title':'عینک و لوازم بینایی'}, {'id':'skin_hair_care','title':'مراقبت پوست و مو'}, {'id':'medical_uniforms','title':'لباس و یونیفورم طبی'}, {'id':'health_other','title':'سایر محصولات صحی'}
   ],
   'kids_family': [
     {'id':'baby_gear','title':'لوازم نوزاد'}, {'id':'toys','title':'اسباب‌بازی'}, {'id':'strollers','title':'کالسکه و چوکی طفل'},
     {'id':'kids_furniture','title':'اثاثیه اطفال'},
+    {'id':'baby_clothes','title':'لباس نوزاد و کودک'}, {'id':'feeding_supplies','title':'لوازم تغذیه کودک'}, {'id':'diapers_hygiene','title':'پوشک و بهداشت کودک'}, {'id':'school_bags','title':'بکس و لوازم مکتب کودک'}, {'id':'baby_monitors','title':'دستگاه مراقبت از کودک'}, {'id':'family_other','title':'سایر لوازم اطفال و خانواده'}
   ],
   'wedding_events': [
     {'id':'wedding_dresses','title':'لباس عروسی'}, {'id':'wedding_services','title':'خدمات عروسی'}, {'id':'halls','title':'تالار و محل مراسم'},
     {'id':'photography','title':'عکاسی و فیلمبرداری'}, {'id':'wedding_decor','title':'دکور و گل‌آرایی'}, {'id':'cake_sweets','title':'کیک و شیرینی'},
+    {'id':'engagement','title':'نامزدی و شیرینی‌خوری'}, {'id':'wedding_clothing','title':'لباس عروسی و دامادی'}, {'id':'makeup_hair','title':'آرایش و پیرایش مراسم'}, {'id':'music_dj','title':'موسیقی و سیستم صوتی مراسم'}, {'id':'event_equipment','title':'تجهیزات و کرایه لوازم مراسم'}, {'id':'invitations','title':'کارت دعوت و چاپ'}, {'id':'event_catering','title':'غذا و پذیرایی مراسم'}, {'id':'events_other','title':'سایر خدمات مراسم'}
   ],
   'animals_pets': [
     {'id':'pigeons','title':'کبوتر'}, {'id':'partridge','title':'کبک و بلدرچین'}, {'id':'parrots','title':'طوطی و پرنده‌های زینتی'},
     {'id':'cats','title':'پیشک / گربه'}, {'id':'dogs','title':'سگ'}, {'id':'pet_supplies','title':'غذا و لوازم حیوانات'},
+    {'id':'rabbits','title':'خرگوش و حیوانات کوچک'}, {'id':'fish_aquarium','title':'ماهی و آکواریوم'}, {'id':'poultry_pets','title':'مرغ و پرنده‌های خانگی'}, {'id':'pet_cages','title':'قفس و لوازم نگهداری'}, {'id':'pet_health','title':'لوازم صحی حیوانات'}, {'id':'pet_services','title':'خدمات نگهداری و تربیت حیوانات'}, {'id':'pets_other','title':'سایر حیوانات و لوازم'}
   ],
   'sports_hobbies': [
     {'id':'sports_equipment','title':'تجهیزات ورزشی'}, {'id':'music','title':'آلات موسیقی'}, {'id':'camping','title':'کمپینگ و سفر'},
+    {'id':'fitness_equipment','title':'وسایل فټنس و ورزش خانگی'}, {'id':'football','title':'فوتبال و فوتسال'}, {'id':'cricket','title':'کریکت'}, {'id':'cycling','title':'دوچرخه‌سواری'}, {'id':'martial_arts','title':'ورزش‌های رزمی'}, {'id':'fishing','title':'ماهی‌گیری'}, {'id':'board_games','title':'بازی‌های فکری و تخته‌ای'}, {'id':'collectibles','title':'کلکسیون و اشیای یادگاری'}, {'id':'arts_crafts','title':'هنر، نقاشی و صنایع دستی'}, {'id':'musical_accessories','title':'لوازم جانبی موسیقی'}, {'id':'hobbies_other','title':'سایر ورزش و سرگرمی'}
   ],
   'travel_tickets': [
     {'id':'air_tickets','title':'تکت هواپیما'}, {'id':'bus_tickets','title':'تکت بس'}, {'id':'hotels','title':'هوتل و اقامت'},
     {'id':'tours','title':'تور و گردشگری'},
+    {'id':'travel_packages','title':'بسته‌های سفر'}, {'id':'visa_travel','title':'ویزا و خدمات سفر'}, {'id':'car_rental_travel','title':'کرایه موتر برای سفر'}, {'id':'guesthouses','title':'مهمان‌خانه و اقامتگاه'}, {'id':'travel_luggage','title':'بکس و لوازم سفر'}, {'id':'travel_other','title':'سایر خدمات سفر'}
   ],
   'afghan_stores': [
     {'id':'clothing_stores','title':'فروشگاه‌های لباس'}, {'id':'shoe_stores','title':'فروشگاه‌های کفش'}, {'id':'gold_stores','title':'طلافروشی و جواهرات'},
@@ -1989,6 +2010,7 @@ const Map<String, List<Map<String, String>>> subcategories = {
     {'id':'car_parts_stores','title':'فروشگاه‌های پرزه‌جات موتر'}, {'id':'children_stores','title':'فروشگاه‌های کودک'}, {'id':'heating_stores','title':'فروشگاه‌های بخاری و لوازم زمستانی'},
     {'id':'solar_stores','title':'فروشگاه‌های سولر و برق'}, {'id':'carpet_stores','title':'قالین‌فروشی'}, {'id':'dry_fruit_stores','title':'میوه خشک و عطاری'},
     {'id':'other_stores','title':'سایر فروشگاه‌ها'},
+    {'id':'computer_stores','title':'فروشگاه‌های کمپیوتر و لوازم جانبی'}, {'id':'stationery_stores','title':'کتاب‌فروشی و لوازم تحریر'}, {'id':'pharmacy_stores','title':'داروخانه و تجهیزات طبی'}, {'id':'agriculture_stores','title':'فروشگاه‌های زراعت و مالداری'}, {'id':'construction_stores','title':'مصالح ساختمانی و ابزار'}, {'id':'sports_stores','title':'فروشگاه‌های ورزشی'}, {'id':'pet_stores','title':'فروشگاه‌های حیوانات و پرندگان'}, {'id':'travel_stores','title':'دفاتر خدمات سفر و تکت'}, {'id':'other_businesses','title':'سایر کسب‌وکارها'}
   ],
 };
 
