@@ -1481,6 +1481,8 @@ const POINTS = {
   referral_invitee: 20,   // هدیه‌ی کسی که با کد دعوت ثبت‌نام کرده
   referral_max: 50,       // حداکثر دعوت امتیازدار برای هر نفر
   store_verified: 100,    // تأیید فروشگاه
+  welcome_bonus: 20,      // هدیه‌ی خوش‌آمد (یک‌بار، هنگام اولین ورود به باشگاه)
+  streak_bonus: 20,       // پاداش هر ۷ روز ورود پشت‌سرهم
 };
 const BOOST_OPTIONS = [
   { id: 'boost3', days: 3, cost: 150, title: 'ویژه ۳ روزه' },
@@ -1503,6 +1505,15 @@ async function adjustPoints(db, userId, delta, reason, ref) {
   const { data, error } = await db.rpc('loyalty_adjust', { p_user: userId, p_delta: delta, p_reason: reason, p_ref: ref == null ? null : String(ref) });
   if (error) { console.error('loyalty_adjust error:', error.message); return { ok: false, error: 'db' }; }
   return data || { ok: false };
+}
+// تعداد روزهای پشت‌سرهمِ ورود روزانه (تا امروز یا دیروز)
+function computeStreak(dates, today) {
+  const set = new Set(dates);
+  const day = (iso, delta) => new Date(new Date(iso + 'T00:00:00Z').getTime() + delta * 86400000).toISOString().slice(0, 10);
+  let cursor = set.has(today) ? today : day(today, -1);
+  let n = 0;
+  while (set.has(cursor)) { n += 1; cursor = day(cursor, -1); }
+  return n;
 }
 function makeReferralCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1543,6 +1554,8 @@ async function awardForPublishedAd(db, userId, productId) {
 app.get('/api/rewards/summary', requireUser, async (req, res) => {
   try {
     const db = getSupabaseAdmin();
+    // هدیه‌ی خوش‌آمد واقعی (فقط یک‌بار برای هر حساب)
+    const welcome = await adjustPoints(db, req.user.id, POINTS.welcome_bonus, 'welcome_bonus', 'self');
     const [{ data: wallet }, { data: txs }, code, { count: invited }, { count: rewardedCount }, { data: me }] = await Promise.all([
       db.from('loyalty_wallets').select('points').eq('user_id', req.user.id).maybeSingle(),
       db.from('loyalty_point_transactions').select('points_delta,reason,created_at').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(25),
@@ -1551,7 +1564,13 @@ app.get('/api/rewards/summary', requireUser, async (req, res) => {
       db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true }).eq('user_id', req.user.id).eq('reason', 'referral'),
       db.from('profiles').select('referred_by').eq('id', req.user.id).maybeSingle(),
     ]);
+    const [{ data: ci }, { count: members }, { count: delivered }] = await Promise.all([
+      db.from('loyalty_point_transactions').select('reference_id').eq('user_id', req.user.id).eq('reason', 'daily_checkin').order('created_at', { ascending: false }).limit(60),
+      db.from('loyalty_wallets').select('user_id', { count: 'exact', head: true }),
+      db.from('mobile_credit_requests').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+    ]);
     const today = kabulDay();
+    const streak = computeStreak((ci || []).map(x => x.reference_id).filter(Boolean), today);
     const checkedIn = (txs || []).some(t => t.reason === 'daily_checkin' && kabulDay(new Date(t.created_at)) === today);
     res.set('Cache-Control', 'no-store');
     res.json({
@@ -1560,6 +1579,9 @@ app.get('/api/rewards/summary', requireUser, async (req, res) => {
       invited_count: invited || 0,
       referral_rewarded_count: rewardedCount || 0,
       has_referrer: Boolean(me?.referred_by),
+      welcome_gift: welcome.ok ? POINTS.welcome_bonus : 0,
+      streak,
+      stats: { members: members || 0, credits_delivered: delivered || 0 },
       checked_in_today: checkedIn,
       earn: POINTS,
       boost_options: BOOST_OPTIONS,
@@ -1576,7 +1598,19 @@ app.post('/api/rewards/checkin', requireUser, async (req, res) => {
   const r = await adjustPoints(db, req.user.id, POINTS.daily_checkin, 'daily_checkin', kabulDay());
   if (r.error === 'duplicate') return res.status(409).json({ error: 'امتیاز امروز را قبلاً گرفته‌اید. فردا دوباره بیایید.' });
   if (!r.ok) return res.status(500).json({ error: 'ثبت امتیاز روزانه انجام نشد.' });
-  res.json({ points: r.points, gained: POINTS.daily_checkin });
+  // پاداش واقعی ۷ روز پشت‌سرهم
+  let bonus = 0, points = r.points;
+  try {
+    const today = kabulDay();
+    const { data: ci } = await db.from('loyalty_point_transactions').select('reference_id').eq('user_id', req.user.id).eq('reason', 'daily_checkin').order('created_at', { ascending: false }).limit(60);
+    const streak = computeStreak((ci || []).map(x => x.reference_id).filter(Boolean), today);
+    if (streak > 0 && streak % 7 === 0) {
+      const b = await adjustPoints(db, req.user.id, POINTS.streak_bonus, 'streak_bonus', today);
+      if (b.ok) { bonus = POINTS.streak_bonus; points = b.points; }
+    }
+    return res.json({ points, gained: POINTS.daily_checkin, bonus, streak });
+  } catch (_) {}
+  res.json({ points, gained: POINTS.daily_checkin, bonus, streak: 0 });
 });
 
 app.post('/api/rewards/apply-referral', requireUser, async (req, res) => {
