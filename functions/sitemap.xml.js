@@ -302,6 +302,9 @@ export async function onRequestGet(context) {
   const homeMod = siteMod ? `<lastmod>${siteMod}</lastmod>` : "";
   out.push(`  <url><loc>${origin}/</loc>${homeMod}<changefreq>hourly</changefreq><priority>1.0</priority></url>`);
 
+  // صفحه‌ی ثابت باشگاه امتیاز (محتوای عمومی؛ تاریخ جعلی نمی‌گذاریم)
+  out.push(`  <url><loc>${origin}/rewards</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+
   // دسته‌ها و زیردسته‌ها: فقط وقتی حداقل یک آگهی فعال دارند وارد می‌شوند (صفحه‌ی خالی برای گوگل Soft 404 می‌شود).
   // تاریخ lastmod = تاریخ آخرین آگهی همان دسته. با ثبت اولین آگهی، دسته خودکار اضافه می‌شود.
   for (const path of STATIC_PATHS) {
