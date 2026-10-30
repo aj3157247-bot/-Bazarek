@@ -2876,6 +2876,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   final scrollCtl = ScrollController();
   final earnKey = GlobalKey();
   String carrier = 'AWCC';
+  String creditChoice = 'credit50';
 
   // مقادیر نمایشی برای حالت عمومی (بدون ورود)؛ همان اعداد سرور است.
   static const Map<String, dynamic> _publicData = {
@@ -3242,7 +3243,56 @@ class _RewardsScreenState extends State<RewardsScreen> {
           keyboardType: TextInputType.phone,
           decoration: InputDecoration(labelText: 'شماره‌ی موبایل برای شارژ', hintText: '07xxxxxxxx', prefixIcon: const Icon(Icons.phone_android_rounded), filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(14))),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
+        const Text('مبلغ کریدت', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 6, children: [
+          for (final o in _list('credit_options'))
+            ChoiceChip(
+              label: Text('${o['amount_afn']} افغانی'),
+              selected: creditChoice == o['id'].toString(),
+              onSelected: (_) => setState(() => creditChoice = o['id'].toString()),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Builder(builder: (context) {
+          final opts = _list('credit_options');
+          final sel = opts.isEmpty ? <String, dynamic>{} : opts.firstWhere((o) => o['id'].toString() == creditChoice, orElse: () => opts.first);
+          final cost = _n(sel['cost']);
+          final enough = !publicMode && cost > 0 && points >= cost;
+          final lack = cost - points;
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: (!enabled || busy || sel.isEmpty) ? null : () => _redeemCredit(sel),
+                style: FilledButton.styleFrom(backgroundColor: enough ? const Color(0xFF7B3FE4) : const Color(0xFF9B8AC4), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                icon: const Icon(Icons.phone_android_rounded),
+                label: const Text('دریافت کریدت موبایل', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+              ),
+            ),
+            if (!publicMode && cost > 0) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(color: enough ? const Color(0xFFE7F6EC) : const Color(0xFFFFF1E6), borderRadius: BorderRadius.circular(12)),
+                child: Row(children: [
+                  Icon(enough ? Icons.check_circle_rounded : Icons.info_outline_rounded, size: 18, color: enough ? const Color(0xFF1B7F3B) : const Color(0xFFC2410C)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      enough ? 'امتیاز شما برای این بسته کافی است ✓' : 'امتیاز شما برای این بسته کافی نیست؛ ${_fmt(lack)} امتیاز دیگر لازم دارید (${_fmt(cost)} امتیاز).',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: enough ? const Color(0xFF1B7F3B) : const Color(0xFFC2410C)),
+                    ),
+                  ),
+                ]),
+              ),
+            ],
+          ]);
+        }),
+        const SizedBox(height: 14),
+        const Text('همه‌ی بسته‌ها', style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
         for (final o in _list('credit_options')) ...[
           Container(
             margin: const EdgeInsets.only(bottom: 10),
