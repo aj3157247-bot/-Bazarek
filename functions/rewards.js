@@ -108,7 +108,7 @@ const FAQ = [
 
 function buildRewardsSeo(shell, requestUrl) {
   const canonical = `${requestUrl.origin}/rewards`;
-  const image = `${requestUrl.origin}/icons/Icon-512.png`;
+  const image = `${requestUrl.origin}/icons/rewards-share.jpg`;
   let html = shell;
   html = replaceTitle(html, PAGE_TITLE);
   html = replaceMeta(html, "name", "description", PAGE_DESC);
@@ -117,7 +117,16 @@ function buildRewardsSeo(shell, requestUrl) {
   html = replaceMeta(html, "property", "og:description", PAGE_DESC);
   html = replaceMeta(html, "property", "og:url", canonical);
   html = replaceMeta(html, "property", "og:image", image);
-  html = replaceMeta(html, "name", "twitter:card", "summary");
+  html = replaceMeta(html, "property", "og:image:secure_url", image);
+  html = replaceMeta(html, "property", "og:image:type", "image/jpeg");
+  html = replaceMeta(html, "property", "og:image:width", "1200");
+  html = replaceMeta(html, "property", "og:image:height", "630");
+  html = replaceMeta(html, "property", "og:image:alt", "باشگاه امتیاز بازارک؛ امتیاز بگیر و کریدت موبایل رایگان ببر");
+  html = replaceMeta(html, "property", "og:site_name", "بازارک");
+  html = replaceMeta(html, "property", "og:locale", "fa_AF");
+  html = replaceMeta(html, "name", "twitter:card", "summary_large_image");
+  html = replaceMeta(html, "name", "twitter:image", image);
+  html = replaceMeta(html, "name", "robots", "index,follow,max-image-preview:large");
   html = replaceMeta(html, "name", "twitter:title", PAGE_TITLE);
   html = replaceMeta(html, "name", "twitter:description", PAGE_DESC);
   html = replaceCanonical(html, canonical);
@@ -135,11 +144,30 @@ function buildRewardsSeo(shell, requestUrl) {
     "@type": "FAQPage",
     mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
   });
-  // متن قابل‌خواندن برای ربات‌ها و کاربرانی که جاوااسکریپت ندارند (همان محتوای صفحه)
-  const noscript = `<noscript><main dir="rtl" style="font-family:sans-serif;max-width:720px;margin:24px auto;padding:0 16px;line-height:1.9">` +
-    `<h1>باشگاه امتیاز بازارک</h1><p>${escHtml(PAGE_DESC)}</p>` +
+  // متن قابل‌خواندن برای ربات‌ها و کاربرانی که جاوااسکریپت ندارند (همان محتوای صفحه، به‌صورت ساختارمند)
+  const earn = [
+    ["ثبت آگهی", "۱۰ امتیاز برای هر آگهی عادی (حداکثر ۳ آگهی در روز)"],
+    ["دعوت دوستان", "۵۰ امتیاز برای هر دوست که اولین آگهی‌اش را منتشر کند؛ دوست شما هم ۲۰ امتیاز هدیه می‌گیرد"],
+    ["ورود روزانه", "۳ امتیاز هر روز و ۲۰ امتیاز پاداش برای هر ۷ روز پشت‌سرهم"],
+    ["تکمیل پروفایل", "۲۰ امتیاز (یک‌بار)"],
+    ["فعال‌سازی فروشگاه", "۱۰۰ امتیاز بعد از تأیید فروشگاه"],
+    ["هدیه‌ی خوش‌آمد", "۲۰ امتیاز در اولین ورود به باشگاه"],
+  ];
+  const spend = [
+    ["کریدت ۵۰ افغانی", "۲٬۰۰۰ امتیاز"],
+    ["کریدت ۱۰۰ افغانی", "۳٬۸۰۰ امتیاز"],
+    ["کریدت ۲۰۰ افغانی", "۷٬۰۰۰ امتیاز"],
+    ["ویژه کردن آگهی ۳ روزه", "۱۵۰ امتیاز"],
+    ["ویژه کردن آگهی ۷ روزه", "۳۰۰ امتیاز"],
+    ["ویژه کردن آگهی ۳۰ روزه", "۱٬۰۰۰ امتیاز"],
+  ];
+  const noscript = `<noscript><main dir="rtl" style="font-family:sans-serif;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.9">` +
+    `<h1>باشگاه امتیاز بازارک؛ امتیاز بگیر، کریدت موبایل رایگان ببر</h1><p>${escHtml(PAGE_DESC)}</p>` +
+    `<h2>چطور امتیاز بگیریم؟</h2><ul>${earn.map(([a, b]) => `<li><strong>${escHtml(a)}:</strong> ${escHtml(b)}</li>`).join("")}</ul>` +
+    `<h2>امتیاز را کجا خرج کنیم؟</h2><ul>${spend.map(([a, b]) => `<li><strong>${escHtml(a)}:</strong> ${escHtml(b)}</li>`).join("")}</ul>` +
+    `<h2>شبکه‌های پشتیبانی‌شده برای کریدت موبایل</h2><p>AWCC، روشان (Roshan)، اتصالات (Etisalat)، سلام (Salaam) و آتوما (ATOMA).</p>` +
     FAQ.map(([q, a]) => `<h2>${escHtml(q)}</h2><p>${escHtml(a)}</p>`).join("") +
-    `<p><a href="${escHtml(requestUrl.origin)}/">بازگشت به بازارک</a></p></main></noscript>`;
+    `<p><a href="${escHtml(requestUrl.origin)}/">بازگشت به بازارک؛ بازار آنلاین خرید و فروش افغانستان</a></p></main></noscript>`;
   html = html.replace(/<body([^>]*)>/i, (m) => `${m}\n${noscript}`);
   return html;
 }
