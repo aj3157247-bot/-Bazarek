@@ -527,6 +527,15 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'آگهی تازه شد و بالای لیست آمد 🔄': 'Ad refreshed and moved to the top 🔄',
+  'تازه‌سازی آگهی (بالا آوردن)': 'Refresh ad (bring to top)',
+  'لینک آگهی کپی شد.': 'Ad link copied.',
+  'کپی لینک آگهی': 'Copy ad link',
+  'ارسال در تلگرام': 'Send on Telegram',
+  'ارسال در واتساپ': 'Send on WhatsApp',
+  'آگهی‌ات را همین حالا برای دوستان و گروه‌هایت بفرست؛ هر چه بیشتر دیده شود، سریع‌تر فروش می‌رود.': 'Send your ad to friends and groups now; the more it is seen, the faster it sells.',
+  '🎉 آگهی شما منتشر شد!': '🎉 Your ad is live!',
+  'اولین آگهی': 'First ad',
   'شبکه و شماره‌ات را وارد کن؛ هر وقت امتیازت رسید، همین‌جا کریدت بگیر.': 'Enter your network and number; claim your credit here as soon as you have enough points.',
   'اشتراک‌گذاری': 'Share',
   'ورود روزانه': 'Daily check-in',
@@ -727,6 +736,15 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'آگهی تازه شد و بالای لیست آمد 🔄': 'اعلان تازه شو او پورته راغی 🔄',
+  'تازه‌سازی آگهی (بالا آوردن)': 'اعلان تازه کړئ (پورته کول)',
+  'لینک آگهی کپی شد.': 'د اعلان لینک کاپي شو.',
+  'کپی لینک آگهی': 'د اعلان لینک کاپي کړئ',
+  'ارسال در تلگرام': 'په تلیګرام کې واستوئ',
+  'ارسال در واتساپ': 'په واټساپ کې واستوئ',
+  'آگهی‌ات را همین حالا برای دوستان و گروه‌هایت بفرست؛ هر چه بیشتر دیده شود، سریع‌تر فروش می‌رود.': 'خپل اعلان همدا اوس ملګرو او ګروپونو ته واستوئ؛ څومره چې ډېر وکتل شي، هغومره ژر پلورل کېږي.',
+  '🎉 آگهی شما منتشر شد!': '🎉 ستاسو اعلان خپور شو!',
+  'اولین آگهی': 'لومړی اعلان',
   'شبکه و شماره‌ات را وارد کن؛ هر وقت امتیازت رسید، همین‌جا کریدت بگیر.': 'خپل شبکه او شمېره ولیکئ؛ کله چې امتیاز مو بسنه وکړ، دلته کریډیټ واخلئ.',
   'اشتراک‌گذاری': 'شریکول',
   'ورود روزانه': 'ورځنی ننوتل',
@@ -2876,21 +2894,23 @@ class _RewardsScreenState extends State<RewardsScreen> {
   final scrollCtl = ScrollController();
   final earnKey = GlobalKey();
   String carrier = 'AWCC';
-  String creditChoice = 'credit50';
+  String creditChoice = 'credit20';
 
   // مقادیر نمایشی برای حالت عمومی (بدون ورود)؛ همان اعداد سرور است.
   static const Map<String, dynamic> _publicData = {
     'points': 0,
-    'earn': {'welcome_profile': 20, 'ad_published': 10, 'ad_daily_cap': 3, 'daily_checkin': 3, 'referral_inviter': 50, 'referral_invitee': 20, 'store_verified': 100, 'welcome_bonus': 20, 'streak_bonus': 20},
+    'earn': {'first_ad_bonus': 30, 'welcome_profile': 20, 'ad_published': 10, 'ad_daily_cap': 3, 'daily_checkin': 3, 'referral_inviter': 50, 'referral_invitee': 20, 'store_verified': 100, 'welcome_bonus': 20, 'streak_bonus': 20},
     'boost_options': [
+      {'id': 'boost1', 'days': 1, 'cost': 60, 'title': 'ویژه ۱ روزه'},
       {'id': 'boost3', 'days': 3, 'cost': 150, 'title': 'ویژه ۳ روزه'},
       {'id': 'boost7', 'days': 7, 'cost': 300, 'title': 'ویژه ۷ روزه'},
       {'id': 'boost30', 'days': 30, 'cost': 1000, 'title': 'ویژه ۳۰ روزه'},
     ],
     'credit_options': [
-      {'id': 'credit50', 'amount_afn': 50, 'cost': 2000},
-      {'id': 'credit100', 'amount_afn': 100, 'cost': 3800},
-      {'id': 'credit200', 'amount_afn': 200, 'cost': 7000},
+      {'id': 'credit20', 'amount_afn': 20, 'cost': 500},
+      {'id': 'credit50', 'amount_afn': 50, 'cost': 1300},
+      {'id': 'credit100', 'amount_afn': 100, 'cost': 2500},
+      {'id': 'credit200', 'amount_afn': 200, 'cost': 4800},
     ],
     'credit_carriers': ['AWCC', 'Roshan', 'Etisalat', 'Salaam', 'ATOMA'],
     'mobile_credit_enabled': true,
@@ -3371,6 +3391,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
           ]),
         ),
         const SizedBox(height: 6),
+        row(Icons.emoji_events_rounded, 'اولین آگهی', '+${_n(earn['first_ad_bonus'])} امتیاز و ۱ روز ویژه‌ی رایگان؛ همان لحظه نتیجه را می‌بینید', action: 'ثبت آگهی', onTap: () async { if (await _needLogin()) return; await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())); _load(); }),
         row(Icons.today_rounded, 'ورود روزانه', '+${_n(earn['daily_checkin'])} امتیاز هر روز؛ هر ۷ روز پشت‌سرهم +${_n(earn['streak_bonus'])} پاداش'),
         row(Icons.campaign_rounded, 'ثبت آگهی', '+${_n(earn['ad_published'])} امتیاز برای هر آگهی (تا ${_n(earn['ad_daily_cap'])} آگهی در روز)', action: 'ثبت آگهی', onTap: () async { if (await _needLogin()) return; await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())); _load(); }),
         row(Icons.person_rounded, 'تکمیل پروفایل', '+${_n(earn['welcome_profile'])} امتیاز (یک‌بار)', action: 'پروفایل', onTap: () async { if (await _needLogin()) return; await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())); _load(); }),
@@ -4303,6 +4324,8 @@ class ApiService {
     if (isFull) return getSellerProfile(key);
     throw Exception('فروشگاه پیدا نشد.');
   }
+
+  static Future<Map<String, dynamic>> refreshListing(String id) => _rewardsCall('POST', '/products/$id/refresh');
 
   static Future<void> saveStoreProfile(Map<String, dynamic> body) async {
     Future<http.Response> send() => http.patch(Uri.parse('${ApiConfig.baseUrl}/store/profile'), headers: headers, body: jsonEncode(body)).timeout(const Duration(seconds: 25));
@@ -10576,6 +10599,25 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                   child: SizedBox(
                                     width: double.infinity,
                                     child: OutlinedButton.icon(
+                                      onPressed: () async {
+                                        try {
+                                          await ApiService.refreshListing(ad['id'].toString());
+                                          listingsVersion.value++;
+                                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('آگهی تازه شد و بالای لیست آمد 🔄')));
+                                        } catch (e) {
+                                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyNetworkError(context, e))));
+                                        }
+                                      },
+                                      icon: const Icon(Icons.refresh_rounded),
+                                      label: const Text('تازه‌سازی آگهی (بالا آوردن)'),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
                                       onPressed: () => _confirmDelete(ad),
                                       style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
                                       icon: const Icon(Icons.delete_outline),
@@ -12083,6 +12125,47 @@ class _AddProductSheetState extends State<AddProductSheet> {
     audioUrl = result;
   }
 
+  /// بعد از ثبت آگهی: با یک لمس برای دوستان بفرست تا سریع‌تر بفروشی.
+  Future<void> _showSharePrompt(Map<String, dynamic> product) async {
+    final title = product['title']?.toString() ?? '';
+    final link = 'https://bazarek.pages.dev${_listingPath(product)}';
+    final text = '🆕 $title\nدر بازارک ببینید: $link';
+    Future<void> open(String url) async {
+      try { await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); } catch (_) {}
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('🎉 آگهی شما منتشر شد!', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            const Text('آگهی‌ات را همین حالا برای دوستان و گروه‌هایت بفرست؛ هر چه بیشتر دیده شود، سریع‌تر فروش می‌رود.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600, height: 1.6)),
+            const SizedBox(height: 14),
+            WhatsappButton(label: 'ارسال در واتساپ', onPressed: () { Navigator.pop(ctx); open('https://wa.me/?text=${Uri.encodeComponent(text)}'); }),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () { Navigator.pop(ctx); open('https://t.me/share/url?url=${Uri.encodeComponent(link)}&text=${Uri.encodeComponent('🆕 $title')}'); },
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF229ED9), foregroundColor: Colors.white, minimumSize: const Size.fromHeight(48)),
+              icon: const Icon(Icons.send_rounded, size: 20),
+              label: const Text('ارسال در تلگرام', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async { await Clipboard.setData(ClipboardData(text: text)); if (ctx.mounted) Navigator.pop(ctx); _msg('لینک آگهی کپی شد.'); },
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('کپی لینک آگهی'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('بعداً')),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickVideoFile() async {
     final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp4', 'webm', 'mov']);
     if (files.isEmpty) return;
@@ -12212,6 +12295,8 @@ class _AddProductSheetState extends State<AddProductSheet> {
       listingsVersion.value++; // صفحه‌ی اصلی بدون رفرش، آگهی تازه را نشان می‌دهد
       if (!mounted) return;
       _msg(widget.professional ? 'محصول با موفقیت در فروشگاه ثبت شد.' : tr(context, 'publish_success'));
+      if (!widget.professional) await _showSharePrompt(data);
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) _msg(friendlyNetworkError(context, e));
