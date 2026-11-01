@@ -1482,17 +1482,21 @@ const POINTS = {
   referral_max: 50,       // حداکثر دعوت امتیازدار برای هر نفر
   store_verified: 100,    // تأیید فروشگاه
   welcome_bonus: 20,      // هدیه‌ی خوش‌آمد (یک‌بار، هنگام اولین ورود به باشگاه)
+  first_ad_bonus: 30,     // اولین آگهی: امتیاز + ۱ روز ویژه‌ی رایگان
   streak_bonus: 20,       // پاداش هر ۷ روز ورود پشت‌سرهم
 };
 const BOOST_OPTIONS = [
+  { id: 'boost1', days: 1, cost: 60, title: 'ویژه ۱ روزه' },
   { id: 'boost3', days: 3, cost: 150, title: 'ویژه ۳ روزه' },
   { id: 'boost7', days: 7, cost: 300, title: 'ویژه ۷ روزه' },
   { id: 'boost30', days: 30, cost: 1000, title: 'ویژه ۳۰ روزه' },
 ];
+// قیمت‌ها (امتیاز) را اینجا تنظیم کنید؛ هر کریدت برای شما هزینه‌ی واقعی دارد.
 const CREDIT_OPTIONS = [
-  { id: 'credit50', amount_afn: 50, cost: 2000 },
-  { id: 'credit100', amount_afn: 100, cost: 3800 },
-  { id: 'credit200', amount_afn: 200, cost: 7000 },
+  { id: 'credit20', amount_afn: 20, cost: 500 },
+  { id: 'credit50', amount_afn: 50, cost: 1300 },
+  { id: 'credit100', amount_afn: 100, cost: 2500 },
+  { id: 'credit200', amount_afn: 200, cost: 4800 },
 ];
 const CREDIT_CARRIERS = ['AWCC', 'Roshan', 'Etisalat', 'Salaam', 'ATOMA'];
 // فقط وقتی true است که واقعاً کریدت را برای کاربران شارژ می‌کنید. اگر false باشد در اپ «به‌زودی» نشان داده می‌شود و امتیازی کم نمی‌شود.
@@ -1536,9 +1540,41 @@ async function ensureReferralCode(db, userId) {
   return '';
 }
 // بعد از ثبت آگهی عادی: امتیاز آگهی + (اگر اولین آگهی کاربرِ دعوت‌شده بود) امتیاز دعوت‌کننده
+// ───────── انتشار خودکار آگهی در کانال تلگرام بازارک ─────────
+// تنظیم: در Render متغیرهای TELEGRAM_BOT_TOKEN و TELEGRAM_CHANNEL_ID (مثلاً @bazarek_af) را بگذارید و ربات را ادمین کانال کنید.
+const TELEGRAM_AUTOPOST = String(process.env.TELEGRAM_AUTOPOST || 'true').toLowerCase() !== 'false';
+const CATEGORY_TAGS = { vehicles: 'وسایط_نقلیه', real_estate: 'املاک', mobile_tablets: 'موبایل', electronics: 'الکترونیک', energy_solar: 'سولر', heating_winter: 'بخاری', home_goods: 'لوازم_خانه', fashion: 'لباس', jewelry_gems: 'طلا_و_جواهر', food_grocery: 'مواد_غذایی', agriculture_livestock: 'زراعت', construction_tools: 'ساختمان', services: 'خدمات', jobs: 'کاریابی', education: 'آموزش', health: 'صحت', kids_family: 'اطفال', wedding_events: 'عروسی', animals_pets: 'حیوانات', sports_hobbies: 'ورزش', travel_tickets: 'سفر' };
+async function postAdToTelegram(product) {
+  try {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chat = process.env.TELEGRAM_CHANNEL_ID;
+    if (!TELEGRAM_AUTOPOST || !token || !chat || !product || product.is_active === false) return;
+    let images = [];
+    try { const raw = product.image_url; images = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); } catch (_) { images = []; }
+    const photo = String(images[0] || '');
+    const price = Number(product.price) > 0 ? `${Number(product.price).toLocaleString('en-US')} ${String(product.currency).toUpperCase() === 'USD' ? 'دالر' : 'افغانی'}` : 'توافقی';
+    const tag = CATEGORY_TAGS[product.category] ? `#${CATEGORY_TAGS[product.category]}` : '';
+    const link = `https://bazarek.pages.dev/listing/${product.id}`;
+    const caption = [`🆕 ${String(product.title || '').slice(0, 120)}`, `💰 ${price}`, product.province ? `📍 ${product.province}` : '', '', `🔗 مشاهده و تماس با فروشنده:`, link, '', `#بازارک ${tag}`.trim()].filter((x, i, a) => x !== '' || (a[i - 1] !== '')).join('\n');
+    const api = `https://api.telegram.org/bot${token}`;
+    const body = photo.startsWith('http') ? { chat_id: chat, photo, caption: caption.slice(0, 1000) } : { chat_id: chat, text: caption };
+    const r = await fetch(`${api}/${photo.startsWith('http') ? 'sendPhoto' : 'sendMessage'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) console.warn('telegram autopost failed:', r.status, (await r.text()).slice(0, 200));
+  } catch (e) { console.warn('telegram autopost error:', e?.message || e); }
+}
+
 async function awardForPublishedAd(db, userId, productId) {
   try {
     const today = kabulDay();
+    // اولین آگهی: نتیجه‌ی فوری برای فروشنده (امتیاز + ۱ روز ویژه‌ی رایگان)
+    const { count: adsCount } = await db.from('products').select('id', { count: 'exact', head: true }).eq('vendor_id', userId).neq('is_store_product', true);
+    if ((adsCount || 0) === 1) {
+      const g = await adjustPoints(db, userId, POINTS.first_ad_bonus, 'first_ad_bonus', productId);
+      if (g.ok) {
+        await db.from('products').update({ is_featured: true, featured_until: new Date(Date.now() + 86400000).toISOString() }).eq('id', productId);
+        try { await db.from('user_notifications').insert([{ user_id: userId, type: 'rewards', title: 'هدیه‌ی اولین آگهی 🎁', message: `+${POINTS.first_ad_bonus} امتیاز و ۱ روز ویژه‌ی رایگان برای آگهی شما. آگهی‌ات را برای دوستانت بفرست تا سریع‌تر بفروشی!` }]); } catch (_) {}
+      }
+    }
     const { count } = await db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true })
       .eq('user_id', userId).eq('reason', 'ad_published').gte('created_at', new Date(Date.now() - 86400000).toISOString());
     if ((count || 0) < POINTS.ad_daily_cap) await adjustPoints(db, userId, POINTS.ad_published, 'ad_published', productId);
@@ -1550,6 +1586,43 @@ async function awardForPublishedAd(db, userId, productId) {
     }
   } catch (e) { console.warn('awardForPublishedAd error:', e?.message || e); }
 }
+
+// ───────── تازه‌سازی آگهی (بالا آوردن در لیست) و یادآوری ─────────
+app.post('/api/products/:id/refresh', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { data: p } = await db.from('products').select('id,vendor_id,is_active,last_refreshed_at,created_at').eq('id', req.params.id).maybeSingle();
+    if (!p || p.vendor_id !== req.user.id) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (p.is_active === false) return res.status(400).json({ error: 'فقط آگهی فعال تازه‌سازی می‌شود.' });
+    const last = p.last_refreshed_at ? new Date(p.last_refreshed_at).getTime() : 0;
+    const wait = last + 24 * 3600000 - Date.now();
+    if (wait > 0) return res.status(429).json({ error: `آگهی را ${Math.ceil(wait / 3600000)} ساعت دیگر می‌توانید تازه کنید.` });
+    const now = new Date().toISOString();
+    const { error } = await db.from('products').update({ created_at: now, last_refreshed_at: now, updated_at: now }).eq('id', p.id);
+    if (error) throw error;
+    res.json({ ok: true, created_at: now });
+  } catch (e) { console.error('refresh error:', e); res.status(500).json({ error: 'تازه‌سازی انجام نشد.' }); }
+});
+
+async function sendRefreshReminders() {
+  try {
+    if (String(process.env.ENABLE_REMINDERS || 'true').toLowerCase() === 'false') return;
+    const db = getSupabaseAdmin();
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data } = await db.from('products').select('id,vendor_id,title,last_reminder_at,last_refreshed_at')
+      .eq('is_active', true).neq('is_store_product', true).lt('created_at', weekAgo)
+      .or(`last_reminder_at.is.null,last_reminder_at.lt.${weekAgo}`).limit(100);
+    const seen = new Set();
+    for (const p of data || []) {
+      if (seen.has(p.vendor_id)) continue; // برای هر فروشنده در هر دور فقط یک یادآوری
+      seen.add(p.vendor_id);
+      await db.from('user_notifications').insert([{ user_id: p.vendor_id, type: 'reminder', title: 'آگهی‌ات را تازه کن 🔄', message: `آگهی «${String(p.title || '').slice(0, 60)}» یک هفته از ثبتش گذشته. با یک لمس تازه‌اش کن تا دوباره بالای لیست دیده شود.` }]);
+      await db.from('products').update({ last_reminder_at: new Date().toISOString() }).eq('vendor_id', p.vendor_id).eq('is_active', true).neq('is_store_product', true).lt('created_at', weekAgo);
+    }
+  } catch (e) { console.warn('reminders error:', e?.message || e); }
+}
+setTimeout(sendRefreshReminders, 3 * 60 * 1000).unref();
+setInterval(sendRefreshReminders, 6 * 3600 * 1000).unref();
 
 app.get('/api/rewards/summary', requireUser, async (req, res) => {
   try {
@@ -1879,6 +1952,7 @@ app.post('/api/products', requireUser, async (req, res) => {
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     if (data && data.is_store_product !== true) awardForPublishedAd(db, req.user.id, data.id); // امتیاز باشگاه (بدون انتظار)
+    if (data) postAdToTelegram(data); // کانال تلگرام (بدون انتظار)
     try {
       const { data: followers } = await db.from('seller_follows').select('user_id').eq('seller_id', req.user.id);
       if (followers?.length) {
@@ -1929,6 +2003,7 @@ app.post('/api/store-products', requireUser, async (req, res) => {
     };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
+    if (data) postAdToTelegram(data); // کانال تلگرام (بدون انتظار)
     res.status(201).json(data);
   } catch (e) {
     console.error(e);
