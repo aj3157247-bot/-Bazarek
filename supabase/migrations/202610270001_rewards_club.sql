@@ -52,3 +52,7 @@ begin
 end;
 $$;
 revoke all on function public.loyalty_adjust(uuid, int, text, text) from public, anon, authenticated;
+
+-- تازه‌سازی و یادآوری آگهی
+alter table public.products add column if not exists last_refreshed_at timestamptz;
+alter table public.products add column if not exists last_reminder_at timestamptz;
