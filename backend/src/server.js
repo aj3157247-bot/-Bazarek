@@ -117,7 +117,7 @@ function requireConfig(res) {
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
 // build: شناسه‌ی نسخه‌ی بک‌اند؛ با باز کردن /api/health مطمئن می‌شوید Deploy آخرین نسخه انجام شده.
 const BACKEND_BUILD = 'all-categories-open-2026-10-24';
-app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0', build: BACKEND_BUILD, active_ad_categories: String(process.env.ACTIVE_AD_CATEGORIES || '*') }));
+app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0', build: BACKEND_BUILD, active_ad_categories: String(process.env.ACTIVE_AD_CATEGORIES || '*'), channels: { telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHANNEL_ID), facebook: Boolean(process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_TOKEN), instagram: Boolean(process.env.INSTAGRAM_USER_ID && (process.env.INSTAGRAM_TOKEN || process.env.FACEBOOK_PAGE_TOKEN)) } }));
 app.get('/api/version', (_, res) => res.json({ version: '2.6.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone','voice-audio','english-us'] }));
 
 // Phone numbers are stored as a private, deterministic Supabase email alias so
@@ -1544,23 +1544,61 @@ async function ensureReferralCode(db, userId) {
 // تنظیم: در Render متغیرهای TELEGRAM_BOT_TOKEN و TELEGRAM_CHANNEL_ID (مثلاً @bazarek_af) را بگذارید و ربات را ادمین کانال کنید.
 const TELEGRAM_AUTOPOST = String(process.env.TELEGRAM_AUTOPOST || 'true').toLowerCase() !== 'false';
 const CATEGORY_TAGS = { vehicles: 'وسایط_نقلیه', real_estate: 'املاک', mobile_tablets: 'موبایل', electronics: 'الکترونیک', energy_solar: 'سولر', heating_winter: 'بخاری', home_goods: 'لوازم_خانه', fashion: 'لباس', jewelry_gems: 'طلا_و_جواهر', food_grocery: 'مواد_غذایی', agriculture_livestock: 'زراعت', construction_tools: 'ساختمان', services: 'خدمات', jobs: 'کاریابی', education: 'آموزش', health: 'صحت', kids_family: 'اطفال', wedding_events: 'عروسی', animals_pets: 'حیوانات', sports_hobbies: 'ورزش', travel_tickets: 'سفر' };
-async function postAdToTelegram(product) {
+function buildAdCaption(product) {
+  const price = Number(product.price) > 0 ? `${Number(product.price).toLocaleString('en-US')} ${String(product.currency).toUpperCase() === 'USD' ? 'دالر' : 'افغانی'}` : 'توافقی';
+  const tag = CATEGORY_TAGS[product.category] ? `#${CATEGORY_TAGS[product.category]}` : '';
+  const link = `https://bazarek.pages.dev/listing/${product.id}`;
+  const lines = [`🆕 ${String(product.title || '').slice(0, 120)}`, `💰 ${price}`];
+  if (product.province) lines.push(`📍 ${product.province}`);
+  lines.push('', '🔗 مشاهده و تماس با فروشنده:', link, '', `#بازارک ${tag}`.trim());
+  return { caption: lines.join('\n'), link };
+}
+function firstAdImage(product) {
+  let images = [];
+  try { const raw = product.image_url; images = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); } catch (_) { images = []; }
+  return String(images[0] || '');
+}
+async function postAdToTelegram(product, caption, photo) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHANNEL_ID;
+  if (!token || !chat) return;
+  const api = `https://api.telegram.org/bot${token}`;
+  const hasPhoto = photo.startsWith('http');
+  const r = await fetch(`${api}/${hasPhoto ? 'sendPhoto' : 'sendMessage'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(hasPhoto ? { chat_id: chat, photo, caption: caption.slice(0, 1000) } : { chat_id: chat, text: caption }) });
+  if (!r.ok) console.warn('telegram autopost failed:', r.status, (await r.text()).slice(0, 200));
+}
+// صفحه‌ی فیسبوک بازارک (نیاز: FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN با مجوز pages_manage_posts)
+async function postAdToFacebook(product, caption, photo, link) {
+  const id = process.env.FACEBOOK_PAGE_ID, token = process.env.FACEBOOK_PAGE_TOKEN;
+  if (!id || !token) return;
+  const hasPhoto = photo.startsWith('http');
+  const params = new URLSearchParams(hasPhoto ? { url: photo, caption, access_token: token } : { message: caption, link, access_token: token });
+  const r = await fetch(`https://graph.facebook.com/v19.0/${id}/${hasPhoto ? 'photos' : 'feed'}`, { method: 'POST', body: params });
+  if (!r.ok) console.warn('facebook autopost failed:', r.status, (await r.text()).slice(0, 300));
+}
+// اینستاگرام (حساب Business/Creator وصل به صفحه‌ی فیسبوک؛ نیاز: INSTAGRAM_USER_ID و توکن؛ فقط عکس JPEG)
+async function postAdToInstagram(product, caption, photo) {
+  const id = process.env.INSTAGRAM_USER_ID, token = process.env.INSTAGRAM_TOKEN || process.env.FACEBOOK_PAGE_TOKEN;
+  if (!id || !token || !/^https?:\/\/.+\.(jpe?g)(\?.*)?$/i.test(photo)) return;
+  const igCaption = caption.replace('🔗 مشاهده و تماس با فروشنده:', '🔗 لینک آگهی در بایو و کانال تلگرام: t.me/MyBazarek\nجستجو در سایت: bazarek.pages.dev').slice(0, 2000);
+  const c = await fetch(`https://graph.facebook.com/v19.0/${id}/media`, { method: 'POST', body: new URLSearchParams({ image_url: photo, caption: igCaption, access_token: token }) });
+  const cj = await c.json().catch(() => ({}));
+  if (!c.ok || !cj.id) return console.warn('instagram media failed:', c.status, JSON.stringify(cj).slice(0, 200));
+  const r = await fetch(`https://graph.facebook.com/v19.0/${id}/media_publish`, { method: 'POST', body: new URLSearchParams({ creation_id: cj.id, access_token: token }) });
+  if (!r.ok) console.warn('instagram publish failed:', r.status, (await r.text()).slice(0, 200));
+}
+// ورودی اصلی: آگهی را در صفحه‌های رسمی خود بازارک منتشر می‌کند (به‌شرط اینکه فروشنده آن را خاموش نکرده باشد)
+async function postAdToChannels(product) {
   try {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    const chat = process.env.TELEGRAM_CHANNEL_ID;
-    if (!TELEGRAM_AUTOPOST || !token || !chat || !product || product.is_active === false) return;
-    let images = [];
-    try { const raw = product.image_url; images = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); } catch (_) { images = []; }
-    const photo = String(images[0] || '');
-    const price = Number(product.price) > 0 ? `${Number(product.price).toLocaleString('en-US')} ${String(product.currency).toUpperCase() === 'USD' ? 'دالر' : 'افغانی'}` : 'توافقی';
-    const tag = CATEGORY_TAGS[product.category] ? `#${CATEGORY_TAGS[product.category]}` : '';
-    const link = `https://bazarek.pages.dev/listing/${product.id}`;
-    const caption = [`🆕 ${String(product.title || '').slice(0, 120)}`, `💰 ${price}`, product.province ? `📍 ${product.province}` : '', '', `🔗 مشاهده و تماس با فروشنده:`, link, '', `#بازارک ${tag}`.trim()].filter((x, i, a) => x !== '' || (a[i - 1] !== '')).join('\n');
-    const api = `https://api.telegram.org/bot${token}`;
-    const body = photo.startsWith('http') ? { chat_id: chat, photo, caption: caption.slice(0, 1000) } : { chat_id: chat, text: caption };
-    const r = await fetch(`${api}/${photo.startsWith('http') ? 'sendPhoto' : 'sendMessage'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) console.warn('telegram autopost failed:', r.status, (await r.text()).slice(0, 200));
-  } catch (e) { console.warn('telegram autopost error:', e?.message || e); }
+    if (!TELEGRAM_AUTOPOST || !product || product.is_active === false || product.share_to_channels === false) return;
+    const { caption, link } = buildAdCaption(product);
+    const photo = firstAdImage(product);
+    await Promise.allSettled([
+      postAdToTelegram(product, caption, photo),
+      postAdToFacebook(product, caption, photo, link),
+      postAdToInstagram(product, caption, photo),
+    ]);
+  } catch (e) { console.warn('channels autopost error:', e?.message || e); }
 }
 
 async function awardForPublishedAd(db, userId, productId) {
@@ -1923,7 +1961,7 @@ app.get('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', share_to_channels = true, stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
     const forceStoreProduct = String(req.headers['x-bazarek-store-product'] || '').toLowerCase() === 'true';
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
@@ -1948,11 +1986,11 @@ app.post('/api/products', requireUser, async (req, res) => {
       const storeSub = await getActiveStoreSubscription(db, req.user.id);
       if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
     }
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), share_to_channels: !(share_to_channels === false || share_to_channels === 'false'), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
     if (data && data.is_store_product !== true) awardForPublishedAd(db, req.user.id, data.id); // امتیاز باشگاه (بدون انتظار)
-    if (data) postAdToTelegram(data); // کانال تلگرام (بدون انتظار)
+    if (data) postAdToChannels(data); // صفحه‌های رسمی بازارک (بدون انتظار)
     try {
       const { data: followers } = await db.from('seller_follows').select('user_id').eq('seller_id', req.user.id);
       if (followers?.length) {
@@ -1968,7 +2006,7 @@ app.post('/api/products', requireUser, async (req, res) => {
 
 app.post('/api/store-products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', share_to_channels = true, stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت محصول الزامی است.' });
     const db = getSupabaseAdmin();
@@ -1983,7 +2021,7 @@ app.post('/api/store-products', requireUser, async (req, res) => {
       price: Math.max(0, Number(price) || 0),
       cost_price: Math.max(0, Number(cost_price) || 0),
       description: String(description).slice(0,10000),
-      category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20),
+      category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), share_to_channels: !(share_to_channels === false || share_to_channels === 'false'), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20),
       allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone),
       contact_phone: String(contact_phone).trim().slice(0,30),
       location_text: String(location_text).trim().slice(0,160),
@@ -2003,7 +2041,7 @@ app.post('/api/store-products', requireUser, async (req, res) => {
     };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
-    if (data) postAdToTelegram(data); // کانال تلگرام (بدون انتظار)
+    if (data) postAdToChannels(data); // صفحه‌های رسمی بازارک (بدون انتظار)
     res.status(201).json(data);
   } catch (e) {
     console.error(e);
