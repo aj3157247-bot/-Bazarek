@@ -56,3 +56,6 @@ revoke all on function public.loyalty_adjust(uuid, int, text, text) from public,
 -- تازه‌سازی و یادآوری آگهی
 alter table public.products add column if not exists last_refreshed_at timestamptz;
 alter table public.products add column if not exists last_reminder_at timestamptz;
+
+-- انتشار آگهی در کانال‌های رسمی بازارک (فروشنده می‌تواند خاموش کند)
+alter table public.products add column if not exists share_to_channels boolean not null default true;
