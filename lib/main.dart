@@ -527,6 +527,11 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'ما را دنبال کنید 💙': 'Follow us 💙',
+  'فیسبوک، تلگرام، واتساپ، یوتیوب، تیک‌تاک و اینستاگرام': 'Facebook, Telegram, WhatsApp, YouTube, TikTok and Instagram',
+  'بازارک در شبکه‌های اجتماعی': 'Bazarek on social media',
+  'آگهی شما (بدون شماره تماس) در تلگرام، فیسبوک و اینستاگرام بازارک هم منتشر می‌شود تا بیشتر دیده شود': 'Your ad (without your phone number) is also posted on Bazarek\'s Telegram, Facebook and Instagram so more people see it',
+  'انتشار در کانال‌های بازارک': 'Publish on Bazarek channels',
   'آگهی تازه شد و بالای لیست آمد 🔄': 'Ad refreshed and moved to the top 🔄',
   'تازه‌سازی آگهی (بالا آوردن)': 'Refresh ad (bring to top)',
   'لینک آگهی کپی شد.': 'Ad link copied.',
@@ -736,6 +741,11 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'ما را دنبال کنید 💙': 'موږ تعقیب کړئ 💙',
+  'فیسبوک، تلگرام، واتساپ، یوتیوب، تیک‌تاک و اینستاگرام': 'فېسبوک، تلیګرام، واټساپ، یوټیوب، ټیکټاک او انسټاګرام',
+  'بازارک در شبکه‌های اجتماعی': 'بازارک په ټولنیزو رسنیو کې',
+  'آگهی شما (بدون شماره تماس) در تلگرام، فیسبوک و اینستاگرام بازارک هم منتشر می‌شود تا بیشتر دیده شود': 'ستاسو اعلان (د تلیفون شمېرې پرته) د بازارک په تلیګرام، فېسبوک او انسټاګرام کې هم خپرېږي',
+  'انتشار در کانال‌های بازارک': 'د بازارک په کانالونو کې خپرول',
   'آگهی تازه شد و بالای لیست آمد 🔄': 'اعلان تازه شو او پورته راغی 🔄',
   'تازه‌سازی آگهی (بالا آوردن)': 'اعلان تازه کړئ (پورته کول)',
   'لینک آگهی کپی شد.': 'د اعلان لینک کاپي شو.',
@@ -3479,6 +3489,72 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   onRefresh: _load,
                   child: ListView(controller: scrollCtl, padding: const EdgeInsets.all(14), children: [_hero(), _creditSection(), _earnSection(), _boostSection(), _history(), _faqSection(), const SizedBox(height: 20)]),
                 ),
+    );
+  }
+}
+
+
+/// صفحه‌های رسمی بازارک در شبکه‌های اجتماعی.
+class SocialLinksScreen extends StatelessWidget {
+  const SocialLinksScreen({super.key});
+
+  static final _items = <List<Object>>[
+    ['فیسبوک', 'خبرها و آگهی‌های تازه', 'https://www.facebook.com/share/1FRxTzdLj6/', 0xFF1877F2, Icons.facebook],
+    ['تلگرام', 'کانال بازارک؛ هر آگهی تازه همین‌جا', 'https://t.me/MyBazarek', 0xFF229ED9, Icons.send_rounded],
+    ['کانال واتساپ', 'خبرهای بازارک در واتساپ', 'https://whatsapp.com/channel/0029VbDvvtSJZg4BR4pZM73o', 0xFF25D366, Icons.chat_rounded],
+    ['یوتیوب', 'ویدیوها و آموزش‌ها', 'https://youtube.com/@bazarek.pages.dev2026', 0xFFFF0000, Icons.smart_display_rounded],
+    ['تیک‌تاک', 'ویدیوهای کوتاه بازارک', 'https://www.tiktok.com/@bazarek.pages.dev', 0xFF111111, Icons.music_note_rounded],
+    ['اینستاگرام', 'عکس محصولات و فروشگاه‌ها', 'https://www.instagram.com/bazarek.pages.dev', 0xFFE4405F, Icons.camera_alt_rounded],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
+      appBar: AppBar(title: const Text('بازارک در شبکه‌های اجتماعی')),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), gradient: const LinearGradient(colors: [Color(0xFF0F6B78), Color(0xFF172B3A)])),
+          child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('ما را دنبال کنید 💙', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+            SizedBox(height: 6),
+            Text('آگهی‌های تازه‌ی بازارک در همه‌ی این صفحه‌ها منتشر می‌شود. دنبال کنید تا هیچ آگهی را از دست ندهید.', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, height: 1.6)),
+          ]),
+        ),
+        for (final it in _items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () async {
+                  try { await launchUrl(Uri.parse(it[2] as String), mode: LaunchMode.externalApplication); } catch (_) {}
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(color: Color(it[3] as int), borderRadius: BorderRadius.circular(14)),
+                      child: Icon(it[4] as IconData, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(it[0] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                      Text(it[1] as String, style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
+                    ])),
+                    const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.black38),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }
@@ -11459,6 +11535,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Divider(height: 1),
             const Divider(height: 1),
             menuTile(Icons.card_giftcard_rounded, 'باشگاه امتیاز', 'امتیاز بگیر، آگهی را ویژه کن، کریدت موبایل ببر', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardsScreen())); }, color: const Color(0xFF7B3FE4)),
+            menuTile(Icons.public_rounded, 'بازارک در شبکه‌های اجتماعی', 'فیسبوک، تلگرام، واتساپ، یوتیوب، تیک‌تاک و اینستاگرام', () { Navigator.push(context, MaterialPageRoute(builder: (_) => const SocialLinksScreen())); }, color: const Color(0xFF229ED9)),
             menuTile(Icons.rocket_launch_rounded, 'Boost آگهی‌ها', 'افزایش نمایش آگهی‌های شما', () async { if (!await requireAccount(context)) return; if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const BoostScreen())); }, color: const Color(0xFFB45309)),
             const Divider(height: 1),
             SwitchListTile(value: Theme.of(context).brightness == Brightness.dark, onChanged: (_) => BazarBuzurgApp.toggleTheme(context), title: Text(tr(context, 'dark_mode')), secondary: const Icon(Icons.dark_mode)),
@@ -11938,6 +12015,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final contactPhone = TextEditingController();
   final whatsappNumber = TextEditingController();
   bool showWhatsapp = false;
+  bool shareToChannels = true;
   final locationText = TextEditingController();
   final socialLink = TextEditingController();
   final brand = TextEditingController();
@@ -12267,7 +12345,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
         'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls), 'audio_url': audioUrl ?? '', 'video_url': videoUrl ?? '',
-        'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(), 'show_whatsapp': showWhatsapp, 'whatsapp_number': showWhatsapp ? (whatsappNumber.text.trim().isEmpty ? contactPhone.text.trim() : whatsappNumber.text.trim()) : '',
+        'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(), 'share_to_channels': shareToChannels, 'show_whatsapp': showWhatsapp, 'whatsapp_number': showWhatsapp ? (whatsappNumber.text.trim().isEmpty ? contactPhone.text.trim() : whatsappNumber.text.trim()) : '',
         'location_text': locationText.text.trim(), 'province': province, 'is_negotiable': isNegotiable, 'currency': currency, 'external_link': socialLink.text.trim(),
         'brand': brand.text.trim(), 'model': model.text.trim(), 'sizes': sizes.text.trim(), 'colors': colors.text.trim(),
         'material': material.text.trim(), 'condition': condition.text.trim(), 'product_code': productCode.text.trim(), 'specifications': specifications.text.trim(),
@@ -12422,6 +12500,14 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 }),
               ),
               if (showWhatsapp) field(whatsappNumber, 'شماره واتساپ', hint: '07xxxxxxxx', keyboard: TextInputType.phone),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.campaign_rounded, color: Color(0xFF229ED9)),
+                title: const Text('انتشار در کانال‌های بازارک', style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: const Text('آگهی شما (بدون شماره تماس) در تلگرام، فیسبوک و اینستاگرام بازارک هم منتشر می‌شود تا بیشتر دیده شود', style: TextStyle(fontSize: 12)),
+                value: shareToChannels,
+                onChanged: (v) => setState(() => shareToChannels = v),
+              ),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('قیمت توافقی'), value: isNegotiable, onChanged: (v) => setState(() => isNegotiable = v)),
             ]),
           );
