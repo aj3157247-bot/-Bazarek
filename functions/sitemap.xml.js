@@ -302,6 +302,19 @@ export async function onRequestGet(context) {
   const homeMod = siteMod ? `<lastmod>${siteMod}</lastmod>` : "";
   out.push(`  <url><loc>${origin}/</loc>${homeMod}<changefreq>hourly</changefreq><priority>1.0</priority></url>`);
 
+  // صفحه‌ی فروشنده شوید (ثابت، جذب فروشنده)
+  out.push(`  <url><loc>${origin}/sell</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+
+  // صفحه‌های شهر + دسته: فقط ترکیب‌هایی که آگهی فعال دارند (صفحه‌ی خالی وارد نمی‌شود)
+  const cityMap = { "بلخ (مزارشریف)": "mazar", "کابل": "kabul", "هرات": "herat", "قندهار": "kandahar", "ننگرهار (جلال‌آباد)": "jalalabad", "کندز": "kunduz" };
+  const cityCatSeen = new Set();
+  for (const x of listings) {
+    const cs = cityMap[x.province]; if (!cs || !x.category || x.is_store_product === true) continue;
+    const key = `${cs}/${x.category}`; if (cityCatSeen.has(key)) continue; cityCatSeen.add(key);
+    const m = lastmodOf(x);
+    out.push(`  <url><loc>${origin}/city/${key}</loc>${m ? `<lastmod>${m}</lastmod>` : ""}<changefreq>daily</changefreq><priority>0.7</priority></url>`);
+  }
+
   // صفحه‌ی ثابت باشگاه امتیاز (محتوای عمومی؛ تاریخ جعلی نمی‌گذاریم)
   out.push(`  <url><loc>${origin}/rewards</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
 
