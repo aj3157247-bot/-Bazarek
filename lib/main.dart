@@ -5731,6 +5731,7 @@ class _HomeScreenState extends State<HomeScreen> {
             searchQuery.trim().isEmpty
         ? tr(context, 'fresh_ads')
         : (isPs ? 'د اعلانونو پایلې' : 'نتایج جستجو');
+    final bool searchMode = selectedCategory.isNotEmpty || selectedProvince.isNotEmpty || searchQuery.trim().isNotEmpty;
 
     Widget categoryTile(Map<String, dynamic> category) {
       final id = category['id'] as String;
@@ -6495,7 +6496,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 1500),
                 child: Column(
                   children: [
-                    if (isMobile) ...[
+                    if (isMobile && !searchMode) ...[
                       Container(
                         margin: const EdgeInsets.fromLTRB(10, 12, 10, 0),
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 15),
@@ -6704,8 +6705,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     ],
 
-                    RewardsBanner(horizontal: horizontal, isMobile: isMobile),
-                    const SizedBox(height: 10),
+                    if (!searchMode) RewardsBanner(horizontal: horizontal, isMobile: isMobile),
+                    if (!searchMode) const SizedBox(height: 10),
 
                     // Professional stores: active paid stores only. Store products are not shown here;
     // customers enter the store to browse its products.
