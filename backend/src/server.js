@@ -1,3 +1,4 @@
+const fs = require('fs');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -1662,6 +1663,32 @@ async function sendRefreshReminders() {
 setTimeout(sendRefreshReminders, 3 * 60 * 1000).unref();
 setInterval(sendRefreshReminders, 6 * 3600 * 1000).unref();
 
+// ───────── ساخت ویدیوی کوتاه از آگهی (برای تیک‌تاک، شورتس، ریلز، واتساپ) ─────────
+// هر کسی که آگهی فعال را ببیند می‌تواند ویدیویش را دانلود کند؛ محدودیت نرخ ساده برای جلوگیری از سوءاستفاده.
+const videoHits = new Map();
+setInterval(() => videoHits.clear(), 60 * 1000).unref();
+app.get('/api/products/:id/video.mp4', async (req, res) => {
+  const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+  const hits = (videoHits.get(ip) || 0) + 1;
+  videoHits.set(ip, hits);
+  if (hits > 6) return res.status(429).json({ error: 'تعداد درخواست زیاد است؛ کمی بعد دوباره امتحان کنید.' });
+  let built = null;
+  try {
+    const db = getSupabaseAdmin();
+    const { data: p } = await db.from('products').select('id,title,price,currency,province,image_url,is_active').eq('id', String(req.params.id)).maybeSingle();
+    if (!p || p.is_active === false) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    const { buildListingVideo } = require('./video/listingVideo');
+    built = await buildListingVideo(p);
+    res.set('Content-Type', 'video/mp4');
+    res.set('Content-Disposition', `attachment; filename="bazarek-${String(p.id).slice(0, 8)}.mp4"`);
+    res.set('Cache-Control', 'public, max-age=3600');
+    fs.createReadStream(built.file).on('close', () => built.cleanup()).pipe(res);
+  } catch (e) {
+    if (built) built.cleanup();
+    console.error('listing video error:', e?.message || e);
+    res.status(500).json({ error: 'ساخت ویدیو انجام نشد.', detail: String(e?.message || '').slice(0, 200) });
+  }
+});
 app.get('/api/rewards/summary', requireUser, async (req, res) => {
   try {
     const db = getSupabaseAdmin();
