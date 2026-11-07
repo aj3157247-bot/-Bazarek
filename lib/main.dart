@@ -2138,8 +2138,9 @@ String storeTypeTitle(BuildContext context, String id) {
 class StoreShowcaseCard extends StatelessWidget {
   final Map<String, dynamic> store;
   final String name;
+  final bool verified;
   final VoidCallback? onOpen;
-  const StoreShowcaseCard({super.key, required this.store, required this.name, this.onOpen});
+  const StoreShowcaseCard({super.key, required this.store, required this.name, this.onOpen, this.verified = false});
 
   @override
   Widget build(BuildContext context) {
@@ -2178,6 +2179,7 @@ class StoreShowcaseCard extends StatelessWidget {
                     height: coverHeight,
                     child: Stack(fit: StackFit.expand, children: [
                       StoreCoverImage(url: cover, height: coverHeight, fallbackIcon: type?.icon ?? Icons.storefront_rounded),
+                      if (verified)
                       Positioned(
                         top: 10,
                         right: 10,
@@ -2322,7 +2324,7 @@ class StoreHeaderBanner extends StatelessWidget {
     this.productCount = 0,
     this.height = 200,
     this.bottom,
-    this.verified = true,
+    this.verified = false,
   });
 
   @override
@@ -6781,6 +6783,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       : (store['seller_name']?.toString().trim().isNotEmpty == true ? store['seller_name'].toString().trim() : 'فروشگاه بازارک');
                   return StoreShowcaseCard(
                     store: store,
+                    verified: store['verified'] == true,
                     name: shopName,
                     onOpen: vendorId.isEmpty
                         ? null
@@ -8737,6 +8740,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                         avatarUrl: storeProfile['avatar_url']?.toString() ?? '',
                         typeId: storeProfile['store_category']?.toString() ?? '',
                         productCount: listings.length,
+                        verified: storeProfile['verified'] == true,
                         height: 210,
                       ),
                       if ((storeProfile['store_whatsapp']?.toString().trim().isNotEmpty == true || storeProfile['store_phone']?.toString().trim().isNotEmpty == true) &&
