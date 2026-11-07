@@ -11064,19 +11064,44 @@ class _CategoryCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    if (images.isEmpty) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [scheme.primaryContainer, scheme.primaryContainer.withOpacity(.55)],
-          ),
+    // طرح یکدست بازارک برای همه‌ی دسته‌ها: گرادینت تیره با آیکن سفید بزرگ (بدون عکس آگهی‌ها)
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F6B78), Color(0xFF172B3A)],
         ),
-        child: Center(child: Icon(icon, size: 44, color: scheme.primary)),
-      );
-    }
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: -30,
+            right: -30,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(.07)),
+            ),
+          ),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.14),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(.28), width: 1.5),
+            ),
+            child: Icon(icon, size: 34, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // (شاخه‌ی قدیمی عکس‌ها دیگر استفاده نمی‌شود)
+  Widget _unusedPhotoRow(BuildContext context) {
     return Row(
       textDirection: TextDirection.ltr,
       children: [
