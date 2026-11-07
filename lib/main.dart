@@ -6710,6 +6710,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     // Professional stores: active paid stores only. Store products are not shown here;
     // customers enter the store to browse its products.
+    if (!searchMode)
     Container(
       margin: EdgeInsets.symmetric(horizontal: horizontal),
       padding: EdgeInsets.fromLTRB(isMobile ? 10 : 18, isMobile ? 14 : 18, isMobile ? 10 : 18, 14),
