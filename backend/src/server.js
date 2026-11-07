@@ -1062,7 +1062,11 @@ app.patch('/api/admin/store-verifications/:id', requireAdmin, async (req, res) =
     }
     const { error: ue } = await db.from('store_verifications').update({ status: decision, admin_note: note, reviewed_at: new Date().toISOString(), id_card_path: '', selfie_path: '' }).eq('id', v.id);
     if (ue) throw ue;
-    if (decision === 'approved') adjustPoints(db, v.user_id, POINTS.store_verified, 'store_verified', v.user_id);
+    if (decision === 'approved') {
+      adjustPoints(db, v.user_id, POINTS.store_verified, 'store_verified', v.user_id);
+      // نشان «فروشنده‌ی تأییدشده» فقط بعد از تأیید هویت توسط مدیریت داده می‌شود
+      await db.from('profiles').update({ verified: true, verified_at: new Date().toISOString() }).eq('id', v.user_id);
+    }
     // حریم خصوصی: بعد از تصمیم مدیریت، عکس‌های مدارک از سرور پاک می‌شوند.
     const files = [v.id_card_path, v.selfie_path].filter(Boolean);
     if (files.length) await db.storage.from(KYC_BUCKET).remove(files);
@@ -1121,7 +1125,7 @@ app.get('/api/stores/active', async (req,res)=>{try{
   const counts={}; for(const p of (products||[])) counts[p.vendor_id]=(counts[p.vendor_id]||0)+1;
   const pm=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
   const best={}; for(const s of active){if(!best[s.user_id]||new Date(s.ends_at).getTime()>new Date(best[s.user_id].ends_at).getTime())best[s.user_id]=s;}
-  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',city:p.store_city||p.city||'',description:p.store_bio||p.bio||'',avatar_url:p.store_logo_url||p.avatar_url||'',store_whatsapp:p.store_whatsapp||p.store_phone||'',store_category:p.store_category||'',store_cover_url:p.store_cover_url||'',verified:p.verified!==false,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
+  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',city:p.store_city||p.city||'',description:p.store_bio||p.bio||'',avatar_url:p.store_logo_url||p.avatar_url||'',store_whatsapp:p.store_whatsapp||p.store_phone||'',store_category:p.store_category||'',store_cover_url:p.store_cover_url||'',verified:p.verified===true,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
 }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});}});
 
 // One-click repair for a product that was accidentally created as an ordinary ad from the store flow.
