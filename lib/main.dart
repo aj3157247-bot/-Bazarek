@@ -5731,8 +5731,6 @@ class _HomeScreenState extends State<HomeScreen> {
             searchQuery.trim().isEmpty
         ? tr(context, 'fresh_ads')
         : (isPs ? 'د اعلانونو پایلې' : 'نتایج جستجو');
-    // وقتی کاربر جستجو یا فیلتر کرده، بخش‌های تزئینی صفحه‌ی اصلی پنهان می‌شوند تا نتیجه بالا باشد
-    final searchMode = selectedCategory.isNotEmpty || selectedProvince.isNotEmpty || searchQuery.trim().isNotEmpty;
 
     Widget categoryTile(Map<String, dynamic> category) {
       final id = category['id'] as String;
@@ -6497,7 +6495,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 1500),
                 child: Column(
                   children: [
-                    if (isMobile && !searchMode) ...[
+                    if (isMobile) ...[
                       Container(
                         margin: const EdgeInsets.fromLTRB(10, 12, 10, 0),
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 15),
@@ -6706,7 +6704,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     ],
 
-                    if (!searchMode) ...[
                     RewardsBanner(horizontal: horizontal, isMobile: isMobile),
                     const SizedBox(height: 10),
 
@@ -6853,8 +6850,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
           const SizedBox(height: 12),
-                    ],
-          
           // Always keep a visible store-purchase CTA under the professional-store carousel.
           Container(
             width: double.infinity,
