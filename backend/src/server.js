@@ -13,6 +13,8 @@ const requireAdmin = require('./middlewares/adminAuth');
 
 const app = express();
 app.use(cors({ origin: true }));
+// فشرده‌سازی پاسخ‌های JSON (اگر کتابخانه نصب باشد؛ در غیر این صورت سرور بدون آن کار می‌کند)
+try { app.use(require('compression')()); } catch (_) {}
 app.use(express.json({ limit: '1mb' }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 20 } });
 const IMAGE_BUCKET = 'listing-images';
@@ -697,7 +699,8 @@ app.get('/api/translate', async (req, res) => {
 });
 
 app.get('/api/listings', async (req, res) => {
-  res.set('Cache-Control', 'no-store');
+  // لیست عمومی چند ثانیه کش می‌شود (تازگی حفظ می‌شود: آگهی جدید بعد از چند ثانیه دیده می‌شود)
+  res.set('Cache-Control', 'public, max-age=10, s-maxage=20, stale-while-revalidate=60');
   try {
     const db = getSupabaseAdmin();
     let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
