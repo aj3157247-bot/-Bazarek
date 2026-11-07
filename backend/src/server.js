@@ -1675,7 +1675,16 @@ app.get('/api/products/:id/video.mp4', async (req, res) => {
   let built = null;
   try {
     const db = getSupabaseAdmin();
-    const { data: p } = await db.from('products').select('id,title,price,currency,province,image_url,is_active').eq('id', String(req.params.id)).maybeSingle();
+    // آیدی کامل (UUID) یا کد کوتاه ۱۲ کاراکتری لینک هر دو قبول می‌شوند
+    const rawId = String(req.params.id || '').trim().toLowerCase();
+    let fullId = rawId;
+    if (/^[0-9a-f]{12}$/.test(rawId)) {
+      const head = `${rawId.slice(0, 8)}-${rawId.slice(8, 12)}`;
+      const { data: found } = await db.from('products').select('id').gte('id', `${head}-0000-0000-0000-000000000000`).lte('id', `${head}-ffff-ffff-ffff-ffffffffffff`).limit(1);
+      if (!found || !found.length) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+      fullId = found[0].id;
+    }
+    const { data: p } = await db.from('products').select('id,title,price,currency,province,image_url,is_active').eq('id', fullId).maybeSingle();
     if (!p || p.is_active === false) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
     const { buildListingVideo } = require('./video/listingVideo');
     built = await buildListingVideo(p);
