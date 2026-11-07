@@ -5605,6 +5605,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           onProvinceChanged: (val) { setState(() => selectedProvince = val ?? ''); _loadProducts(); },
                           onLanguage: _toggleLanguage,
                         ),
+                        if (MediaQuery.sizeOf(context).width < 650)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+                            child: Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: MobileProvinceButton(
+                                selectedProvince: selectedProvince,
+                                onChanged: (val) { setState(() => selectedProvince = val); _loadProducts(); },
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 10),
                         _BazarekSearchBar(
                           controller: _searchController,
@@ -11057,6 +11068,64 @@ Map<String, List<String>> _buildCategoryCovers(List<dynamic> products) {
 }
 
 /// کاور دسته: عکس‌ها کنار هم در یک قاب؛ اگر آگهی‌ای نبود آیکن روی زمینه‌ی رنگی.
+/// دکمه‌ی انتخاب ولایت برای موبایل: کنار نوار جستجو، با نوشته‌ی واضح.
+/// فقط یک شیت انتخاب را باز می‌کند و ولایت را به صفحه برمی‌گرداند؛ بقیه‌ی صفحه دست‌نخورده است.
+class MobileProvinceButton extends StatelessWidget {
+  final String selectedProvince;
+  final ValueChanged<String> onChanged;
+  const MobileProvinceButton({super.key, required this.selectedProvince, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = selectedProvince.isEmpty
+        ? tr(context, 'all_provinces')
+        : localizedProvince(context, selectedProvince);
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () async {
+        final value = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (_) => SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 18),
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.public_outlined),
+                  title: Text(tr(context, 'all_provinces')),
+                  onTap: () => Navigator.pop(context, ''),
+                ),
+                for (final p in provinces)
+                  ListTile(
+                    leading: const Icon(Icons.location_on_outlined),
+                    title: Text(localizedProvince(context, p)),
+                    onTap: () => Navigator.pop(context, p),
+                  ),
+              ],
+            ),
+          ),
+        );
+        if (value != null) onChanged(value);
+      },
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F3F5),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD5D9D9)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.location_on_outlined, size: 18, color: Color(0xFF007185)),
+          const SizedBox(width: 6),
+          Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+          const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+        ]),
+      ),
+    );
+  }
+}
+
 class _CategoryCover extends StatelessWidget {
   final List<String> images;
   final IconData icon;
