@@ -1,3 +1,4 @@
+const fs = require('fs');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -6,14 +7,24 @@ const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer = require('multer');
 const crypto = require('crypto');
+const sharp = require('sharp');
 const { requireUser, getSupabaseAdmin } = require('./middlewares/auth');
 const requireAdmin = require('./middlewares/adminAuth');
 
 const app = express();
 app.use(cors({ origin: true }));
+// فشرده‌سازی پاسخ‌های JSON (اگر کتابخانه نصب باشد؛ در غیر این صورت سرور بدون آن کار می‌کند)
+try { app.use(require('compression')()); } catch (_) {}
 app.use(express.json({ limit: '1mb' }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 20 } });
 const IMAGE_BUCKET = 'listing-images';
+const AUDIO_BUCKET = 'listing-audio';
+const VIDEO_BUCKET = 'listing-videos';
+// ویدیو: آگهی عادی ≤ ۳۰ ثانیه / حداکثر ۲۰MB — فروشگاه حرفه‌ای ≤ ۶۰ ثانیه / حداکثر ۴۰MB.
+// مدت ویدیو در اپ بررسی می‌شود؛ سرور سقف حجم را اجبار می‌کند.
+const VIDEO_MAX_REGULAR = 20 * 1024 * 1024;
+const VIDEO_MAX_STORE = 40 * 1024 * 1024;
+const uploadVideoMw = multer({ storage: multer.memoryStorage(), limits: { fileSize: VIDEO_MAX_STORE, files: 1 } });
 const AVATAR_BUCKET = 'profile-avatars';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -107,8 +118,10 @@ function requireConfig(res) {
 }
 
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
-app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0' }));
-app.get('/api/version', (_, res) => res.json({ version: '2.5.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone'] }));
+// build: شناسه‌ی نسخه‌ی بک‌اند؛ با باز کردن /api/health مطمئن می‌شوید Deploy آخرین نسخه انجام شده.
+const BACKEND_BUILD = 'all-categories-open-2026-10-24';
+app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0', build: BACKEND_BUILD, active_ad_categories: String(process.env.ACTIVE_AD_CATEGORIES || '*'), channels: { telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHANNEL_ID), facebook: Boolean(process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_TOKEN), instagram: Boolean(process.env.INSTAGRAM_USER_ID && (process.env.INSTAGRAM_TOKEN || process.env.FACEBOOK_PAGE_TOKEN)) } }));
+app.get('/api/version', (_, res) => res.json({ version: '2.6.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone','voice-audio','english-us'] }));
 
 // Phone numbers are stored as a private, deterministic Supabase email alias so
 // phone registration/login works without enabling Supabase SMS/OTP. Gmail/email
@@ -269,8 +282,34 @@ app.get('/api/me', requireUser, async (req, res) => {
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('profiles').select('*').eq('id', req.user.id).single();
     if (error) throw error;
-    const { data: ads } = await db.from('products').select('is_active,views_count').eq('vendor_id', req.user.id);
-    const list=ads||[]; data.active_ads=list.filter(a=>a.is_active===true).length; data.total_ads=list.length; data.total_views=list.reduce((n,a)=>n+Number(a.views_count||0),0);
+    const { data: ads } = await db.from('products').select('id,is_active,views_count').eq('vendor_id', req.user.id);
+    const list=ads||[];
+    data.active_ads=list.filter(a=>a.is_active===true).length;
+    data.total_ads=list.length;
+    data.total_views=list.reduce((n,a)=>n+Number(a.views_count||0),0);
+
+    // Social/profile statistics. Keep these optional so an older database
+    // without the social tables does not break the whole account screen.
+    try {
+      const listingIds=list.map(a=>a.id).filter(Boolean);
+      const [{count:followersCount},{count:followingCount},{data:ratings},{count:commentsCount},{count:likesReceivedCount}] = await Promise.all([
+        db.from('seller_follows').select('*',{count:'exact',head:true}).eq('seller_id',req.user.id),
+        db.from('seller_follows').select('*',{count:'exact',head:true}).eq('user_id',req.user.id),
+        db.from('seller_ratings').select('rating').eq('seller_id',req.user.id),
+        db.from('seller_comments').select('*',{count:'exact',head:true}).eq('seller_id',req.user.id),
+        listingIds.length ? db.from('listing_likes').select('*',{count:'exact',head:true}).in('listing_id',listingIds) : Promise.resolve({count:0}),
+      ]);
+      const values=(ratings||[]).map(x=>Number(x.rating)).filter(x=>Number.isFinite(x));
+      data.followers_count=followersCount||0;
+      data.following_count=followingCount||0;
+      data.rating=values.length ? values.reduce((a,x)=>a+x,0)/values.length : 0;
+      data.ratings_count=values.length;
+      data.comments_count=commentsCount||0;
+      data.likes_received_count=likesReceivedCount||0;
+    } catch (socialError) {
+      console.warn('Profile social statistics unavailable:', socialError?.message || socialError);
+      data.followers_count=0; data.following_count=0; data.rating=0; data.ratings_count=0; data.comments_count=0; data.likes_received_count=0;
+    }
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در دریافت پروفایل.' }); }
 });
@@ -280,45 +319,78 @@ app.patch('/api/me', requireUser, async (req, res) => {
     const { full_name, shop_name, phone, city, bio } = req.body || {};
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('profiles').update({ full_name: String(full_name||'').trim().slice(0,120), shop_name: String(shop_name||'').trim().slice(0,120), phone: String(phone||'').trim().slice(0,30), city: String(city||'').trim().slice(0,120), bio: String(bio||'').trim().slice(0,500), updated_at: new Date().toISOString() }).eq('id', req.user.id).select().single();
+    if (!error && data && data.full_name && data.phone && data.city) adjustPoints(db, req.user.id, POINTS.welcome_profile, 'profile_complete', 'self'); // امتیاز باشگاه (یک‌بار)
     if (error) throw error;
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'خطا در ذخیره پروفایل.' }); }
 });
 
+app.post('/api/upload-audio', requireUser, upload.single('audio'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: 'فایل صوتی انتخاب نشده است.' });
+    if (!file.mimetype.startsWith('audio/')) return res.status(400).json({ error: 'فقط فایل صوتی مجاز است.' });
+    if (file.size > 8 * 1024 * 1024) return res.status(400).json({ error: 'فایل صوتی نباید بیشتر از ۸ مگابایت باشد.' });
+    const db = getSupabaseAdmin();
+    const buckets = await db.storage.listBuckets();
+    const allowed = ['audio/webm','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/aac','audio/mp4'];
+    if (!buckets.data?.some(b => b.name === AUDIO_BUCKET)) {
+      const { error: bucketError } = await db.storage.createBucket(AUDIO_BUCKET, { public: true, fileSizeLimit: '8MB', allowedMimeTypes: allowed });
+      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
+    } else {
+      const { error: bucketUpdateError } = await db.storage.updateBucket(AUDIO_BUCKET, { public: true, fileSizeLimit: '8MB', allowedMimeTypes: allowed });
+      if (bucketUpdateError) console.warn('Could not update audio bucket settings:', bucketUpdateError.message);
+    }
+    const originalExt = (file.originalname.split('.').pop() || 'webm').toLowerCase().replace(/[^a-z0-9]/g, '') || 'webm';
+    const path = `${req.user.id}/${crypto.randomUUID()}.${originalExt}`;
+    const { error } = await db.storage.from(AUDIO_BUCKET).upload(path, file.buffer, { contentType: file.mimetype, cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(AUDIO_BUCKET).getPublicUrl(path);
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) {
+    console.error('Listing audio upload error:', e);
+    const detail = String(e?.message || '').trim();
+    res.status(500).json({ error: detail ? `خطا در آپلود صدا: ${detail}` : 'خطا در آپلود صدا.' });
+  }
+});
 
+app.post('/api/upload-video', requireUser, (req, res, next) => uploadVideoMw.single('video')(req, res, (err) => {
+  if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'حجم ویدیو بیش از حد مجاز است.' : 'خطا در دریافت ویدیو.' });
+  next();
+}), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: 'ویدیو انتخاب نشده است.' });
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    if (!allowedTypes.includes(file.mimetype)) return res.status(400).json({ error: 'فقط ویدیوی MP4، WebM یا MOV مجاز است.' });
+    const db = getSupabaseAdmin();
+    const isStore = Boolean(await getActiveStoreSubscription(db, req.user.id));
+    const maxBytes = isStore ? VIDEO_MAX_STORE : VIDEO_MAX_REGULAR;
+    if (file.size > maxBytes) {
+      return res.status(400).json({ error: `حجم ویدیو نباید بیشتر از ${isStore ? '۴۰' : '۲۰'} مگابایت باشد.` });
+    }
+    const buckets = await db.storage.listBuckets();
+    const bucketOptions = { public: true, fileSizeLimit: '40MB', allowedMimeTypes: allowedTypes };
+    if (!buckets.data?.some(b => b.name === VIDEO_BUCKET)) {
+      const { error: bucketError } = await db.storage.createBucket(VIDEO_BUCKET, bucketOptions);
+      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) throw bucketError;
+    }
+    const ext = file.mimetype === 'video/webm' ? 'webm' : file.mimetype === 'video/quicktime' ? 'mov' : 'mp4';
+    const path = `${req.user.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await db.storage.from(VIDEO_BUCKET).upload(path, file.buffer, { contentType: file.mimetype, cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(VIDEO_BUCKET).getPublicUrl(path);
+    res.status(201).json({ url: data.publicUrl, limit_seconds: isStore ? 60 : 30 });
+  } catch (e) {
+    console.error('Listing video upload error:', e);
+    const detail = String(e?.message || '').trim();
+    res.status(500).json({ error: detail ? `خطا در آپلود ویدیو: ${detail}` : 'خطا در آپلود ویدیو.' });
+  }
+});
 
 app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'تصویر پروفایل انتخاب نشده است.' });
-
-    // Browsers can send an image as application/octet-stream. Do not reject it
-    // just because the multipart MIME type is missing; determine the type from
-    // the filename first and from the file signature as a final fallback.
-    const originalName = String(req.file.originalname || '').trim();
-    let ext = (originalName.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const mime = String(req.file.mimetype || '').toLowerCase();
-    const mimeByExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif' };
-    const clientMime = String(req.headers['x-image-mime-type'] || '').toLowerCase();
-    const clientExt = String(req.headers['x-image-extension'] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!ext && clientExt) ext = clientExt;
-    let contentType = mime.startsWith('image/') ? mime : (clientMime.startsWith('image/') ? clientMime : (mimeByExt[ext] || ''));
-
-    // Magic-byte detection handles browsers/platforms that provide neither a
-    // useful MIME type nor a useful filename extension.
-    if (!contentType && req.file.buffer) {
-      const b = req.file.buffer;
-      if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp' && ['avif','avis'].includes(b.toString('ascii', 8, 12))) { contentType = 'image/avif'; ext = 'avif'; }
-      else if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp' && ['heic','heix','hevc','hevx','heif','mif1'].includes(b.toString('ascii', 8, 12))) { contentType = 'image/heic'; ext = 'heic'; }
-      else if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) { contentType = 'image/jpeg'; ext = 'jpg'; }
-      else if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) { contentType = 'image/png'; ext = 'png'; }
-      else if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') { contentType = 'image/webp'; ext = 'webp'; }
-      else if (b.length >= 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a')) { contentType = 'image/gif'; ext = 'gif'; }
-    }
-    if (!contentType || !contentType.startsWith('image/')) return res.status(400).json({ error: 'فقط فایل تصویری مجاز است.' });
-
-    if (!['jpg','jpeg','png','webp','gif','heic','heif','avif'].includes(ext)) {
-      ext = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1] || 'jpg';
-    }
 
     const db = getSupabaseAdmin();
     const buckets = await db.storage.listBuckets();
@@ -339,9 +411,19 @@ app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req
       if (error) console.warn('Could not update avatar bucket settings:', error.message);
     }
 
-    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, req.file.buffer, {
-      contentType,
+    // پردازش فایل با sharp جهت رفع چرخش EXIF عکس‌های عمودی موبایل و جلوگیری از زوم شدن
+    const processedBuffer = await sharp(req.file.buffer)
+      .rotate()
+      .resize(400, 400, {
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
+    const path = `${req.user.id}/avatar-${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, processedBuffer, {
+      contentType: 'image/jpeg',
       cacheControl: '31536000',
       upsert: false,
     });
@@ -457,9 +539,35 @@ app.post('/api/reports', requireUser, async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت گزارش.'});}
 });
 
+// محدودیت تلاش ورود مدیریت: ۵ تلاش ناموفق از یک IP ← قفل ۱۵ دقیقه‌ای؛ سقف کل ۴۰ تلاش ناموفق در ۱۵ دقیقه.
+const ADMIN_FAIL_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_FAIL_MAX_PER_IP = 5;
+const ADMIN_FAIL_MAX_TOTAL = 40;
+const adminFails = new Map(); // ip -> [timestamps]
+function adminFailsRecent(ip) {
+  const now = Date.now();
+  const list = (adminFails.get(ip) || []).filter(t => now - t < ADMIN_FAIL_WINDOW_MS);
+  if (list.length) adminFails.set(ip, list); else adminFails.delete(ip);
+  return list;
+}
+function adminFailsTotal() {
+  let n = 0;
+  for (const ip of [...adminFails.keys()]) n += adminFailsRecent(ip).length;
+  return n;
+}
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 app.post('/api/admin/login', async (req, res) => {
   const { email, password } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
+  const clientIp = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  if (adminFailsRecent(clientIp).length >= ADMIN_FAIL_MAX_PER_IP || adminFailsTotal() >= ADMIN_FAIL_MAX_TOTAL) {
+    return res.status(429).json({ error: 'تلاش‌های ناموفق زیاد بود. ۱۵ دقیقه بعد دوباره تلاش کنید.' });
+  }
   const db = getSupabaseAdmin();
   const logLogin = async (success) => {
     try {
@@ -475,12 +583,16 @@ app.post('/api/admin/login', async (req, res) => {
     await logLogin(false);
     return res.status(503).json({ error: 'تنظیمات امن پنل مدیریت روی سرور کامل نیست.' });
   }
-  if (normalizedEmail !== String(process.env.ADMIN_EMAIL).trim().toLowerCase() || password !== process.env.ADMIN_PASSWORD) {
+  const emailOk = safeEqual(normalizedEmail, String(process.env.ADMIN_EMAIL).trim().toLowerCase());
+  const passOk = safeEqual(String(password || ''), String(process.env.ADMIN_PASSWORD));
+  if (!(emailOk && passOk)) {
+    adminFails.set(clientIp, [...adminFailsRecent(clientIp), Date.now()]);
     await logLogin(false);
     return res.status(401).json({ error: 'ایمیل یا رمز عبور ادمین اشتباه است.' });
   }
+  adminFails.delete(clientIp);
   await logLogin(true);
-  const token = jwt.sign({ role: 'admin', email: normalizedEmail }, process.env.ADMIN_SESSION_SECRET, { expiresIn: '8h' });
+  const token = jwt.sign({ role: 'admin', email: normalizedEmail }, process.env.ADMIN_SESSION_SECRET, { expiresIn: '8h', algorithm: 'HS256' });
   res.json({ token, security_notice: 'ورود مدیریت ثبت شد.' });
 });
 
@@ -519,7 +631,7 @@ app.patch('/api/admin/users/:id/block', requireAdmin, async (req, res) => {
 app.get('/api/admin/products', requireAdmin, async (_, res) => {
   try {
     const db = getSupabaseAdmin();
-    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at').order('created_at', { ascending: false });
+    const { data, error } = await db.from('products').select('id,vendor_id,title,description,price,stock,category,subcategory,province,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,is_active,moderation_disabled,moderation_reason,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,created_at,updated_at,currency').order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
@@ -551,6 +663,8 @@ app.patch('/api/admin/products/:id/promotion', requireAdmin, async (req, res) =>
     const featureDays = Math.max(0, Math.trunc(Number(req.body?.feature_days || 0)));
     const pinDays = Math.max(0, Math.trunc(Number(req.body?.pin_days || 0)));
     const db = getSupabaseAdmin();
+    const { data: listing } = await db.from('products').select('is_store_product').eq('id', req.params.id).maybeSingle();
+    if (listing?.is_store_product === true) return res.status(400).json({ error: 'محصول فروشگاهی قابل بوست یا ارتقای آگهی نیست.' });
     const now = Date.now();
     const payload = {
       is_featured: featureDays > 0,
@@ -572,10 +686,10 @@ app.get('/api/translate', async (req, res) => {
     const text = String(req.query.text || '').trim().slice(0, 1200);
     const target = String(req.query.target || 'ps').trim();
     if (!text) return res.json({ text: '' });
-    if (target !== 'ps') return res.json({ text });
+    if (!['ps','en'].includes(target)) return res.json({ text });
     const url = new URL('https://api.mymemory.translated.net/get');
     url.searchParams.set('q', text);
-    url.searchParams.set('langpair', 'fa|ps');
+    url.searchParams.set('langpair', target === 'en' ? 'fa|en' : 'fa|ps');
     const r = await fetch(url);
     if (!r.ok) return res.json({ text });
     const d = await r.json();
@@ -585,9 +699,11 @@ app.get('/api/translate', async (req, res) => {
 });
 
 app.get('/api/listings', async (req, res) => {
+  // لیست عمومی چند ثانیه کش می‌شود (تازگی حفظ می‌شود: آگهی جدید بعد از چند ثانیه دیده می‌شود)
+  res.set('Cache-Control', 'public, max-age=10, s-maxage=20, stale-while-revalidate=60');
   try {
     const db = getSupabaseAdmin();
-    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province').eq('is_active', true).order('created_at', { ascending: false }).limit(100);
+    let query = db.from('products').select('id,title,description,price,stock,category,subcategory,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,currency,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product').eq('is_active', true).eq('is_store_product', false).order('created_at', { ascending: false }).limit(100);
     const q = String(req.query.q || '').trim();
     const category = String(req.query.category || '').trim();
     const province = String(req.query.province || '').trim();
@@ -601,20 +717,23 @@ app.get('/api/listings', async (req, res) => {
     const now = Date.now();
     const vendorIds = [...new Set((data || []).map(x => x.vendor_id).filter(Boolean))];
     const [{ data: profiles }, { data: globalSubs }, { data: storeSubs }] = await Promise.all([
-      vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone,bio').in('id', vendorIds) : Promise.resolve({ data: [] }),
+      vendorIds.length ? db.from('profiles').select('id,full_name,shop_name,phone,bio,store_name,store_bio').in('id', vendorIds) : Promise.resolve({ data: [] }),
       vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['boost_weekly','boost_monthly','boost_yearly']) : Promise.resolve({ data: [] }),
       vendorIds.length ? db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('user_id', vendorIds).in('status', ['active']).in('plan', ['store_monthly','store_yearly']) : Promise.resolve({ data: [] }),
     ]);
+    const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
     const storeStatus = {};
     for (const sub of (storeSubs || [])) {
       const end = new Date(sub.ends_at || 0).getTime();
       const start = new Date(sub.starts_at || 0).getTime();
       if (end > now && (!sub.starts_at || start <= now)) {
         const current = storeStatus[sub.user_id];
-        if (!current || end > new Date(current.ends_at || 0).getTime()) storeStatus[sub.user_id] = sub;
+        const currentEnd = current ? new Date(current.ends_at || 0).getTime() : 0;
+        if (!current || end > currentEnd) {
+          storeStatus[sub.user_id] = sub;
+        }
       }
     }
-    const pm = Object.fromEntries((profiles || []).map(x => [x.id, x]));
     const globalLevel = {};
     for (const sub of (globalSubs || [])) {
       const end = new Date(sub.ends_at || 0).getTime();
@@ -630,12 +749,27 @@ app.get('/api/listings', async (req, res) => {
       const boostUntil = level === globalLevel[x.vendor_id] ? (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0]?.ends_at || x.boost_until : x.boost_until;
       const turboSub = (globalSubs || []).filter(s => s.user_id === x.vendor_id && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0];
       const storeSub = storeStatus[x.vendor_id];
-      return { ...x, is_featured: featured, is_pinned: pinned, effective_boost_level: level, boost_until: boostUntil, turbo_active: Boolean(turboSub), turbo_plan: turboSub?.plan || null, turbo_starts_at: turboSub?.starts_at || null, turbo_until: turboSub?.ends_at || null, store_active: Boolean(storeSub), store_plan: storeSub?.plan || null, store_starts_at: storeSub?.starts_at || null, store_until: storeSub?.ends_at || null, store_description: pm[x.vendor_id]?.bio || '' };
+      return {
+        ...x,
+        is_featured: featured,
+        is_pinned: pinned,
+        effective_boost_level: level,
+        boost_until: boostUntil,
+        turbo_active: Boolean(turboSub),
+        turbo_plan: turboSub?.plan || null,
+        turbo_starts_at: turboSub?.starts_at || null,
+        turbo_until: turboSub?.ends_at || null,
+        store_active: Boolean(storeSub),
+        store_plan: storeSub?.plan || null,
+        store_starts_at: storeSub?.starts_at || null,
+        store_until: storeSub?.ends_at || null,
+        store_description: pm[x.vendor_id]?.bio || '',
+      };
     }).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || Number(b.is_featured) - Number(a.is_featured) || Number(b.effective_boost_level || 0) - Number(a.effective_boost_level || 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     res.json(rows.map(x => {
       const level = Number(x.effective_boost_level || 0);
       const labels = {1:'⚡ توربو',2:'🔥 انفجاری',3:'💥 قدرتی',4:'👑 فروشنده ویژه',5:'🏆 فروشنده طلایی'};
-      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: pm[x.vendor_id]?.shop_name || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
+      return { ...x, boost_label: x.turbo_active ? '⚡ توربو' : (labels[level] || ''), seller_phone: x.show_phone ? (x.contact_phone || pm[x.vendor_id]?.phone || '') : '', seller_name: (x.is_store_product === true ? (pm[x.vendor_id]?.store_name || pm[x.vendor_id]?.shop_name) : (pm[x.vendor_id]?.store_name ? pm[x.vendor_id]?.full_name : pm[x.vendor_id]?.shop_name)) || pm[x.vendor_id]?.full_name || 'فروشنده بازارک' };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آگهی‌ها.' }); }
 });
@@ -650,11 +784,13 @@ app.get('/api/listings/:id', async (req,res)=>{
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({error:'آگهی پیدا نشد.'});
+    const storeSub = await getActiveStoreSubscription(db, data.vendor_id);
+    if (data.is_store_product === true && !storeSub) return res.status(404).json({error:'این محصول فروشگاهی در حال حاضر نمایش داده نمی‌شود.'});
 
     let seller = {};
     if (data.vendor_id) {
       const {data:profile,error:profileError} = await db.from('profiles')
-        .select('id,full_name,shop_name,phone,bio')
+        .select('id,full_name,shop_name,phone,bio,store_name,store_bio')
         .eq('id', data.vendor_id)
         .maybeSingle();
       if (profileError) console.error('listing seller lookup:', profileError);
@@ -664,9 +800,13 @@ app.get('/api/listings/:id', async (req,res)=>{
     res.set('Cache-Control', 'no-store');
     res.json({
       ...data,
-      seller_name: seller.shop_name || seller.full_name || 'فروشنده بازارک',
+      seller_name: (data.is_store_product === true ? (seller.store_name || seller.shop_name) : (seller.store_name ? seller.full_name : seller.shop_name)) || seller.full_name || 'فروشنده بازارک',
       seller_phone: data.show_phone ? (data.contact_phone || seller.phone || '') : '',
-      store_description: seller.bio || '',
+      store_description: (data.is_store_product === true ? (seller.store_bio || seller.bio) : seller.bio) || '',
+      store_active: Boolean(storeSub),
+      store_plan: storeSub?.plan || null,
+      store_starts_at: storeSub?.starts_at || null,
+      store_until: storeSub?.ends_at || null,
     });
   } catch (e) {
     console.error('GET /api/listings/:id failed:', e);
@@ -738,10 +878,545 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req,res)=>{
 app.get('/api/admin/security/events', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('admin_login_events').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت رویدادهای امنیتی.'});}});
 
 
+// Marketplace social layer: seller profiles, follows, listing likes, ratings and comments.
+app.get('/api/sellers/:id', async (req,res)=>{
+  try{
+    const db=getSupabaseAdmin(); const id=String(req.params.id);
+    const {data:profile,error}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,created_at,store_category,store_cover_url,store_name,store_bio,store_logo_url,store_phone,store_whatsapp,store_city,store_address').eq('id',id).maybeSingle();
+    if(error) throw error; if(!profile) return res.status(404).json({error:'فروشنده پیدا نشد.'});
+    const [{count:followers_count},{data:ratings},storeSub]=await Promise.all([
+      db.from('seller_follows').select('*',{count:'exact',head:true}).eq('seller_id',id),
+      db.from('seller_ratings').select('rating').eq('seller_id',id),
+      getActiveStoreSubscription(db,id)
+    ]);
+    let saved_count=0;
+    try { const r=await db.from('saved_stores').select('*',{count:'exact',head:true}).eq('seller_id',id); saved_count=r.count||0; } catch (_) {}
+    const vals=(ratings||[]).map(x=>Number(x.rating)).filter(x=>Number.isFinite(x));
+    const rating=vals.length?vals.reduce((a,x)=>a+x,0)/vals.length:0;
+    let is_following=false; let is_saved=false;
+    if(req.user?.id){
+      const {data:f}=await db.from('seller_follows').select('user_id').eq('user_id',req.user.id).eq('seller_id',id).maybeSingle();
+      is_following=!!f;
+      try { const {data:sv}=await db.from('saved_stores').select('user_id').eq('user_id',req.user.id).eq('seller_id',id).maybeSingle(); is_saved=!!sv; } catch (_) {}
+    }
+    const {count:products_count}=await db.from('products').select('*',{count:'exact',head:true}).eq('vendor_id',id).eq('is_active',true).eq('is_store_product',true);
+    res.json({...profile,...(req.query.personal==='1'
+      // پروفایل شخصی (ورود از آگهی عادی): اطلاعات فروشگاه نمایش داده نمی‌شود
+      ? {shop_name:profile.store_name?'':(profile.shop_name||''),bio:profile.bio||'',avatar_url:profile.avatar_url||'',city:profile.city||'',store_category:'',store_cover_url:'',store_whatsapp:'',store_phone:'',store_address:''}
+      : {shop_name:profile.store_name||profile.shop_name||'',bio:profile.store_bio||profile.bio||'',avatar_url:profile.store_logo_url||profile.avatar_url||'',city:profile.store_city||profile.city||''}),followers_count:followers_count||0,rating,is_following,is_saved,is_store_active:Boolean(storeSub),store_plan:storeSub?.plan||null,store_until:storeSub?.ends_at||null,saved_count:saved_count||0,products_count:products_count||0});
+  }catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پروفایل فروشنده.'});}
+});
+app.get('/api/sellers/:id/ads', async (req,res)=>{try{
+  const db=getSupabaseAdmin();
+  const sellerId=String(req.params.id);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',false).order('created_at',{ascending:false}).limit(100);
+  if(error)throw error;
+  res.json(data||[]);
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت آگهی‌های فروشنده.'});}});
+
+app.get('/api/sellers/:id/listings', async (req,res)=>{try{
+  const db=getSupabaseAdmin();
+  const sellerId=String(req.params.id);
+  const {data,error}=await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id',sellerId).eq('is_active',true).eq('is_store_product',true).order('created_at',{ascending:false}).limit(100);
+  if(error)throw error;
+  const storeSub=await getActiveStoreSubscription(db,sellerId);
+  const storeActive=Boolean(storeSub);
+  res.json((data||[]).map(x=>({...x,store_active:storeActive,store_plan:storeSub?.plan||null,store_starts_at:storeSub?.starts_at||null,store_until:storeSub?.ends_at||null})));
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت محصولات فروشگاه.'});}});
+
+// Public directory of active professional stores. Product counts are strictly store-product counts.
+// ───────────── هویت فروشگاه: نوع فروشگاه و عکس روی فروشگاه ─────────────
+const STORE_TYPE_IDS = new Set(['clothing','shoes','heating','mobile','electronics','solar','home','furniture','carpet','gold','supermarket','dry_fruit','car_parts','car_dealer','construction','cosmetics','kids','books','wedding','sports','pharmacy','agriculture','other']);
+
+app.patch('/api/store/identity', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.status(403).json({ error: 'برای تنظیم فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
+    const category = String((req.body || {}).store_category || '').trim();
+    if (!STORE_TYPE_IDS.has(category)) return res.status(400).json({ error: 'نوع فروشگاه معتبر نیست.' });
+    const { data, error } = await db.from('profiles').update({ store_category: category, updated_at: new Date().toISOString() }).eq('id', req.user.id).select('id,store_category,store_cover_url').single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { console.error('store identity error:', e); res.status(500).json({ error: 'خطا در ذخیره نوع فروشگاه.' }); }
+});
+
+app.post('/api/store/cover', requireUser, upload.single('cover'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'تصویر انتخاب نشده است.' });
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.status(403).json({ error: 'برای افزودن عکس فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
+    // کاور بدون برش و بدون زوم: نسبت اصلی عکس حفظ می‌شود (فقط چرخش EXIF اصلاح و حجم کم می‌شود).
+    const processed = await sharp(req.file.buffer).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84 }).toBuffer();
+    const buckets = await db.storage.listBuckets();
+    if (!buckets.data?.some(b => b.name === AVATAR_BUCKET)) {
+      const { error: be } = await db.storage.createBucket(AVATAR_BUCKET, { public: true, fileSizeLimit: '10MB' });
+      if (be && !String(be.message || '').toLowerCase().includes('already')) throw be;
+    }
+    const path = `${req.user.id}/cover-${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, processed, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    if (!data?.publicUrl) throw new Error('آدرس تصویر ساخته نشد.');
+    const { error: pe } = await db.from('profiles').update({ store_cover_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', req.user.id);
+    if (pe) throw pe;
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) { console.error('store cover error:', e); res.status(500).json({ error: 'خطا در آپلود عکس فروشگاه.' }); }
+});
+
+// ───────────── فعال‌سازی رایگان فروشگاه: تأیید هویت (تذکره + سلفی) ─────────────
+const KYC_BUCKET = 'store-kyc';
+async function ensureKycBucket(db) {
+  const buckets = await db.storage.listBuckets();
+  if (!buckets.data?.some(b => b.name === KYC_BUCKET)) {
+    const { error } = await db.storage.createBucket(KYC_BUCKET, { public: false, fileSizeLimit: '10MB' });
+    if (error && !String(error.message || '').toLowerCase().includes('already')) throw error;
+  }
+}
+
+app.get('/api/store/verification', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const [{ data: rows }, storeSub] = await Promise.all([
+      db.from('store_verifications').select('id,status,admin_note,created_at,reviewed_at').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(1),
+      getActiveStoreSubscription(db, req.user.id),
+    ]);
+    const last = rows && rows[0];
+    res.set('Cache-Control', 'no-store');
+    res.json({ status: storeSub ? 'approved' : (last?.status || 'none'), admin_note: last?.admin_note || '', store_active: Boolean(storeSub), created_at: last?.created_at || null });
+  } catch (e) { console.error('verification status error:', e); res.status(500).json({ error: 'خطا در دریافت وضعیت تأیید.' }); }
+});
+
+app.post('/api/store/verification', requireUser, upload.fields([{ name: 'id_card', maxCount: 1 }, { name: 'selfie', maxCount: 1 }]), async (req, res) => {
+  try {
+    const idFile = req.files?.id_card?.[0];
+    const selfieFile = req.files?.selfie?.[0];
+    if (!idFile || !selfieFile) return res.status(400).json({ error: 'هر دو عکس (تذکره و سلفی) لازم است.' });
+    const db = getSupabaseAdmin();
+    if (await getActiveStoreSubscription(db, req.user.id)) return res.status(409).json({ error: 'فروشگاه شما همین حالا فعال است.' });
+    const { data: pending } = await db.from('store_verifications').select('id').eq('user_id', req.user.id).eq('status', 'pending').limit(1);
+    if (pending?.length) return res.status(409).json({ error: 'درخواست قبلی شما در انتظار بررسی مدیریت است.' });
+    await ensureKycBucket(db);
+    const stamp = `${Date.now()}-${crypto.randomUUID()}`;
+    const compress = (buf) => sharp(buf).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+    const [idBuf, selfieBuf] = await Promise.all([compress(idFile.buffer), compress(selfieFile.buffer)]);
+    const idPath = `${req.user.id}/${stamp}-id.jpg`;
+    const selfiePath = `${req.user.id}/${stamp}-selfie.jpg`;
+    const up1 = await db.storage.from(KYC_BUCKET).upload(idPath, idBuf, { contentType: 'image/jpeg', upsert: false });
+    if (up1.error) throw up1.error;
+    const up2 = await db.storage.from(KYC_BUCKET).upload(selfiePath, selfieBuf, { contentType: 'image/jpeg', upsert: false });
+    if (up2.error) { await db.storage.from(KYC_BUCKET).remove([idPath]); throw up2.error; }
+    const { data, error } = await db.from('store_verifications').insert([{ user_id: req.user.id, id_card_path: idPath, selfie_path: selfiePath }]).select('id,status,created_at').single();
+    if (error) { await db.storage.from(KYC_BUCKET).remove([idPath, selfiePath]); throw error; }
+    res.status(201).json(data);
+  } catch (e) {
+    console.error('verification submit error:', e);
+    res.status(500).json({ error: 'ارسال مدارک ناموفق بود. دوباره تلاش کنید.' });
+  }
+});
+
+app.get('/api/admin/store-verifications', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const status = ['pending', 'approved', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
+    const { data: rows, error } = await db.from('store_verifications').select('*').eq('status', status).order('created_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    const ids = [...new Set((rows || []).map(r => r.user_id))];
+    const { data: profiles } = ids.length ? await db.from('profiles').select('id,full_name,shop_name,phone,city').in('id', ids) : { data: [] };
+    const pm = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    const sign = async (path) => {
+      if (!path) return '';
+      const { data } = await db.storage.from(KYC_BUCKET).createSignedUrl(path, 600);
+      return data?.signedUrl || '';
+    };
+    const out = [];
+    for (const r of rows || []) {
+      out.push({
+        id: r.id, user_id: r.user_id, status: r.status, admin_note: r.admin_note, created_at: r.created_at, reviewed_at: r.reviewed_at,
+        full_name: pm[r.user_id]?.full_name || '', shop_name: pm[r.user_id]?.shop_name || '', phone: pm[r.user_id]?.phone || '', city: pm[r.user_id]?.city || '',
+        id_card_url: await sign(r.id_card_path), selfie_url: await sign(r.selfie_path),
+      });
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json(out);
+  } catch (e) { console.error('admin verifications error:', e); res.status(500).json({ error: 'خطا در دریافت درخواست‌های تأیید.' }); }
+});
+
+app.patch('/api/admin/store-verifications/:id', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const decision = String(req.body?.status || '');
+    if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ error: 'وضعیت نامعتبر است.' });
+    const note = String(req.body?.note || '').trim().slice(0, 300);
+    const { data: v, error: ve } = await db.from('store_verifications').select('*').eq('id', req.params.id).maybeSingle();
+    if (ve) throw ve;
+    if (!v) return res.status(404).json({ error: 'درخواست پیدا نشد.' });
+    if (v.status !== 'pending') return res.status(409).json({ error: 'این درخواست قبلاً بررسی شده است.' });
+    if (decision === 'approved' && !(await getActiveStoreSubscription(db, v.user_id))) {
+      const now = new Date();
+      const end = new Date(now.getTime() + 365 * 86400000);
+      const row = { user_id: v.user_id, plan: 'store_yearly', price_afn: 0, starts_at: now.toISOString(), ends_at: end.toISOString(),
+        status: 'active', payment_method: 'free_promo', payment_reference: `kyc-${v.id}` };
+      let { error: se } = await db.from('seller_subscriptions').insert([row]);
+      // اگر جدول قدیمی قیمت صفر را نپذیرد (check price_afn > 0)، با ۱ افغانی ثبت می‌کنیم.
+      if (se && String(se.code) === '23514') ({ error: se } = await db.from('seller_subscriptions').insert([{ ...row, price_afn: 1 }]));
+      if (se) throw se;
+    }
+    const { error: ue } = await db.from('store_verifications').update({ status: decision, admin_note: note, reviewed_at: new Date().toISOString(), id_card_path: '', selfie_path: '' }).eq('id', v.id);
+    if (ue) throw ue;
+    if (decision === 'approved') {
+      adjustPoints(db, v.user_id, POINTS.store_verified, 'store_verified', v.user_id);
+      // نشان «فروشنده‌ی تأییدشده» فقط بعد از تأیید هویت توسط مدیریت داده می‌شود
+      await db.from('profiles').update({ verified: true, verified_at: new Date().toISOString() }).eq('id', v.user_id);
+    }
+    // حریم خصوصی: بعد از تصمیم مدیریت، عکس‌های مدارک از سرور پاک می‌شوند.
+    const files = [v.id_card_path, v.selfie_path].filter(Boolean);
+    if (files.length) await db.storage.from(KYC_BUCKET).remove(files);
+    res.json({ ok: true, status: decision });
+  } catch (e) { console.error('admin verification decision error:', e); res.status(500).json({ error: 'ثبت تصمیم ناموفق بود.' }); }
+});
+
+// ───────────── پروفایل فروشگاه (جدا از پروفایل شخصی) ─────────────
+app.patch('/api/store/profile', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    if (!(await getActiveStoreSubscription(db, req.user.id))) return res.status(403).json({ error: 'برای ویرایش پروفایل فروشگاه باید فروشگاه حرفه‌ای فعال باشد.' });
+    const b = req.body || {};
+    const clip = (v, n) => String(v || '').trim().slice(0, n);
+    const phone = (v) => String(v || '').replace(/[^0-9+]/g, '').slice(0, 20);
+    const name = clip(b.store_name, 80);
+    if (!name) return res.status(400).json({ error: 'نام فروشگاه را وارد کنید.' });
+    const update = {
+      store_name: name, store_bio: clip(b.store_bio, 600), store_city: clip(b.store_city, 60), store_address: clip(b.store_address, 200),
+      store_phone: phone(b.store_phone), store_whatsapp: phone(b.store_whatsapp), updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await db.from('profiles').update(update).eq('id', req.user.id).select('id,store_name,store_bio,store_city,store_address,store_phone,store_whatsapp,store_logo_url').single();
+    if (error) throw error;
+    res.json(data);
+  } catch (e) { console.error('store profile error:', e); res.status(500).json({ error: 'خطا در ذخیره پروفایل فروشگاه.' }); }
+});
+
+app.post('/api/store/logo', requireUser, upload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'تصویر انتخاب نشده است.' });
+    const db = getSupabaseAdmin();
+    if (!(await getActiveStoreSubscription(db, req.user.id))) return res.status(403).json({ error: 'برای افزودن لوگو باید فروشگاه حرفه‌ای فعال باشد.' });
+    const processed = await sharp(req.file.buffer).rotate().resize(600, 600, { fit: 'cover', position: 'attention' }).jpeg({ quality: 85 }).toBuffer();
+    const path = `${req.user.id}/store-logo-${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error } = await db.storage.from(AVATAR_BUCKET).upload(path, processed, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    const { error: pe } = await db.from('profiles').update({ store_logo_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', req.user.id);
+    if (pe) throw pe;
+    res.status(201).json({ url: data.publicUrl });
+  } catch (e) { console.error('store logo error:', e); res.status(500).json({ error: 'خطا در آپلود لوگوی فروشگاه.' }); }
+});
+
+app.get('/api/stores/active', async (req,res)=>{try{
+  const db=getSupabaseAdmin(); const now=new Date().toISOString();
+  const {data:subs,error:se}=await db.from('seller_subscriptions').select('user_id,plan,starts_at,ends_at,status').in('plan',['store_monthly','store_yearly']).eq('status','active').gt('ends_at',now).order('ends_at',{ascending:false}).limit(500);
+  if(se)throw se;
+  const active=(subs||[]).filter(s=>!s.starts_at||new Date(s.starts_at).getTime()<=Date.now());
+  const ids=[...new Set(active.map(s=>s.user_id).filter(Boolean))];
+  if(!ids.length)return res.json([]);
+  const [{data:profiles,error:pe},{data:products,error:prode}]=await Promise.all([
+    db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url,verified,store_category,store_cover_url,store_name,store_bio,store_logo_url,store_city,store_phone,store_whatsapp').in('id',ids),
+    db.from('products').select('vendor_id').in('vendor_id',ids).eq('is_active',true).eq('is_store_product',true)
+  ]);
+  if(pe)throw pe;if(prode)throw prode;
+  const counts={}; for(const p of (products||[])) counts[p.vendor_id]=(counts[p.vendor_id]||0)+1;
+  const pm=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
+  const best={}; for(const s of active){if(!best[s.user_id]||new Date(s.ends_at).getTime()>new Date(best[s.user_id].ends_at).getTime())best[s.user_id]=s;}
+  res.json(ids.map(id=>{const p=pm[id]||{};const s=best[id];return {vendor_id:id,shop_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',seller_name:p.store_name||p.shop_name||p.full_name||'فروشگاه بازارک',city:p.store_city||p.city||'',description:p.store_bio||p.bio||'',avatar_url:p.store_logo_url||p.avatar_url||'',store_whatsapp:p.store_whatsapp||p.store_phone||'',store_category:p.store_category||'',store_cover_url:p.store_cover_url||'',verified:p.verified===true,products_count:counts[id]||0,store_plan:s?.plan||null,store_starts_at:s?.starts_at||null,store_until:s?.ends_at||null};}));
+}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت فروشگاه‌های فعال.'});}});
+
+// One-click repair for a product that was accidentally created as an ordinary ad from the store flow.
+app.patch('/api/store-products/:id/claim', requireUser, async (req,res)=>{try{
+  const db=getSupabaseAdmin(); const id=String(req.params.id); const storeSub=await getActiveStoreSubscription(db,req.user.id);
+  if(!storeSub)return res.status(403).json({error:'فروشگاه حرفه‌ای فعال نیست یا تاریخ آن به پایان رسیده است.'});
+  const {data:product,error:pe}=await db.from('products').select('id,vendor_id,is_active,is_store_product').eq('id',id).maybeSingle();
+  if(pe)throw pe;
+  if(!product)return res.status(404).json({error:'محصول پیدا نشد.'});
+  if(String(product.vendor_id)!==String(req.user.id))return res.status(403).json({error:'این محصول متعلق به شما نیست.'});
+  if(product.is_active!==true)return res.status(400).json({error:'فقط محصول فعال قابل انتقال است.'});
+  if(product.is_store_product===true)return res.json(product);
+  const {data,error}=await db.from('products').update({
+    is_store_product:true,is_featured:false,is_pinned:false,featured_until:null,pinned_until:null,
+    boost_level:0,boost_until:null,updated_at:new Date().toISOString()
+  }).eq('id',id).eq('vendor_id',req.user.id).select('*').maybeSingle();
+  if(error)throw error;
+  if(!data)return res.status(404).json({error:'محصول پیدا نشد یا انتقال آن انجام نشد.'});
+  res.set('Cache-Control','no-store');
+  res.json(data);
+}catch(e){
+  console.error('store product claim error:',e);
+  res.status(500).json({error:`انتقال محصول به فروشگاه ناموفق بود${e?.message ? `: ${e.message}` : '.'}`});
+}});
+
+
+app.post('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const sellerId=String(req.params.id);if(sellerId===req.user.id)return res.status(400).json({error:'نمی‌توانید خودتان را دنبال کنید.'});const db=getSupabaseAdmin();const {data:seller}=await db.from('profiles').select('id').eq('id',sellerId).maybeSingle();if(!seller)return res.status(404).json({error:'فروشنده پیدا نشد.'});const {error}=await db.from('seller_follows').upsert([{user_id:req.user.id,seller_id:sellerId}],{onConflict:'user_id,seller_id'});if(error)throw error;res.status(201).json({following:true});}catch(e){console.error(e);res.status(500).json({error:'دنبال‌کردن فروشنده ناموفق بود.'});}});
+app.delete('/api/sellers/:id/follow', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('seller_follows').delete().eq('user_id',req.user.id).eq('seller_id',req.params.id);if(error)throw error;res.json({following:false});}catch(e){console.error(e);res.status(500).json({error:'لغو دنبال‌کردن ناموفق بود.'});}});
+app.post('/api/listings/:id/like', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('listing_likes').upsert([{user_id:req.user.id,listing_id:req.params.id}],{onConflict:'user_id,listing_id'});if(error)throw error;const {count}=await db.from('listing_likes').select('*',{count:'exact',head:true}).eq('listing_id',req.params.id);res.status(201).json({liked:true,likes_count:count||0});}catch(e){console.error(e);res.status(500).json({error:'پسندیدن آگهی ناموفق بود.'});}});
+app.delete('/api/listings/:id/like', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {error}=await db.from('listing_likes').delete().eq('user_id',req.user.id).eq('listing_id',req.params.id);if(error)throw error;const {count}=await db.from('listing_likes').select('*',{count:'exact',head:true}).eq('listing_id',req.params.id);res.json({liked:false,likes_count:count||0});}catch(e){console.error(e);res.status(500).json({error:'لغو پسندیدن ناموفق بود.'});}});
+app.get('/api/sellers/:id/comments', async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('seller_comments').select('id,user_id,comment,created_at').eq('seller_id',req.params.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];let profiles=[];if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name').in('id',ids);profiles=r.data||[];}const map=Object.fromEntries(profiles.map(x=>[x.id,x]));res.json((data||[]).map(x=>({...x,user_name:map[x.user_id]?.shop_name||map[x.user_id]?.full_name||'کاربر بازارک'})));}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت دیدگاه‌ها.'});}});
+app.post('/api/sellers/:id/comments', requireUser, async (req,res)=>{try{const comment=String(req.body?.comment||'').trim().slice(0,500);if(!comment)return res.status(400).json({error:'دیدگاه خالی است.'});if(req.params.id===req.user.id)return res.status(400).json({error:'نمی‌توانید برای خودتان دیدگاه ثبت کنید.'});const db=getSupabaseAdmin();const {data,error}=await db.from('seller_comments').insert([{seller_id:req.params.id,user_id:req.user.id,comment}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'ثبت دیدگاه ناموفق بود.'});}});
+app.post('/api/sellers/:id/rating', requireUser, async (req,res)=>{try{const rating=Math.trunc(Number(req.body?.rating));if(rating<1||rating>5)return res.status(400).json({error:'امتیاز باید بین ۱ تا ۵ باشد.'});if(req.params.id===req.user.id)return res.status(400).json({error:'نمی‌توانید به خودتان امتیاز بدهید.'});const db=getSupabaseAdmin();const {data,error}=await db.from('seller_ratings').upsert([{seller_id:req.params.id,user_id:req.user.id,rating}],{onConflict:'seller_id,user_id'}).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'ثبت امتیاز ناموفق بود.'});}});
+
+
+// Current user's social lists used by the clickable statistics on «حساب من».
+
+// Professional store reviews and saved stores.
+async function getActiveStoreSubscription(db, sellerId) {
+  const { data, error } = await db.from('seller_subscriptions')
+    .select('plan,starts_at,ends_at,status')
+    .eq('user_id', sellerId)
+    .eq('status', 'active')
+    .in('plan', ['store_monthly','store_yearly'])
+    .order('ends_at', { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  const now = Date.now();
+  return (data || []).find(s => new Date(s.ends_at || 0).getTime() > now && (!s.starts_at || new Date(s.starts_at).getTime() <= now)) || null;
+}
+
+app.get('/api/products/:id/reviews', async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const productId=String(req.params.id);
+    const {data:product,error:pe}=await db.from('products').select('id,vendor_id,is_active').eq('id',productId).maybeSingle();
+    if(pe) throw pe;
+    if(!product || product.is_active !== true) return res.status(404).json({error:'محصول پیدا نشد.'});
+    const storeSub=await getActiveStoreSubscription(db, product.vendor_id);
+    if(!storeSub) return res.json([]);
+    const {data,error}=await db.from('product_reviews').select('id,product_id,user_id,rating,review,seller_reply,seller_replied_at,created_at,updated_at').eq('product_id',productId).order('created_at',{ascending:false}).limit(200);
+    if(error) throw error;
+    const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+    let profiles=[];
+    if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url').in('id',ids);profiles=r.data||[];}
+    const map=Object.fromEntries(profiles.map(x=>[x.id,x]));
+    const rows=(data||[]).map(x=>({...x,user_name:map[x.user_id]?.shop_name||map[x.user_id]?.full_name||'کاربر بازارک',user_avatar:map[x.user_id]?.avatar_url||''}));
+    const vals=rows.map(x=>Number(x.rating)).filter(Number.isFinite);
+    res.json({data:rows,average_rating:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0,reviews_count:rows.length});
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت نظرات محصول.'}); }
+});
+
+app.post('/api/products/:id/reviews', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const productId=String(req.params.id);
+    const rating=Math.trunc(Number(req.body?.rating));
+    const review=String(req.body?.review||'').trim().slice(0,1200);
+    if(rating<1 || rating>5) return res.status(400).json({error:'امتیاز باید بین ۱ تا ۵ باشد.'});
+    if(!review) return res.status(400).json({error:'متن نظر الزامی است.'});
+    const {data:product,error:pe}=await db.from('products').select('id,vendor_id,is_active').eq('id',productId).maybeSingle();
+    if(pe) throw pe;
+    if(!product || product.is_active !== true) return res.status(404).json({error:'محصول پیدا نشد.'});
+    if(String(product.vendor_id)===String(req.user.id)) return res.status(400).json({error:'صاحب محصول نمی‌تواند برای محصول خودش نظر ثبت کند.'});
+    const storeSub=await getActiveStoreSubscription(db, product.vendor_id);
+    if(!storeSub) return res.status(403).json({error:'نظر و امتیاز فقط برای محصولات فروشگاه حرفه‌ای فعال است.'});
+    const {data,error}=await db.from('product_reviews').upsert([{
+      product_id:productId,user_id:req.user.id,rating,review,seller_reply:null,seller_replied_at:null,updated_at:new Date().toISOString()
+    }],{onConflict:'product_id,user_id'}).select().single();
+    if(error) throw error;
+    res.status(201).json(data);
+  } catch(e) { console.error(e); res.status(500).json({error:'ثبت نظر ناموفق بود.'}); }
+});
+
+app.patch('/api/product-reviews/:id/reply', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const reviewId=String(req.params.id);
+    const reply=String(req.body?.reply||'').trim().slice(0,1200);
+    if(!reply) return res.status(400).json({error:'متن پاسخ الزامی است.'});
+    const {data:review,error:re}=await db.from('product_reviews').select('id,product_id').eq('id',reviewId).maybeSingle();
+    if(re) throw re;
+    if(!review) return res.status(404).json({error:'نظر پیدا نشد.'});
+    const {data:product,error:pe}=await db.from('products').select('id,vendor_id').eq('id',review.product_id).maybeSingle();
+    if(pe) throw pe;
+    if(!product || String(product.vendor_id)!==String(req.user.id)) return res.status(403).json({error:'شما صاحب این محصول نیستید.'});
+    const storeSub=await getActiveStoreSubscription(db, req.user.id);
+    if(!storeSub) return res.status(403).json({error:'برای پاسخ‌دادن به نظرات باید فروشگاه حرفه‌ای فعال باشد.'});
+    const {data,error}=await db.from('product_reviews').update({seller_reply:reply,seller_replied_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',reviewId).select().single();
+    if(error) throw error;
+    res.json(data);
+  } catch(e) { console.error(e); res.status(500).json({error:'ثبت پاسخ ناموفق بود.'}); }
+});
+
+app.get('/api/me/store-reviews', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const storeSub=await getActiveStoreSubscription(db, req.user.id);
+    if(!storeSub) return res.json([]);
+    const {data:products,error:pe}=await db.from('products').select('id,title,image_url').eq('vendor_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+    if(pe) throw pe;
+    const ids=(products||[]).map(x=>x.id).filter(Boolean);
+    if(!ids.length) return res.json([]);
+    const {data:reviews,error}=await db.from('product_reviews').select('id,product_id,user_id,rating,review,seller_reply,seller_replied_at,created_at,updated_at').in('product_id',ids).order('created_at',{ascending:false}).limit(500);
+    if(error) throw error;
+    const userIds=[...new Set((reviews||[]).map(x=>x.user_id).filter(Boolean))];
+    let profiles=[];
+    if(userIds.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url').in('id',userIds);profiles=r.data||[];}
+    const pm=Object.fromEntries((products||[]).map(x=>[x.id,x]));
+    const um=Object.fromEntries(profiles.map(x=>[x.id,x]));
+    res.json((reviews||[]).map(x=>({...x,product_title:pm[x.product_id]?.title||'محصول',product_image:pm[x.product_id]?.image_url||'',user_name:um[x.user_id]?.shop_name||um[x.user_id]?.full_name||'کاربر بازارک',user_avatar:um[x.user_id]?.avatar_url||''})));
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت نظرات فروشگاه.'}); }
+});
+
+app.post('/api/stores/:id/save', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin(); const sellerId=String(req.params.id);
+    if(sellerId===String(req.user.id)) return res.status(400).json({error:'فروشگاه خودتان را نمی‌توانید ذخیره کنید.'});
+    const storeSub=await getActiveStoreSubscription(db,sellerId);
+    if(!storeSub) return res.status(404).json({error:'فروشگاه حرفه‌ای فعال پیدا نشد.'});
+    const {error}=await db.from('saved_stores').upsert([{user_id:req.user.id,seller_id:sellerId}],{onConflict:'user_id,seller_id'});
+    if(error) throw error;
+    const {count}=await db.from('saved_stores').select('*',{count:'exact',head:true}).eq('seller_id',sellerId);
+    res.status(201).json({saved:true,saved_count:count||0});
+  } catch(e) { console.error(e); res.status(500).json({error:'ذخیره فروشگاه ناموفق بود.'}); }
+});
+
+app.delete('/api/stores/:id/save', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin(); const sellerId=String(req.params.id);
+    const {error}=await db.from('saved_stores').delete().eq('user_id',req.user.id).eq('seller_id',sellerId);
+    if(error) throw error;
+    const {count}=await db.from('saved_stores').select('*',{count:'exact',head:true}).eq('seller_id',sellerId);
+    res.json({saved:false,saved_count:count||0});
+  } catch(e) { console.error(e); res.status(500).json({error:'لغو ذخیره فروشگاه ناموفق بود.'}); }
+});
+
+app.get('/api/me/saved-stores', requireUser, async (req,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    const {data,error}=await db.from('saved_stores').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+    if(error) throw error;
+    const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
+    if(!ids.length) return res.json([]);
+    const {data:profiles,error:pe}=await db.from('profiles').select('id,full_name,shop_name,city,bio,avatar_url').in('id',ids);
+    if(pe) throw pe;
+    const pm=Object.fromEntries((profiles||[]).map(x=>[x.id,x]));
+    const rows=[];
+    for(const x of (data||[])) {
+      const sub=await getActiveStoreSubscription(db,x.seller_id);
+      if(sub) rows.push({...pm[x.seller_id],seller_id:x.seller_id,store_plan:sub.plan,store_until:sub.ends_at,saved_at:x.created_at});
+    }
+    res.json(rows);
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت فروشگاه‌های ذخیره‌شده.'}); }
+});
+
+app.get('/api/me/social/:type', requireUser, async (req,res)=>{
+  try {
+    const type=String(req.params.type||'');
+    const db=getSupabaseAdmin();
+    let rows=[];
+    if(type==='followers'){
+      const {data,error}=await db.from('seller_follows').select('user_id,created_at').eq('seller_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+      if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);const map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));rows=(data||[]).map(x=>({...map[x.user_id],created_at:x.created_at}));}
+    } else if(type==='following'){
+      const {data,error}=await db.from('seller_follows').select('seller_id,created_at').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.seller_id).filter(Boolean))];
+      if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);const map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));rows=(data||[]).map(x=>({...map[x.seller_id],created_at:x.created_at}));}
+    } else if(type==='ratings'){
+      const {data,error}=await db.from('seller_ratings').select('user_id,rating,created_at').eq('seller_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+      let map={}; if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));}
+      rows=(data||[]).map(x=>({...map[x.user_id],rating:x.rating,created_at:x.created_at}));
+    } else if(type==='comments'){
+      const {data,error}=await db.from('seller_comments').select('id,user_id,comment,created_at').eq('seller_id',req.user.id).order('created_at',{ascending:false}).limit(500);
+      if(error) throw error;
+      const ids=[...new Set((data||[]).map(x=>x.user_id).filter(Boolean))];
+      let map={}; if(ids.length){const r=await db.from('profiles').select('id,full_name,shop_name,avatar_url,city').in('id',ids);map=Object.fromEntries((r.data||[]).map(x=>[x.id,x]));}
+      rows=(data||[]).map(x=>({...map[x.user_id],comment:x.comment,created_at:x.created_at}));
+    } else if(type==='likes'){
+      const {data:ads,error:adsError}=await db.from('products').select('id,title,price,currency,image_url,created_at').eq('vendor_id',req.user.id).limit(500);
+      if(adsError) throw adsError;
+      const ids=(ads||[]).map(x=>x.id).filter(Boolean);
+      if(ids.length){const {data,error}=await db.from('listing_likes').select('listing_id,user_id,created_at').in('listing_id',ids).order('created_at',{ascending:false}).limit(1000);if(error) throw error;const adMap=Object.fromEntries((ads||[]).map(x=>[x.id,x]));rows=(data||[]).map(x=>({...adMap[x.listing_id],listing_id:x.listing_id,user_id:x.user_id,created_at:x.created_at,listing_title:adMap[x.listing_id]?.title||'آگهی'}));}
+    } else return res.status(400).json({error:'نوع فهرست نامعتبر است.'});
+    res.json(rows.filter(Boolean));
+  } catch(e) { console.error(e); res.status(500).json({error:'خطا در دریافت اطلاعات اجتماعی.'}); }
+});
+
 app.get('/api/support/requests', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت درخواست‌های پشتیبانی.'});}});
 app.post('/api/support/requests', requireUser, async (req,res)=>{try{const type=String(req.body?.type||'support');const allowed=['bug','suggestion','support','report'];if(!allowed.includes(type))return res.status(400).json({error:'نوع درخواست نامعتبر است.'});const title=String(req.body?.title||'').trim().slice(0,160);const message=String(req.body?.message||'').trim().slice(0,4000);if(!title||!message)return res.status(400).json({error:'موضوع و توضیح الزامی است.'});const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').insert([{user_id:req.user.id,type,title,message}]).select().single();if(error)throw error;res.status(201).json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در ثبت درخواست پشتیبانی.'});}});
-app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('support_requests').select('*,profiles(full_name,phone,city,shop_name)').order('created_at',{ascending:false}).limit(500);if(error)throw error;res.json(data||[]);}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت پشتیبانی.'});}});
+app.get('/api/admin/support/requests', requireAdmin, async (_,res)=>{
+  try {
+    const db=getSupabaseAdmin();
+    // support_requests.user_id references auth.users, not public.profiles, so
+    // PostgREST cannot safely embed profiles here. Fetch them separately.
+    const {data:requests,error}=await db.from('support_requests').select('*').order('created_at',{ascending:false}).limit(500);
+    if(error) throw error;
+    const rows=requests||[];
+    const userIds=[...new Set(rows.map(x=>x.user_id).filter(Boolean))];
+    let profiles=[];
+    if(userIds.length){
+      const {data,error:profileError}=await db.from('profiles').select('id,full_name,phone,city,shop_name,avatar_url').in('id',userIds);
+      if(profileError) throw profileError;
+      profiles=data||[];
+    }
+    const profileMap=Object.fromEntries(profiles.map(p=>[p.id,p]));
+    res.json(rows.map(x=>({...x,profiles:profileMap[x.user_id]||null,user:profileMap[x.user_id]||null})));
+  } catch(e) {
+    console.error('admin support requests error:',e);
+    res.status(500).json({error:'خطا در دریافت پشتیبانی.'});
+  }
+});
 app.patch('/api/admin/support/requests/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'in_progress');if(!['open','in_progress','answered','resolved','closed'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const reply=String(req.body?.admin_reply||'').trim().slice(0,4000);const db=getSupabaseAdmin();const {data:old}=await db.from('support_requests').select('user_id,title').eq('id',req.params.id).maybeSingle();const {data,error}=await db.from('support_requests').update({status,admin_reply:reply,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(old?.user_id&&reply){await db.from('user_notifications').insert([{user_id:old.user_id,type:'support',title:'پاسخ پشتیبانی بازارک',message:`پاسخ درخواست «${old.title||'پشتیبانی'}» آماده شد.`}]);}res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در پاسخ به درخواست.'});}});
+
+// ───────────── آمار داخلی (Analytics) ─────────────
+// دریافت رویداد از سایت: عمومی، با محدودیت نرخ در حافظه (۱۲۰ رویداد در دقیقه برای هر IP).
+const ANALYTICS_EVENTS = new Set(['page_view', 'listing_view', 'chat_click', 'call_click', 'share_click', 'search']);
+const analyticsHits = new Map();
+setInterval(() => analyticsHits.clear(), 60 * 1000).unref();
+app.post('/api/analytics/event', express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    const hits = (analyticsHits.get(ip) || 0) + 1;
+    analyticsHits.set(ip, hits);
+    if (hits > 120) return res.status(204).end();
+    const b = req.body || {};
+    const event = String(b.event || '');
+    if (!ANALYTICS_EVENTS.has(event)) return res.status(204).end();
+    const clip = (v, n) => String(v || '').trim().slice(0, n);
+    const visitor = clip(b.visitor_id, 64);
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(visitor)) return res.status(204).end();
+    const listingId = /^[0-9a-fA-F-]{8,40}$/.test(String(b.listing_id || '')) ? String(b.listing_id).toLowerCase() : '';
+    const row = {
+      event,
+      path: clip(b.path, 200),
+      listing_id: listingId,
+      category: /^[a-z0-9_]{1,40}$/.test(String(b.category || '')) ? String(b.category) : '',
+      query: event === 'search' ? clip(b.query, 80) : '',
+      referrer: clip(b.referrer, 100).toLowerCase().replace(/^www\./, ''),
+      device: ['mobile', 'desktop'].includes(String(b.device)) ? String(b.device) : '',
+      visitor_id: visitor,
+      lang: clip(b.lang, 10),
+    };
+    const db = getSupabaseAdmin();
+    const { error } = await db.from('analytics_events').insert([row]);
+    if (error) console.warn('analytics insert error:', error.message);
+    res.status(204).end();
+  } catch (e) { res.status(204).end(); }
+});
+
+app.get('/api/admin/analytics', requireAdmin, async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 7));
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.rpc('admin_analytics', { p_days: days });
+    if (error) {
+      console.error('admin_analytics error:', error.message);
+      const missing = /admin_analytics|analytics_events|does not exist|schema cache/i.test(error.message || '');
+      return res.status(500).json({ error: missing ? 'جدول آمار ساخته نشده است. فایل 202610180001_analytics.sql را در Supabase اجرا کنید.' : 'خطا در دریافت آمار.' });
+    }
+    res.json(data || {});
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت آمار.' }); }
+});
 
 app.get('/api/admin/stats', requireAdmin, async (_, res) => {
   try {
@@ -803,10 +1478,414 @@ app.get('/api/payment-info', requireUser, async (_,res)=>{
   }
 });
 
+// ═════════════════════ باشگاه امتیاز بازارک (Rewards) ═════════════════════
+// امتیازها فقط توسط سرور تغییر می‌کنند (تابع loyalty_adjust). هر رویداد فقط یک‌بار امتیاز می‌دهد.
+const POINTS = {
+  welcome_profile: 20,    // تکمیل پروفایل (یک‌بار)
+  ad_published: 10,       // هر آگهی عادی (حداکثر ۳ آگهی در روز)
+  ad_daily_cap: 3,
+  daily_checkin: 3,       // ورود روزانه
+  referral_inviter: 50,   // وقتی دوست دعوت‌شده اولین آگهی‌اش را منتشر کرد
+  referral_invitee: 20,   // هدیه‌ی کسی که با کد دعوت ثبت‌نام کرده
+  referral_max: 50,       // حداکثر دعوت امتیازدار برای هر نفر
+  store_verified: 100,    // تأیید فروشگاه
+  welcome_bonus: 20,      // هدیه‌ی خوش‌آمد (یک‌بار، هنگام اولین ورود به باشگاه)
+  first_ad_bonus: 30,     // اولین آگهی: امتیاز + ۱ روز ویژه‌ی رایگان
+  streak_bonus: 20,       // پاداش هر ۷ روز ورود پشت‌سرهم
+};
+const BOOST_OPTIONS = [
+  { id: 'boost1', days: 1, cost: 60, title: 'ویژه ۱ روزه' },
+  { id: 'boost3', days: 3, cost: 150, title: 'ویژه ۳ روزه' },
+  { id: 'boost7', days: 7, cost: 300, title: 'ویژه ۷ روزه' },
+  { id: 'boost30', days: 30, cost: 1000, title: 'ویژه ۳۰ روزه' },
+];
+// قیمت‌ها (امتیاز) را اینجا تنظیم کنید؛ هر کریدت برای شما هزینه‌ی واقعی دارد.
+const CREDIT_OPTIONS = [
+  { id: 'credit20', amount_afn: 20, cost: 500 },
+  { id: 'credit50', amount_afn: 50, cost: 1300 },
+  { id: 'credit100', amount_afn: 100, cost: 2500 },
+  { id: 'credit200', amount_afn: 200, cost: 4800 },
+];
+const CREDIT_CARRIERS = ['AWCC', 'Roshan', 'Etisalat', 'Salaam', 'ATOMA'];
+// فقط وقتی true است که واقعاً کریدت را برای کاربران شارژ می‌کنید. اگر false باشد در اپ «به‌زودی» نشان داده می‌شود و امتیازی کم نمی‌شود.
+const MOBILE_CREDIT_ENABLED = String(process.env.MOBILE_CREDIT_ENABLED || 'true').toLowerCase() !== 'false';
+
+function kabulDay(d = new Date()) {
+  return new Date(d.getTime() + 4.5 * 3600000).toISOString().slice(0, 10);
+}
+async function adjustPoints(db, userId, delta, reason, ref) {
+  const { data, error } = await db.rpc('loyalty_adjust', { p_user: userId, p_delta: delta, p_reason: reason, p_ref: ref == null ? null : String(ref) });
+  if (error) { console.error('loyalty_adjust error:', error.message); return { ok: false, error: 'db' }; }
+  return data || { ok: false };
+}
+// تعداد روزهای پشت‌سرهمِ ورود روزانه (تا امروز یا دیروز)
+function computeStreak(dates, today) {
+  const set = new Set(dates);
+  const day = (iso, delta) => new Date(new Date(iso + 'T00:00:00Z').getTime() + delta * 86400000).toISOString().slice(0, 10);
+  let cursor = set.has(today) ? today : day(today, -1);
+  let n = 0;
+  while (set.has(cursor)) { n += 1; cursor = day(cursor, -1); }
+  return n;
+}
+function makeReferralCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  const bytes = crypto.randomBytes(7);
+  for (let i = 0; i < 7; i++) c += alphabet[bytes[i] % alphabet.length];
+  return c;
+}
+async function ensureReferralCode(db, userId) {
+  const { data: p } = await db.from('profiles').select('referral_code').eq('id', userId).maybeSingle();
+  if (p?.referral_code) return p.referral_code;
+  for (let i = 0; i < 5; i++) {
+    const code = makeReferralCode();
+    const { error } = await db.from('profiles').update({ referral_code: code }).eq('id', userId).is('referral_code', null);
+    if (!error) {
+      const { data: again } = await db.from('profiles').select('referral_code').eq('id', userId).maybeSingle();
+      if (again?.referral_code) return again.referral_code;
+    }
+  }
+  return '';
+}
+// بعد از ثبت آگهی عادی: امتیاز آگهی + (اگر اولین آگهی کاربرِ دعوت‌شده بود) امتیاز دعوت‌کننده
+// ───────── انتشار خودکار آگهی در کانال تلگرام بازارک ─────────
+// تنظیم: در Render متغیرهای TELEGRAM_BOT_TOKEN و TELEGRAM_CHANNEL_ID (مثلاً @bazarek_af) را بگذارید و ربات را ادمین کانال کنید.
+const TELEGRAM_AUTOPOST = String(process.env.TELEGRAM_AUTOPOST || 'true').toLowerCase() !== 'false';
+const CATEGORY_TAGS = { vehicles: 'وسایط_نقلیه', real_estate: 'املاک', mobile_tablets: 'موبایل', electronics: 'الکترونیک', energy_solar: 'سولر', heating_winter: 'بخاری', home_goods: 'لوازم_خانه', fashion: 'لباس', jewelry_gems: 'طلا_و_جواهر', food_grocery: 'مواد_غذایی', agriculture_livestock: 'زراعت', construction_tools: 'ساختمان', services: 'خدمات', jobs: 'کاریابی', education: 'آموزش', health: 'صحت', kids_family: 'اطفال', wedding_events: 'عروسی', animals_pets: 'حیوانات', sports_hobbies: 'ورزش', travel_tickets: 'سفر' };
+function buildAdCaption(product) {
+  const price = Number(product.price) > 0 ? `${Number(product.price).toLocaleString('en-US')} ${String(product.currency).toUpperCase() === 'USD' ? 'دالر' : 'افغانی'}` : 'توافقی';
+  const tag = CATEGORY_TAGS[product.category] ? `#${CATEGORY_TAGS[product.category]}` : '';
+  const link = `https://bazarek.pages.dev/listing/${product.id}`;
+  const lines = [`🆕 ${String(product.title || '').slice(0, 120)}`, `💰 ${price}`];
+  if (product.province) lines.push(`📍 ${product.province}`);
+  lines.push('', '🔗 مشاهده و تماس با فروشنده:', link, '', `#بازارک ${tag}`.trim());
+  return { caption: lines.join('\n'), link };
+}
+function firstAdImage(product) {
+  let images = [];
+  try { const raw = product.image_url; images = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); } catch (_) { images = []; }
+  return String(images[0] || '');
+}
+async function postAdToTelegram(product, caption, photo) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHANNEL_ID;
+  if (!token || !chat) return;
+  const api = `https://api.telegram.org/bot${token}`;
+  const hasPhoto = photo.startsWith('http');
+  const r = await fetch(`${api}/${hasPhoto ? 'sendPhoto' : 'sendMessage'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(hasPhoto ? { chat_id: chat, photo, caption: caption.slice(0, 1000) } : { chat_id: chat, text: caption }) });
+  if (!r.ok) console.warn('telegram autopost failed:', r.status, (await r.text()).slice(0, 200));
+}
+// صفحه‌ی فیسبوک بازارک (نیاز: FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN با مجوز pages_manage_posts)
+async function postAdToFacebook(product, caption, photo, link) {
+  const id = process.env.FACEBOOK_PAGE_ID, token = process.env.FACEBOOK_PAGE_TOKEN;
+  if (!id || !token) return;
+  const hasPhoto = photo.startsWith('http');
+  const params = new URLSearchParams(hasPhoto ? { url: photo, caption, access_token: token } : { message: caption, link, access_token: token });
+  const r = await fetch(`https://graph.facebook.com/v19.0/${id}/${hasPhoto ? 'photos' : 'feed'}`, { method: 'POST', body: params });
+  if (!r.ok) console.warn('facebook autopost failed:', r.status, (await r.text()).slice(0, 300));
+}
+// اینستاگرام (حساب Business/Creator وصل به صفحه‌ی فیسبوک؛ نیاز: INSTAGRAM_USER_ID و توکن؛ فقط عکس JPEG)
+async function postAdToInstagram(product, caption, photo) {
+  const id = process.env.INSTAGRAM_USER_ID, token = process.env.INSTAGRAM_TOKEN || process.env.FACEBOOK_PAGE_TOKEN;
+  if (!id || !token || !/^https?:\/\/.+\.(jpe?g)(\?.*)?$/i.test(photo)) return;
+  const igCaption = caption.replace('🔗 مشاهده و تماس با فروشنده:', '🔗 لینک آگهی در بایو و کانال تلگرام: t.me/MyBazarek\nجستجو در سایت: bazarek.pages.dev').slice(0, 2000);
+  const c = await fetch(`https://graph.facebook.com/v19.0/${id}/media`, { method: 'POST', body: new URLSearchParams({ image_url: photo, caption: igCaption, access_token: token }) });
+  const cj = await c.json().catch(() => ({}));
+  if (!c.ok || !cj.id) return console.warn('instagram media failed:', c.status, JSON.stringify(cj).slice(0, 200));
+  const r = await fetch(`https://graph.facebook.com/v19.0/${id}/media_publish`, { method: 'POST', body: new URLSearchParams({ creation_id: cj.id, access_token: token }) });
+  if (!r.ok) console.warn('instagram publish failed:', r.status, (await r.text()).slice(0, 200));
+}
+// ورودی اصلی: آگهی را در صفحه‌های رسمی خود بازارک منتشر می‌کند (به‌شرط اینکه فروشنده آن را خاموش نکرده باشد)
+async function postAdToChannels(product) {
+  try {
+    if (!TELEGRAM_AUTOPOST || !product || product.is_active === false || product.share_to_channels === false) return;
+    const { caption, link } = buildAdCaption(product);
+    const photo = firstAdImage(product);
+    await Promise.allSettled([
+      postAdToTelegram(product, caption, photo),
+      postAdToFacebook(product, caption, photo, link),
+      postAdToInstagram(product, caption, photo),
+    ]);
+  } catch (e) { console.warn('channels autopost error:', e?.message || e); }
+}
+
+async function awardForPublishedAd(db, userId, productId) {
+  try {
+    const today = kabulDay();
+    // اولین آگهی: نتیجه‌ی فوری برای فروشنده (امتیاز + ۱ روز ویژه‌ی رایگان)
+    const { count: adsCount } = await db.from('products').select('id', { count: 'exact', head: true }).eq('vendor_id', userId).neq('is_store_product', true);
+    if ((adsCount || 0) === 1) {
+      const g = await adjustPoints(db, userId, POINTS.first_ad_bonus, 'first_ad_bonus', productId);
+      if (g.ok) {
+        await db.from('products').update({ is_featured: true, featured_until: new Date(Date.now() + 86400000).toISOString() }).eq('id', productId);
+        try { await db.from('user_notifications').insert([{ user_id: userId, type: 'rewards', title: 'هدیه‌ی اولین آگهی 🎁', message: `+${POINTS.first_ad_bonus} امتیاز و ۱ روز ویژه‌ی رایگان برای آگهی شما. آگهی‌ات را برای دوستانت بفرست تا سریع‌تر بفروشی!` }]); } catch (_) {}
+      }
+    }
+    const { count } = await db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('reason', 'ad_published').gte('created_at', new Date(Date.now() - 86400000).toISOString());
+    if ((count || 0) < POINTS.ad_daily_cap) await adjustPoints(db, userId, POINTS.ad_published, 'ad_published', productId);
+    const { data: me } = await db.from('profiles').select('referred_by').eq('id', userId).maybeSingle();
+    if (me?.referred_by && me.referred_by !== userId) {
+      const { count: rewarded } = await db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true })
+        .eq('user_id', me.referred_by).eq('reason', 'referral');
+      if ((rewarded || 0) < POINTS.referral_max) await adjustPoints(db, me.referred_by, POINTS.referral_inviter, 'referral', userId);
+    }
+  } catch (e) { console.warn('awardForPublishedAd error:', e?.message || e); }
+}
+
+// ───────── تازه‌سازی آگهی (بالا آوردن در لیست) و یادآوری ─────────
+app.post('/api/products/:id/refresh', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { data: p } = await db.from('products').select('id,vendor_id,is_active,last_refreshed_at,created_at').eq('id', req.params.id).maybeSingle();
+    if (!p || p.vendor_id !== req.user.id) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (p.is_active === false) return res.status(400).json({ error: 'فقط آگهی فعال تازه‌سازی می‌شود.' });
+    const last = p.last_refreshed_at ? new Date(p.last_refreshed_at).getTime() : 0;
+    const wait = last + 24 * 3600000 - Date.now();
+    if (wait > 0) return res.status(429).json({ error: `آگهی را ${Math.ceil(wait / 3600000)} ساعت دیگر می‌توانید تازه کنید.` });
+    const now = new Date().toISOString();
+    const { error } = await db.from('products').update({ created_at: now, last_refreshed_at: now, updated_at: now }).eq('id', p.id);
+    if (error) throw error;
+    res.json({ ok: true, created_at: now });
+  } catch (e) { console.error('refresh error:', e); res.status(500).json({ error: 'تازه‌سازی انجام نشد.' }); }
+});
+
+async function sendRefreshReminders() {
+  try {
+    if (String(process.env.ENABLE_REMINDERS || 'true').toLowerCase() === 'false') return;
+    const db = getSupabaseAdmin();
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data } = await db.from('products').select('id,vendor_id,title,last_reminder_at,last_refreshed_at')
+      .eq('is_active', true).neq('is_store_product', true).lt('created_at', weekAgo)
+      .or(`last_reminder_at.is.null,last_reminder_at.lt.${weekAgo}`).limit(100);
+    const seen = new Set();
+    for (const p of data || []) {
+      if (seen.has(p.vendor_id)) continue; // برای هر فروشنده در هر دور فقط یک یادآوری
+      seen.add(p.vendor_id);
+      await db.from('user_notifications').insert([{ user_id: p.vendor_id, type: 'reminder', title: 'آگهی‌ات را تازه کن 🔄', message: `آگهی «${String(p.title || '').slice(0, 60)}» یک هفته از ثبتش گذشته. با یک لمس تازه‌اش کن تا دوباره بالای لیست دیده شود.` }]);
+      await db.from('products').update({ last_reminder_at: new Date().toISOString() }).eq('vendor_id', p.vendor_id).eq('is_active', true).neq('is_store_product', true).lt('created_at', weekAgo);
+    }
+  } catch (e) { console.warn('reminders error:', e?.message || e); }
+}
+setTimeout(sendRefreshReminders, 3 * 60 * 1000).unref();
+setInterval(sendRefreshReminders, 6 * 3600 * 1000).unref();
+
+// ───────── ساخت ویدیوی کوتاه از آگهی (برای تیک‌تاک، شورتس، ریلز، واتساپ) ─────────
+// هر کسی که آگهی فعال را ببیند می‌تواند ویدیویش را دانلود کند؛ محدودیت نرخ ساده برای جلوگیری از سوءاستفاده.
+const videoHits = new Map();
+setInterval(() => videoHits.clear(), 60 * 1000).unref();
+app.get('/api/products/:id/video.mp4', async (req, res) => {
+  const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+  const hits = (videoHits.get(ip) || 0) + 1;
+  videoHits.set(ip, hits);
+  if (hits > 6) return res.status(429).json({ error: 'تعداد درخواست زیاد است؛ کمی بعد دوباره امتحان کنید.' });
+  let built = null;
+  try {
+    const db = getSupabaseAdmin();
+    // آیدی کامل (UUID) یا کد کوتاه ۱۲ کاراکتری لینک هر دو قبول می‌شوند
+    const rawId = String(req.params.id || '').trim().toLowerCase();
+    let fullId = rawId;
+    if (/^[0-9a-f]{12}$/.test(rawId)) {
+      const head = `${rawId.slice(0, 8)}-${rawId.slice(8, 12)}`;
+      const { data: found } = await db.from('products').select('id').gte('id', `${head}-0000-0000-0000-000000000000`).lte('id', `${head}-ffff-ffff-ffff-ffffffffffff`).limit(1);
+      if (!found || !found.length) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+      fullId = found[0].id;
+    }
+    const { data: p } = await db.from('products').select('id,title,price,currency,province,image_url,is_active').eq('id', fullId).maybeSingle();
+    if (!p || p.is_active === false) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    const { buildListingVideo } = require('./video/listingVideo');
+    built = await buildListingVideo(p);
+    res.set('Content-Type', 'video/mp4');
+    res.set('Content-Disposition', `attachment; filename="bazarek-${String(p.id).slice(0, 8)}.mp4"`);
+    res.set('Cache-Control', 'public, max-age=3600');
+    fs.createReadStream(built.file).on('close', () => built.cleanup()).pipe(res);
+  } catch (e) {
+    if (built) built.cleanup();
+    console.error('listing video error:', e?.message || e);
+    res.status(500).json({ error: 'ساخت ویدیو انجام نشد.', detail: String(e?.message || '').slice(0, 200) });
+  }
+});
+app.get('/api/rewards/summary', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    // هدیه‌ی خوش‌آمد واقعی (فقط یک‌بار برای هر حساب)
+    const welcome = await adjustPoints(db, req.user.id, POINTS.welcome_bonus, 'welcome_bonus', 'self');
+    const [{ data: wallet }, { data: txs }, code, { count: invited }, { count: rewardedCount }, { data: me }] = await Promise.all([
+      db.from('loyalty_wallets').select('points').eq('user_id', req.user.id).maybeSingle(),
+      db.from('loyalty_point_transactions').select('points_delta,reason,created_at').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(25),
+      ensureReferralCode(db, req.user.id),
+      db.from('profiles').select('id', { count: 'exact', head: true }).eq('referred_by', req.user.id),
+      db.from('loyalty_point_transactions').select('id', { count: 'exact', head: true }).eq('user_id', req.user.id).eq('reason', 'referral'),
+      db.from('profiles').select('referred_by').eq('id', req.user.id).maybeSingle(),
+    ]);
+    const [{ data: ci }, { count: members }, { count: delivered }] = await Promise.all([
+      db.from('loyalty_point_transactions').select('reference_id').eq('user_id', req.user.id).eq('reason', 'daily_checkin').order('created_at', { ascending: false }).limit(60),
+      db.from('loyalty_wallets').select('user_id', { count: 'exact', head: true }),
+      db.from('mobile_credit_requests').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+    ]);
+    const today = kabulDay();
+    const streak = computeStreak((ci || []).map(x => x.reference_id).filter(Boolean), today);
+    const checkedIn = (txs || []).some(t => t.reason === 'daily_checkin' && kabulDay(new Date(t.created_at)) === today);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      points: Math.max(0, Number(wallet?.points || 0)),
+      referral_code: code,
+      invited_count: invited || 0,
+      referral_rewarded_count: rewardedCount || 0,
+      has_referrer: Boolean(me?.referred_by),
+      welcome_gift: welcome.ok ? POINTS.welcome_bonus : 0,
+      streak,
+      stats: { members: members || 0, credits_delivered: delivered || 0 },
+      checked_in_today: checkedIn,
+      earn: POINTS,
+      boost_options: BOOST_OPTIONS,
+      credit_options: CREDIT_OPTIONS,
+      credit_carriers: CREDIT_CARRIERS,
+      mobile_credit_enabled: MOBILE_CREDIT_ENABLED,
+      transactions: txs || [],
+    });
+  } catch (e) { console.error('rewards summary error:', e); res.status(500).json({ error: 'خطا در دریافت اطلاعات باشگاه امتیاز.' }); }
+});
+
+app.post('/api/rewards/checkin', requireUser, async (req, res) => {
+  const db = getSupabaseAdmin();
+  const r = await adjustPoints(db, req.user.id, POINTS.daily_checkin, 'daily_checkin', kabulDay());
+  if (r.error === 'duplicate') return res.status(409).json({ error: 'امتیاز امروز را قبلاً گرفته‌اید. فردا دوباره بیایید.' });
+  if (!r.ok) return res.status(500).json({ error: 'ثبت امتیاز روزانه انجام نشد.' });
+  // پاداش واقعی ۷ روز پشت‌سرهم
+  let bonus = 0, points = r.points;
+  try {
+    const today = kabulDay();
+    const { data: ci } = await db.from('loyalty_point_transactions').select('reference_id').eq('user_id', req.user.id).eq('reason', 'daily_checkin').order('created_at', { ascending: false }).limit(60);
+    const streak = computeStreak((ci || []).map(x => x.reference_id).filter(Boolean), today);
+    if (streak > 0 && streak % 7 === 0) {
+      const b = await adjustPoints(db, req.user.id, POINTS.streak_bonus, 'streak_bonus', today);
+      if (b.ok) { bonus = POINTS.streak_bonus; points = b.points; }
+    }
+    return res.json({ points, gained: POINTS.daily_checkin, bonus, streak });
+  } catch (_) {}
+  res.json({ points, gained: POINTS.daily_checkin, bonus, streak: 0 });
+});
+
+app.post('/api/rewards/apply-referral', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const code = String(req.body?.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+    if (code.length < 5) return res.status(400).json({ error: 'کد دعوت معتبر نیست.' });
+    const { data: me } = await db.from('profiles').select('id,referred_by,created_at').eq('id', req.user.id).maybeSingle();
+    if (!me) return res.status(404).json({ error: 'پروفایل پیدا نشد.' });
+    if (me.referred_by) return res.status(409).json({ error: 'قبلاً کد دعوت ثبت کرده‌اید.' });
+    // کد فقط برای حساب‌های تازه (۱۴ روز اول) معتبر است تا سوءاستفاده نشود
+    if (Date.now() - new Date(me.created_at).getTime() > 14 * 86400000) return res.status(403).json({ error: 'کد دعوت فقط در ۱۴ روز اول ثبت‌نام قابل ثبت است.' });
+    const { data: inviter } = await db.from('profiles').select('id').eq('referral_code', code).maybeSingle();
+    if (!inviter) return res.status(404).json({ error: 'این کد دعوت پیدا نشد.' });
+    if (inviter.id === req.user.id) return res.status(400).json({ error: 'نمی‌توانید کد خودتان را وارد کنید.' });
+    const { error } = await db.from('profiles').update({ referred_by: inviter.id }).eq('id', req.user.id).is('referred_by', null);
+    if (error) throw error;
+    const r = await adjustPoints(db, req.user.id, POINTS.referral_invitee, 'referral_welcome', 'self');
+    res.json({ ok: true, gained: r.ok ? POINTS.referral_invitee : 0, points: r.points });
+  } catch (e) { console.error('apply referral error:', e); res.status(500).json({ error: 'ثبت کد دعوت انجام نشد.' }); }
+});
+
+app.post('/api/rewards/redeem-boost', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const option = BOOST_OPTIONS.find(o => o.id === String(req.body?.option_id || ''));
+    const listingId = String(req.body?.listing_id || '');
+    if (!option || !listingId) return res.status(400).json({ error: 'آگهی و بسته را انتخاب کنید.' });
+    const { data: listing } = await db.from('products').select('id,vendor_id,is_active,is_store_product,featured_until').eq('id', listingId).maybeSingle();
+    if (!listing || listing.vendor_id !== req.user.id) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+    if (listing.is_store_product === true) return res.status(400).json({ error: 'محصول فروشگاهی قابل ویژه‌سازی نیست.' });
+    if (listing.is_active === false) return res.status(400).json({ error: 'فقط آگهی فعال را می‌توان ویژه کرد.' });
+    const ref = `${listingId}:${Date.now()}`;
+    const spent = await adjustPoints(db, req.user.id, -option.cost, 'boost_redeem', ref);
+    if (spent.error === 'insufficient') return res.status(402).json({ error: `برای این بسته ${option.cost} امتیاز لازم است.` });
+    if (!spent.ok) return res.status(500).json({ error: 'کم کردن امتیاز انجام نشد.' });
+    const start = Math.max(Date.now(), listing.featured_until ? new Date(listing.featured_until).getTime() : 0);
+    const until = new Date(start + option.days * 86400000).toISOString();
+    const { error } = await db.from('products').update({ is_featured: true, featured_until: until, updated_at: new Date().toISOString() }).eq('id', listingId);
+    if (error) {
+      await adjustPoints(db, req.user.id, option.cost, 'boost_refund', ref);
+      throw error;
+    }
+    res.json({ ok: true, points: spent.points, featured_until: until, days: option.days });
+  } catch (e) { console.error('redeem boost error:', e); res.status(500).json({ error: 'ویژه‌سازی انجام نشد؛ امتیاز شما کم نشده است.' }); }
+});
+
+app.post('/api/rewards/redeem-credit', requireUser, async (req, res) => {
+  try {
+    if (!MOBILE_CREDIT_ENABLED) return res.status(403).json({ error: 'دریافت کریدت موبایل به‌زودی فعال می‌شود.' });
+    const db = getSupabaseAdmin();
+    const option = CREDIT_OPTIONS.find(o => o.id === String(req.body?.option_id || ''));
+    const carrier = String(req.body?.carrier || '');
+    const digits = String(req.body?.phone || '').replace(/[^0-9]/g, '');
+    if (!option) return res.status(400).json({ error: 'مبلغ کریدت را انتخاب کنید.' });
+    if (!CREDIT_CARRIERS.includes(carrier)) return res.status(400).json({ error: 'شبکه‌ی مخابراتی را انتخاب کنید.' });
+    if (digits.length < 9 || digits.length > 13) return res.status(400).json({ error: 'شماره‌ی موبایل معتبر نیست.' });
+    const { count: openCount } = await db.from('mobile_credit_requests').select('id', { count: 'exact', head: true }).eq('user_id', req.user.id).eq('status', 'pending');
+    if ((openCount || 0) >= 2) return res.status(429).json({ error: 'دو درخواست شما در انتظار شارژ است؛ بعد از انجام آن‌ها دوباره درخواست بدهید.' });
+    const ref = `credit:${Date.now()}`;
+    const spent = await adjustPoints(db, req.user.id, -option.cost, 'credit_redeem', ref);
+    if (spent.error === 'insufficient') return res.status(402).json({ error: `برای این کریدت ${option.cost} امتیاز لازم است.` });
+    if (!spent.ok) return res.status(500).json({ error: 'کم کردن امتیاز انجام نشد.' });
+    const { data, error } = await db.from('mobile_credit_requests').insert([{
+      user_id: req.user.id, phone: digits.slice(0, 15), carrier, amount_afn: option.amount_afn, points_spent: option.cost,
+      points_at_request: Math.max(0, Number(spent.points || 0)) + option.cost, status: 'pending',
+    }]).select('id,status,created_at').single();
+    if (error) { await adjustPoints(db, req.user.id, option.cost, 'credit_refund', ref); throw error; }
+    res.status(201).json({ ok: true, request: data, points: spent.points });
+  } catch (e) { console.error('redeem credit error:', e); res.status(500).json({ error: 'ثبت درخواست انجام نشد؛ امتیاز شما کم نشده است.' }); }
+});
+
+app.get('/api/rewards/credit-requests', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.from('mobile_credit_requests').select('id,carrier,phone,amount_afn,points_spent,status,admin_note,created_at')
+      .eq('user_id', req.user.id).neq('status', 'development_placeholder').order('created_at', { ascending: false }).limit(20);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: 'خطا در دریافت درخواست‌ها.' }); }
+});
+
+app.get('/api/admin/credit-requests', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const status = ['pending', 'completed', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
+    const { data, error } = await db.from('mobile_credit_requests').select('*').eq('status', status).order('created_at', { ascending: status === 'pending' }).limit(100);
+    if (error) throw error;
+    const ids = [...new Set((data || []).map(r => r.user_id))];
+    const { data: profiles } = ids.length ? await db.from('profiles').select('id,full_name,phone').in('id', ids) : { data: [] };
+    const pm = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    res.set('Cache-Control', 'no-store');
+    res.json((data || []).map(r => ({ ...r, full_name: pm[r.user_id]?.full_name || '', account_phone: pm[r.user_id]?.phone || '' })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت درخواست‌های کریدت.' }); }
+});
+
+app.patch('/api/admin/credit-requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const decision = String(req.body?.status || '');
+    if (!['completed', 'rejected'].includes(decision)) return res.status(400).json({ error: 'وضعیت نامعتبر است.' });
+    const note = String(req.body?.note || '').trim().slice(0, 300);
+    const { data: r } = await db.from('mobile_credit_requests').select('*').eq('id', req.params.id).maybeSingle();
+    if (!r) return res.status(404).json({ error: 'درخواست پیدا نشد.' });
+    if (r.status !== 'pending') return res.status(409).json({ error: 'این درخواست قبلاً بررسی شده است.' });
+    const { error } = await db.from('mobile_credit_requests').update({ status: decision, admin_note: note, updated_at: new Date().toISOString() }).eq('id', r.id).eq('status', 'pending');
+    if (error) throw error;
+    // رد شدن = برگشت امتیاز به کاربر
+    if (decision === 'rejected' && r.points_spent > 0) await adjustPoints(db, r.user_id, r.points_spent, 'credit_refund', `admin:${r.id}`);
+    try {
+      await db.from('user_notifications').insert([{ user_id: r.user_id, type: 'credit_request', title: decision === 'completed' ? 'کریدت موبایل شما ارسال شد 🎉' : 'درخواست کریدت رد شد',
+        message: decision === 'completed' ? `کریدت ${r.amount_afn} افغانی برای شماره‌ی ${r.phone} شارژ شد.` : `امتیاز شما برگردانده شد.${note ? ' ' + note : ''}` }]);
+    } catch (_) {}
+    res.json({ ok: true, status: decision });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'ثبت تصمیم انجام نشد.' }); }
+});
+
 app.get('/api/monetization/packages', requireUser, async (_,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_packages').select('*').eq('is_active',true).order('price_afn');if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت بسته‌های تبلیغاتی.'});}});
 app.get('/api/wallet', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const [{data:w,error:we},{data:tx,error:te}]=await Promise.all([db.from('wallets').select('*').eq('user_id',req.user.id).maybeSingle(),db.from('wallet_transactions').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100)]);if(we)throw we;if(te)throw te;res.json({wallet:w||{user_id:req.user.id,balance_afn:0},transactions:tx||[]});}catch(e){console.error(e);res.status(500).json({error:'خطا در دریافت کیف پول.'});}});
 app.get('/api/promotions/orders', requireUser, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('promotion_orders').select('*,promotion_packages(title),products(title)').eq('user_id',req.user.id).order('created_at',{ascending:false}).limit(100);if(error)throw error;res.json(data||[]);}catch(e){res.status(500).json({error:'خطا در دریافت سفارش‌ها.'});}});
-app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='bank_transfer',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});if(Number(pkg.price_afn||0)<=0)return res.status(400).json({error:'این بسته تبلیغاتی قیمت معتبر ندارد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});
+app.post('/api/promotions/orders', requireUser, async (req,res)=>{try{const {listing_id,package_id,payment_method='bank_transfer',payment_reference=''}=req.body||{};if(!listing_id||!package_id)return res.status(400).json({error:'آگهی و بسته تبلیغاتی الزامی است.'});const db=getSupabaseAdmin();const {data:pkg,error:pe}=await db.from('promotion_packages').select('*').eq('id',package_id).eq('is_active',true).maybeSingle();if(pe)throw pe;if(!pkg)return res.status(404).json({error:'بسته تبلیغاتی پیدا نشد.'});if(Number(pkg.price_afn||0)<=0)return res.status(400).json({error:'این بسته تبلیغاتی قیمت معتبر ندارد.'});const {data:listing,error:le}=await db.from('products').select('id,vendor_id,is_store_product').eq('id',listing_id).maybeSingle();if(le)throw le;if(!listing||listing.vendor_id!==req.user.id)return res.status(403).json({error:'این آگهی متعلق به شما نیست.'});if(listing.is_store_product===true)return res.status(400).json({error:'محصول فروشگاهی قابل بوست یا ارتقای آگهی نیست؛ فقط آگهی‌های عادی قابل بوست هستند.'});
 if(!['manual','bank_transfer'].includes(payment_method))return res.status(400).json({error:'برای فعال‌سازی تبلیغ باید مبلغ را به حساب بازارک انتقال دهید و منتظر تأیید مدیریت بمانید.'});
 const reference=String(payment_reference||'').trim();if(!reference)return res.status(400).json({error:'شماره پیگیری/رسید انتقال بانکی را وارد کنید.'});
 const {data:order,error}=await db.from('promotion_orders').insert([{user_id:req.user.id,listing_id,package_id,amount_afn:pkg.price_afn,payment_method:'manual',payment_reference:reference.slice(0,200),status:'pending'}]).select().single();if(error)throw error;
@@ -824,6 +1903,7 @@ app.post('/api/subscriptions', requireUser, async (req,res)=>{try{
   const plan=String(req.body?.plan||'').trim().toLowerCase();
   if(!plans[plan])return res.status(400).json({error:'پلن نامعتبر است.'});
   const p=plans[plan];
+  if(p.store)return res.status(400).json({error:'فعال‌سازی فروشگاه فعلاً رایگان است و با تأیید هویت انجام می‌شود (نه با پرداخت).'});
   const reference=String(req.body?.payment_reference||'').trim();
   if(!reference)return res.status(400).json({error:'برای خرید اشتراک باید مبلغ را انتقال دهید و شماره پیگیری را وارد کنید.'});
   const db=getSupabaseAdmin();
@@ -843,11 +1923,25 @@ app.patch('/api/admin/subscriptions/:id', requireAdmin, async (req,res)=>{try{
   const {data:sub,error:se}=await db.from('seller_subscriptions').select('*').eq('id',req.params.id).maybeSingle();
   if(se)throw se;if(!sub)return res.status(404).json({error:'اشتراک پیدا نشد.'});
   const patch={status};
-  if(status==='active'){const days=sub.plan==='boost_yearly'||sub.plan==='store_yearly'?365:sub.plan==='boost_monthly'||sub.plan==='store_monthly'?30:sub.plan==='boost_weekly'?7:30;const start=new Date();const end=new Date(start.getTime()+days*86400000);patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();}
+  if(status==='active'){
+    const days=sub.plan==='boost_yearly'||sub.plan==='store_yearly'?365:sub.plan==='boost_monthly'||sub.plan==='store_monthly'?30:sub.plan==='boost_weekly'?7:30;
+    let start=new Date();
+    // Renewals/plan upgrades are queued after the user's current store period
+    // so remaining paid time is never lost. Expired stores start immediately.
+    if(String(sub.plan).startsWith('store_')) {
+      const {data:currentStore}=await db.from('seller_subscriptions').select('ends_at,status').eq('user_id',sub.user_id).in('plan',['store_monthly','store_yearly']).eq('status','active').gt('ends_at',new Date().toISOString()).order('ends_at',{ascending:false}).limit(1).maybeSingle();
+      if(currentStore?.ends_at) {
+        const currentEnd=new Date(currentStore.ends_at);
+        if(currentEnd.getTime()>start.getTime()) start=currentEnd;
+      }
+    }
+    const end=new Date(start.getTime()+days*86400000);
+    patch.starts_at=start.toISOString();patch.ends_at=end.toISOString();
+  }
   const {data,error}=await db.from('seller_subscriptions').update(patch).eq('id',req.params.id).select().single();
   if(error)throw error;
-  if(status==='active')await db.from('profiles').update({plan:['pro','business'].includes(sub.plan) ? sub.plan : 'free'}).eq('id',sub.user_id);
-  await db.from('user_notifications').insert([{user_id:sub.user_id,type:'payment',title:status==='active'?'پرداخت اشتراک تأیید شد':'نتیجه درخواست اشتراک',message:status==='active'?`پرداخت اشتراک «${sub.plan}» تأیید شد و فعال گردید.`:`درخواست اشتراک «${sub.plan}» توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);
+  if(status==='active' && ['pro','business'].includes(sub.plan)) await db.from('profiles').update({plan:sub.plan}).eq('id',sub.user_id);
+  await db.from('user_notifications').insert([{user_id:sub.user_id,type:'payment',title:status==='active'?'پرداخت اشتراک تأیید شد':'نتیجه درخواست اشتراک',message:status==='active' ? (String(sub.plan).startsWith('store_') && patch.starts_at && new Date(patch.starts_at).getTime()>Date.now() ? `پرداخت اشتراک «${sub.plan}» تأیید شد و پس از پایان زمان باقی‌مانده فروشگاه فعال می‌شود.` : `پرداخت اشتراک «${sub.plan}» تأیید شد و فعال گردید.`) : `درخواست اشتراک «${sub.plan}» توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);
   res.json(data);
 }catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر وضعیت اشتراک.'});}});
 app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{
@@ -884,7 +1978,7 @@ app.get('/api/admin/monetization', requireAdmin, async (_,res)=>{
 app.patch('/api/admin/transactions/:id/archive', requireAdmin, async (req,res)=>{try{const db=getSupabaseAdmin();const {data,error}=await db.from('wallet_transactions').update({is_archived:true}).eq('id',req.params.id).select().single();if(error)throw error;res.json(data);}catch(e){console.error(e);res.status(500).json({error:'خطا در بایگانی تراکنش.'});}});
 
 app.post('/api/admin/wallets/:id/credit', requireAdmin, async (req,res)=>{try{const amount=Math.trunc(Number(req.body?.amount_afn||0));if(amount<=0)return res.status(400).json({error:'مبلغ نامعتبر است.'});const db=getSupabaseAdmin();const balance=await db.rpc('bazarek_wallet_credit',{p_user_id:req.params.id,p_amount:amount,p_type:'credit',p_description:String(req.body?.description||'شارژ کیف پول توسط مدیریت').slice(0,200),p_reference:'admin'});res.status(201).json({balance_afn:balance.data});}catch(e){console.error(e);res.status(500).json({error:'خطا در شارژ کیف پول.'});}});
-app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();const days=Math.max(Number(pkg.feature_days||0),Number(pkg.pin_days||0));await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,boost_level:Number(pkg.boost_level||0),boost_until:days>0?new Date(now+days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}await db.from('user_notifications').insert([{user_id:order.user_id,type:'payment',title:status==='paid'?'ارتقای آگهی فعال شد':'نتیجه سفارش ارتقا',message:status==='paid'?`پرداخت شما تأیید شد و ارتقای آگهی «${order.listing_id}» فعال گردید.`:`سفارش ارتقای آگهی شما توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
+app.patch('/api/admin/promotions/orders/:id', requireAdmin, async (req,res)=>{try{const status=String(req.body?.status||'paid');if(!['paid','rejected','cancelled'].includes(status))return res.status(400).json({error:'وضعیت نامعتبر است.'});const db=getSupabaseAdmin();const {data:order,error:oe}=await db.from('promotion_orders').select('*,promotion_packages(*)').eq('id',req.params.id).maybeSingle();if(oe)throw oe;if(!order)return res.status(404).json({error:'سفارش پیدا نشد.'});const {data:targetListing}=await db.from('products').select('id,is_store_product').eq('id',order.listing_id).maybeSingle();if(targetListing?.is_store_product===true)return res.status(400).json({error:'محصول فروشگاهی قابل بوست یا ارتقای آگهی نیست.'});const {data:updated,error}=await db.from('promotion_orders').update({status,updated_at:new Date().toISOString()}).eq('id',req.params.id).select().single();if(error)throw error;if(status==='paid'&&order.status!=='paid'){const pkg=order.promotion_packages;const now=Date.now();const days=Math.max(Number(pkg.feature_days||0),Number(pkg.pin_days||0));await db.from('products').update({is_featured:pkg.feature_days>0,is_pinned:pkg.pin_days>0,featured_until:pkg.feature_days>0?new Date(now+pkg.feature_days*86400000).toISOString():null,pinned_until:pkg.pin_days>0?new Date(now+pkg.pin_days*86400000).toISOString():null,boost_level:Number(pkg.boost_level||0),boost_until:days>0?new Date(now+days*86400000).toISOString():null,updated_at:new Date().toISOString()}).eq('id',order.listing_id);}await db.from('user_notifications').insert([{user_id:order.user_id,type:'payment',title:status==='paid'?'ارتقای آگهی فعال شد':'نتیجه سفارش ارتقا',message:status==='paid'?`پرداخت شما تأیید شد و ارتقای آگهی «${order.listing_id}» فعال گردید.`:`سفارش ارتقای آگهی شما توسط مدیریت ${status==='rejected'?'رد':'لغو'} شد.`}]);res.json(updated);}catch(e){console.error(e);res.status(500).json({error:'خطا در تغییر سفارش.'});}});
 app.get('/api/products', requireUser, async (req, res) => {
   try {
     const db = getSupabaseAdmin();
@@ -903,22 +1997,113 @@ app.get('/api/products', requireUser, async (req, res) => {
       const own = x.boost_level && (!x.boost_until || new Date(x.boost_until).getTime() > now) ? Number(x.boost_level) : 0;
       const level = Math.max(own, globalLevel);
       const turboSub = (subs || []).filter(s => s.status === 'active' && new Date(s.ends_at || 0).getTime() > now).sort((a,b)=>new Date(b.ends_at).getTime()-new Date(a.ends_at).getTime())[0];
-      return { ...x, effective_boost_level: level, boost_label: turboSub ? '⚡ توربو' : (labels[level] || ''), global_boost: globalLevel > 0, turbo_active: Boolean(turboSub), turbo_plan: turboSub?.plan || null, turbo_starts_at: turboSub?.starts_at || null, turbo_until: turboSub?.ends_at || null };
+      const isStoreProduct = x.is_store_product === true; const safeLevel = isStoreProduct ? 0 : level; return { ...x, effective_boost_level: safeLevel, boost_label: isStoreProduct ? '' : (turboSub ? '⚡ توربو' : (labels[safeLevel] || '')), global_boost: isStoreProduct ? false : globalLevel > 0, turbo_active: isStoreProduct ? false : Boolean(turboSub), turbo_plan: isStoreProduct ? null : (turboSub?.plan || null), turbo_starts_at: isStoreProduct ? null : (turboSub?.starts_at || null), turbo_until: isStoreProduct ? null : (turboSub?.ends_at || null) };
     }));
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در دریافت محصولات.' }); }
 });
 
 app.post('/api/products', requireUser, async (req, res) => {
   try {
-    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false } = req.body || {};
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', share_to_channels = true, stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0, is_store_product = false } = req.body || {};
+    const forceStoreProduct = String(req.headers['x-bazarek-store-product'] || '').toLowerCase() === 'true';
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
     const db = getSupabaseAdmin();
     if (!String(province).trim()) return res.status(400).json({ error: 'ولایت آگهی الزامی است.' });
-    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description), category: String(category), subcategory: String(subcategory), image_url: String(image_url), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), stock: Math.max(0, Math.trunc(Number(stock) || 0)) };
+    // همه‌ی دسته‌ها برای آگهی عادی باز است (پیش‌فرض *).
+    // اگر خواستید فقط چند دسته فعال باشد، در Render متغیر ACTIVE_AD_CATEGORIES را بگذارید، مثلاً:
+    //   ACTIVE_AD_CATEGORIES=vehicles,heating_winter
+    // (اگر این متغیر را قبلاً گذاشته‌اید، آن را حذف کنید یا مقدارش را * بگذارید.)
+    const activeAdCategories = String(process.env.ACTIVE_AD_CATEGORIES || '*').split(',').map(x => x.trim()).filter(Boolean);
+    const allCategoriesOpen = activeAdCategories.includes('*');
+    if (!forceStoreProduct && !allCategoriesOpen && !activeAdCategories.includes(String(category))) {
+      return res.status(400).json({ error: 'فعلاً ثبت آگهی در این دسته فعال نیست. لطفاً دسته‌ی دیگری انتخاب کنید.' });
+    }
+    const cleanCode = String(product_code || '').trim().slice(0,80);
+    const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
+    const discount = Math.min(99, Math.max(0, Number(discount_percent) || 0));
+    // The server is the final authority: only the dedicated store-product flow
+    // (explicit header) may create a store product. A normal ad can never become
+    // a store product merely by sending is_store_product=true in JSON.
+    const storeProduct = forceStoreProduct;
+    if (storeProduct) {
+      const storeSub = await getActiveStoreSubscription(db, req.user.id);
+      if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
+    }
+    const payload = { vendor_id: req.user.id, title: title.trim(), price: Math.max(0, Number(price) || 0), cost_price: Math.max(0, Number(cost_price) || 0), description: String(description).slice(0,10000), category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), share_to_channels: !(share_to_channels === false || share_to_channels === 'false'), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20), allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone), contact_phone: String(contact_phone).trim().slice(0,30), location_text: String(location_text).trim().slice(0,160), external_link: String(req.body?.external_link || '').trim().slice(0,500), province: String(province).trim().slice(0,80), is_negotiable: Boolean(is_negotiable), currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN', stock: Math.max(0, Math.trunc(Number(stock) || 0)), brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120), sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300), material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120), product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000), discount_percent: discount, is_store_product: storeProduct, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null };
     const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) throw error;
+    if (data && data.is_store_product !== true) awardForPublishedAd(db, req.user.id, data.id); // امتیاز باشگاه (بدون انتظار)
+    if (data) postAdToChannels(data); // صفحه‌های رسمی بازارک (بدون انتظار)
+    try {
+      const { data: followers } = await db.from('seller_follows').select('user_id').eq('seller_id', req.user.id);
+      if (followers?.length) {
+        await db.from('user_notifications').insert(followers.map(f => ({
+          user_id: f.user_id, type: 'seller_new_listing', title: 'آگهی جدید از فروشنده مورد علاقه شما',
+          message: `فروشنده «${title.trim()}» یک آگهی جدید منتشر کرد.`
+        })));
+      }
+    } catch (notifyError) { console.warn('seller follower notification error:', notifyError?.message || notifyError); }
     res.status(201).json(data);
   } catch (e) { console.error(e); res.status(500).json({ error: 'خطا در ثبت محصول.' }); }
+});
+
+app.post('/api/store-products', requireUser, async (req, res) => {
+  try {
+    const { title, price, cost_price = 0, description = '', category = '', subcategory = '', image_url = '', audio_url = '', video_url = '', show_whatsapp = false, whatsapp_number = '', share_to_channels = true, stock = 0, allow_chat = true, show_phone = false, contact_phone = '', location_text = '', province = '', is_negotiable = false, currency = 'AFN', brand = '', model = '', sizes = '', colors = '', material = '', condition = '', product_code = '', specifications = '', discount_percent = 0 } = req.body || {};
+    if (!title || typeof title !== 'string') return res.status(400).json({ error: 'نام محصول الزامی است.' });
+    if (!String(province).trim()) return res.status(400).json({ error: 'ولایت محصول الزامی است.' });
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.status(403).json({ error: 'برای افزودن محصول فروشگاهی باید فروشگاه حرفه‌ای فعال باشد.' });
+    const cleanCode = String(product_code || '').trim().slice(0,80);
+    const generatedCode = cleanCode || `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0,10).toUpperCase()}`;
+    const discount = Math.min(99, Math.max(0, Number(discount_percent) || 0));
+    const payload = {
+      vendor_id: req.user.id,
+      title: title.trim(),
+      price: Math.max(0, Number(price) || 0),
+      cost_price: Math.max(0, Number(cost_price) || 0),
+      description: String(description).slice(0,10000),
+      category: String(category), subcategory: String(subcategory), image_url: String(image_url), audio_url: String(audio_url).trim().slice(0,1000), video_url: String(video_url || '').trim().slice(0,1000), share_to_channels: !(share_to_channels === false || share_to_channels === 'false'), show_whatsapp: show_whatsapp === true || show_whatsapp === 'true', whatsapp_number: String(whatsapp_number || '').replace(/[^0-9+]/g,'').slice(0,20),
+      allow_chat: Boolean(allow_chat), show_phone: Boolean(show_phone),
+      contact_phone: String(contact_phone).trim().slice(0,30),
+      location_text: String(location_text).trim().slice(0,160),
+      external_link: String(req.body?.external_link || '').trim().slice(0,500),
+      province: String(province).trim().slice(0,80),
+      is_negotiable: Boolean(is_negotiable),
+      currency: String(currency).toUpperCase() === 'USD' ? 'USD' : 'AFN',
+      stock: Math.max(0, Math.trunc(Number(stock) || 0)),
+      brand: String(brand).trim().slice(0,120), model: String(model).trim().slice(0,120),
+      sizes: String(sizes).trim().slice(0,300), colors: String(colors).trim().slice(0,300),
+      material: String(material).trim().slice(0,120), condition: String(condition).trim().slice(0,120),
+      product_code: generatedCode, specifications: String(specifications).trim().slice(0,3000),
+      discount_percent: discount,
+      is_store_product: true,
+      is_featured: false, is_pinned: false, featured_until: null, pinned_until: null,
+      boost_level: 0, boost_until: null,
+    };
+    const { data, error } = await db.from('products').insert([payload]).select().single();
+    if (error) throw error;
+    if (data) postAdToChannels(data); // صفحه‌های رسمی بازارک (بدون انتظار)
+    res.status(201).json(data);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در ثبت محصول فروشگاه.' });
+  }
+});
+
+app.get('/api/my/store-products', requireUser, async (req, res) => {
+  try {
+    const db = getSupabaseAdmin();
+    const storeSub = await getActiveStoreSubscription(db, req.user.id);
+    if (!storeSub) return res.json([]);
+    const { data, error } = await db.from('products').select('id,title,description,price,currency,image_url,audio_url,video_url,show_whatsapp,whatsapp_number,created_at,vendor_id,is_featured,is_pinned,featured_until,pinned_until,boost_level,boost_until,allow_chat,show_phone,contact_phone,location_text,external_link,is_negotiable,views_count,province,brand,model,sizes,colors,material,condition,product_code,specifications,discount_percent,is_store_product,is_active').eq('vendor_id', req.user.id).eq('is_active', true).eq('is_store_product', true).order('created_at', { ascending: false }).limit(100);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطا در دریافت محصولات فروشگاه.' });
+  }
 });
 
 app.patch('/api/products/:id/status', requireUser, async (req, res) => {
@@ -981,12 +2166,15 @@ app.delete('/api/me/account', requireUser, async (req, res) => {
 
 app.patch('/api/products/:id', requireUser, async (req, res) => {
   try {
-    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable'];
+    const allowed = ['title', 'price', 'cost_price', 'description', 'category', 'subcategory', 'image_url', 'stock', 'allow_chat', 'show_phone', 'contact_phone', 'location_text', 'external_link', 'is_negotiable', 'currency', 'brand', 'model', 'sizes', 'colors', 'material', 'condition', 'product_code', 'specifications', 'discount_percent', 'province', 'audio_url', 'video_url', 'show_whatsapp', 'whatsapp_number'];
     const payload = {};
     for (const key of allowed) if (req.body[key] !== undefined) payload[key] = req.body[key];
     if (payload.price !== undefined) payload.price = Math.max(0, Number(payload.price) || 0);
+    if (payload.currency !== undefined) payload.currency = String(payload.currency).toUpperCase() === 'USD' ? 'USD' : 'AFN';
     if (payload.cost_price !== undefined) payload.cost_price = Math.max(0, Number(payload.cost_price) || 0);
     if (payload.stock !== undefined) payload.stock = Math.max(0, Math.trunc(Number(payload.stock) || 0));
+    if (payload.discount_percent !== undefined) payload.discount_percent = Math.min(90, Math.max(0, Number(payload.discount_percent) || 0));
+    if (payload.title !== undefined) { payload.title = String(payload.title).trim().slice(0, 140); if (!payload.title) return res.status(400).json({ error: 'عنوان نمی‌تواند خالی باشد.' }); }
     payload.updated_at = new Date().toISOString();
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('products').update(payload).eq('id', req.params.id).eq('vendor_id', req.user.id).select().single();
