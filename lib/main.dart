@@ -3572,7 +3572,7 @@ class SocialLinksScreen extends StatelessWidget {
 }
 
 /// هر بار آگهی ساخته، حذف یا فعال/غیرفعال شود این عدد زیاد می‌شود تا صفحه‌ی اصلی خودکار تازه شود.
-final ValueNotifier<int> listingsVersion = ValueNotifier<int>(0);
+final ValueNotifier<int> listingsVersion = ValueNotifier<int>(0)..addListener(() => ApiService.clearListCache());
 
 class ApiConfig {
   static const String baseUrl = 'https://bazarek.onrender.com/api';
@@ -4123,6 +4123,25 @@ class ApiService {
     return http.get(uri, headers: h).timeout(const Duration(seconds: 40));
   }
 
+  // کش کوتاه در حافظه: اگر همان لیست چند ثانیه پیش گرفته شده، دوباره دانلود نمی‌شود.
+  static final Map<String, ({DateTime at, List<dynamic> data})> _listCache = {};
+  static const Duration _listTtl = Duration(seconds: 45);
+
+  static List<dynamic>? peekCachedProducts({String? category, String? province, String? query}) {
+    final key = Uri(queryParameters: {
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (province != null && province.isNotEmpty) 'province': province,
+      if (query != null && query.isNotEmpty) 'q': query,
+    }).query;
+    final c = _listCache[key];
+    return c != null && DateTime.now().difference(c.at) < _listTtl ? c.data : null;
+  }
+
+  static void clearListCache() {
+    _listCache.clear();
+    _storesCache = null;
+  }
+
   static Future<List<dynamic>> getProducts({
     String? category,
     String? subcategory,
@@ -4138,13 +4157,21 @@ class ApiService {
     };
     if (query != null && query.trim().length >= 2) Analytics.track('search', query: query.trim(), category: category ?? '');
     // پارامتر زمان: جلوگیری از کش شدن پاسخ لیست در مرورگر/شبکه (آگهی تازه همان لحظه دیده شود)
-    final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: {...queryParams, '_t': DateTime.now().millisecondsSinceEpoch.toString()});
+    final cacheKey = Uri(queryParameters: queryParams).query;
+    final cached = _listCache[cacheKey];
+    if (cached != null && DateTime.now().difference(cached.at) < _listTtl) return cached.data;
+    final uri = Uri.parse('${ApiConfig.baseUrl}/listings').replace(queryParameters: queryParams.isEmpty ? null : queryParams);
     try {
       final res = await _getWithWakeUp(uri);
       final data = jsonDecode(res.body);
       if (res.statusCode == 200) {
-        if (data is List) return data;
-        if (data is Map && data['data'] is List) return List<dynamic>.from(data['data']);
+        List<dynamic>? out;
+        if (data is List) out = data;
+        if (data is Map && data['data'] is List) out = List<dynamic>.from(data['data']);
+        if (out != null) {
+          _listCache[cacheKey] = (at: DateTime.now(), data: out);
+          return out;
+        }
         throw Exception('پاسخ آگهی‌ها از سرور نامعتبر است.');
       }
       throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت آگهی‌ها.') : 'خطا در دریافت آگهی‌ها.');
@@ -4154,7 +4181,11 @@ class ApiService {
     }
   }
 
+  static ({DateTime at, List<Map<String, dynamic>> data})? _storesCache;
+
   static Future<List<Map<String, dynamic>>> getActiveStores() async {
+    final c = _storesCache;
+    if (c != null && DateTime.now().difference(c.at) < _listTtl) return c.data;
     final uri = Uri.parse('${ApiConfig.baseUrl}/stores/active');
     final res = await _getWithWakeUp(uri);
     dynamic data;
@@ -4163,7 +4194,9 @@ class ApiService {
       throw Exception(data is Map ? (data['error'] ?? 'خطا در دریافت فروشگاه‌ها.') : 'خطا در دریافت فروشگاه‌ها.');
     }
     if (data is! List) throw Exception('پاسخ فروشگاه‌ها از سرور نامعتبر است.');
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    final list = data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    _storesCache = (at: DateTime.now(), data: list);
+    return list;
   }
 
   static Future<Map<String, dynamic>> getListingById(String id) async {
@@ -5271,7 +5304,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadProducts() async {
-    if (mounted) setState(() { isLoading = true; loadError = null; });
+    // اگر همین لیست چند ثانیه پیش گرفته شده، فوراً نشان داده می‌شود و در پس‌زمینه تازه می‌شود (بدون صفحه‌ی بارگذاری).
+    final cachedNow = ApiService.peekCachedProducts(category: selectedCategory, province: selectedProvince, query: searchQuery);
+    if (mounted) setState(() { isLoading = cachedNow == null; loadError = null; });
     try {
       final data = await ApiService.getProducts(
         category: selectedCategory,
