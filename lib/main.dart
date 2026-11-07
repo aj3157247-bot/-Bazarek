@@ -7916,7 +7916,7 @@ class _SpecialCard extends StatelessWidget {
         child: InkWell(
           onTap: () => _openListing(context, item),
           child: Row(children: [
-            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, resize: 'contain'), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
+            SizedBox(width: 86, height: 188, child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 82, resize: 'contain'), fit: BoxFit.contain, loadingBuilder: _bazarekImageLoading, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12, child: Icon(Icons.image_not_supported))) : const ColoredBox(color: Colors.black12, child: Icon(Icons.image, size: 30))),
             Expanded(child: Padding(padding: const EdgeInsets.all(9), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(8)), child: Text(label.isEmpty ? '✨ ویژه' : label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -8670,7 +8670,7 @@ class _ProfessionalStoreCatalogScreenState extends State<ProfessionalStoreCatalo
                   child: Column(children: [
                     Expanded(
                       child: image.isNotEmpty
-                          ? ClipRRect(borderRadius: BorderRadius.circular(5), child: Image.network(_optimizedImageUrl(image), width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(_professionalCategoryIcon(id), size: 30, color: const Color(0xFF4F659B))))
+                          ? ClipRRect(borderRadius: BorderRadius.circular(5), child: Image.network(_optimizedImageUrl(image, width: 480, quality: 82), width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(_professionalCategoryIcon(id), size: 30, color: const Color(0xFF4F659B))))
                           : Icon(_professionalCategoryIcon(id), size: 30, color: const Color(0xFF4F659B)),
                     ),
                     const SizedBox(height: 5),
@@ -9809,7 +9809,7 @@ class StoreDirectoryScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE0E5E8))),
                       child: Row(children: [
-                        Container(width: 96, height: 96, decoration: BoxDecoration(color: const Color(0xFFF2F5F6), borderRadius: BorderRadius.circular(14)), child: imageUrl.isNotEmpty ? ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(_optimizedImageUrl(imageUrl), fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.storefront_rounded, size: 42, color: Color(0xFF37475A)))) : const Icon(Icons.storefront_rounded, size: 42, color: Color(0xFF37475A))),
+                        Container(width: 96, height: 96, decoration: BoxDecoration(color: const Color(0xFFF2F5F6), borderRadius: BorderRadius.circular(14)), child: imageUrl.isNotEmpty ? ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 82), fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.storefront_rounded, size: 42, color: Color(0xFF37475A)))) : const Icon(Icons.storefront_rounded, size: 42, color: Color(0xFF37475A))),
                         const SizedBox(width: 13),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Row(children: [Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))), const Icon(Icons.verified_rounded, color: Color(0xFF007185), size: 20)]),
@@ -10182,7 +10182,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                         child: Container(
                           decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFD5D9D9)), borderRadius: BorderRadius.circular(12)),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                            Expanded(child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, resize: 'contain'), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 45))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 45))),
+                            Expanded(child: imageUrl.isNotEmpty ? Image.network(_optimizedImageUrl(imageUrl, width: 480, quality: 82, resize: 'contain'), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_not_supported_outlined, size: 45))) : const ColoredBox(color: Color(0xFFF3F3F3), child: Icon(Icons.image_outlined, size: 45))),
                             Padding(padding: const EdgeInsets.fromLTRB(11, 9, 11, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(item['title']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, height: 1.3)),
                               const SizedBox(height: 6),
