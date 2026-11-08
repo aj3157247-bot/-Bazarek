@@ -1,3 +1,4 @@
+// BUILD-MARKER: province-button-web-header-v1
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
@@ -6421,6 +6422,17 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
+                        if (isMobile)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: MobileProvinceButton(
+                                selectedProvince: selectedProvince,
+                                onChanged: (val) { setState(() => selectedProvince = val); _loadProducts(); },
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
