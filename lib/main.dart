@@ -1,4 +1,4 @@
-// BUILD-MARKER: province-button-web-header-v1
+// BUILD-MARKER: province-nav-and-instant-cache-v2
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
@@ -4138,6 +4138,28 @@ class ApiService {
     return c != null && DateTime.now().difference(c.at) < _listTtl ? c.data : null;
   }
 
+  static const String _persistKey = 'bz_home_listings_v1';
+  static Future<void> persistHomeListings(List<dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_persistKey, jsonEncode({'t': DateTime.now().millisecondsSinceEpoch, 'd': data.take(40).toList()}));
+    } catch (_) {}
+  }
+
+  static Future<List<dynamic>?> loadPersistedHomeListings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_persistKey);
+      if (raw == null) return null;
+      final m = jsonDecode(raw);
+      final t = m['t'] as int;
+      if (DateTime.now().millisecondsSinceEpoch - t > 24 * 3600 * 1000) return null;
+      return List<dynamic>.from(m['d'] as List);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static void clearListCache() {
     _listCache.clear();
     _storesCache = null;
@@ -4171,6 +4193,7 @@ class ApiService {
         if (data is Map && data['data'] is List) out = List<dynamic>.from(data['data']);
         if (out != null) {
           _listCache[cacheKey] = (at: DateTime.now(), data: out);
+          if (cacheKey.isEmpty) persistHomeListings(out);
           return out;
         }
         throw Exception('پاسخ آگهی‌ها از سرور نامعتبر است.');
@@ -5307,7 +5330,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadProducts() async {
     // اگر همین لیست چند ثانیه پیش گرفته شده، فوراً نشان داده می‌شود و در پس‌زمینه تازه می‌شود (بدون صفحه‌ی بارگذاری).
     final cachedNow = ApiService.peekCachedProducts(category: selectedCategory, province: selectedProvince, query: searchQuery);
-    if (mounted) setState(() { isLoading = cachedNow == null; loadError = null; });
+    // اولین نمایش فوری: آخرین لیست ذخیره‌شده (تا ۲۴ ساعت) را نشان می‌دهیم و در پس‌زمینه تازه می‌کنیم.
+    var instant = products.isNotEmpty;
+    if (!instant && selectedCategory.isEmpty && selectedProvince.isEmpty && searchQuery.trim().isEmpty) {
+      final saved = await ApiService.loadPersistedHomeListings();
+      if (saved != null && saved.isNotEmpty && mounted && products.isEmpty) {
+        products = saved.where((raw) => raw is Map && raw['is_store_product'] != true).toList();
+        instant = products.isNotEmpty;
+      }
+    }
+    if (mounted) setState(() { isLoading = cachedNow == null && !instant; loadError = null; });
     try {
       final data = await ApiService.getProducts(
         category: selectedCategory,
@@ -5328,8 +5360,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() { products = sorted; isLoading = false; });
     } catch (e) {
       if (mounted) setState(() {
-        products = [];
-        loadError = _friendlyNetworkError(e);
+        if (!instant) {
+          products = [];
+          loadError = _friendlyNetworkError(e);
+        }
         isLoading = false;
       });
     }
@@ -6422,17 +6456,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                        if (isMobile)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Align(
-                              alignment: AlignmentDirectional.centerEnd,
-                              child: MobileProvinceButton(
-                                selectedProvince: selectedProvince,
-                                onChanged: (val) { setState(() => selectedProvince = val); _loadProducts(); },
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -6501,6 +6524,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Text(isPs ? 'ټول' : 'همه', style: const TextStyle(color: Color(0xFFFFD814), fontWeight: FontWeight.w900)),
                           ),
                         ] else ...[
+                          const Spacer(),
+                          MobileProvinceButton(
+                            compact: true,
+                            selectedProvince: selectedProvince,
+                            onChanged: (val) { setState(() => selectedProvince = val); _loadProducts(); },
+                          ),
                           const Spacer(),
                           TextButton.icon(
                             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreDirectoryScreen(stores: professionalStores))),
@@ -11085,7 +11114,8 @@ Map<String, List<String>> _buildCategoryCovers(List<dynamic> products) {
 class MobileProvinceButton extends StatelessWidget {
   final String selectedProvince;
   final ValueChanged<String> onChanged;
-  const MobileProvinceButton({super.key, required this.selectedProvince, required this.onChanged});
+  final bool compact;
+  const MobileProvinceButton({super.key, required this.selectedProvince, required this.onChanged, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -11120,18 +11150,19 @@ class MobileProvinceButton extends StatelessWidget {
         if (value != null) onChanged(value);
       },
       child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: compact ? 32 : 40,
+        constraints: BoxConstraints(maxWidth: compact ? 150 : double.infinity),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F3F5),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFD5D9D9)),
+          color: compact ? Colors.white.withOpacity(.14) : const Color(0xFFF1F3F5),
+          borderRadius: BorderRadius.circular(compact ? 16 : 14),
+          border: Border.all(color: compact ? Colors.white24 : const Color(0xFFD5D9D9)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.location_on_outlined, size: 18, color: Color(0xFF007185)),
-          const SizedBox(width: 6),
-          Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-          const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+          Icon(Icons.location_on_outlined, size: compact ? 16 : 18, color: compact ? const Color(0xFFFFD814) : const Color(0xFF007185)),
+          const SizedBox(width: 5),
+          Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, fontSize: compact ? 12 : 13, color: compact ? Colors.white : null))),
+          Icon(Icons.keyboard_arrow_down_rounded, size: compact ? 16 : 18, color: compact ? Colors.white70 : null),
         ]),
       ),
     );
