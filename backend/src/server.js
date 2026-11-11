@@ -2222,4 +2222,10 @@ const PORT = process.env.PORT || 5000;
 expireTimeBasedBoosts();
 setInterval(expireTimeBasedBoosts, 30 * 1000);
 
+// ───────── دستیار هوش مصنوعی آگهی (ربات تلگرام + پیش‌نویس آگهی) ─────────
+// نیاز: GEMINI_API_KEY، TELEGRAM_BOT_TOKEN، TELEGRAM_WEBHOOK_SECRET، TELEGRAM_ASSIST_ADMINS، ASSIST_VENDOR_ID (راهنما: README-AI-ASSISTANT.txt)
+try {
+  require('./assist/listingAssistant').registerAssist(app, { getSupabaseAdmin, requireUser, genAI, sharp, crypto, postAdToChannels, express });
+} catch (e) { console.warn('AI assistant not loaded:', e?.message || e); }
+
 app.listen(PORT, () => console.log(`Bazarek backend running on ${PORT}`));
