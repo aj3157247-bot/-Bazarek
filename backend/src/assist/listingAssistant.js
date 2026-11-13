@@ -28,6 +28,7 @@ function buildPrompt(text) {
 - شماره‌ی تلفن فقط از متن فروشنده؛ از عکس حدس نزن.
 - category و subcategory باید دقیقاً از فهرست زیر باشند.
 - province باید یکی از این ولایت‌ها باشد: ${PROVINCES.join('، ')}.
+- address: آدرس دقیق (منطقه، سرک، مارکیت، ناحیه) فقط اگر در متن باشد؛ وگرنه خالی.
 - عنوان کوتاه و روشن (حداکثر ۸۰ کاراکتر) به فارسی/دری. توضیحات ۲ تا ۶ خط، بدون ایموجی زیاد و بدون شماره‌ی تلفن.
 فهرست دسته‌ها (id (عنوان): زیردسته‌ها):
 ${categoryGuide()}
@@ -36,7 +37,7 @@ ${categoryGuide()}
 """${String(text || '').slice(0, 2000)}"""
 
 فقط یک JSON معتبر برگردان با این کلیدها:
-{"title":"","description":"","category":"","subcategory":"","price":0,"currency":"AFN یا USD","province":"","condition":"نو/دست‌دوم/خالی","brand":"","model":"","negotiable":false}`;
+{"title":"","description":"","category":"","subcategory":"","price":0,"currency":"AFN یا USD","province":"","address":"","condition":"نو/دست‌دوم/خالی","brand":"","model":"","negotiable":false}`;
 }
 
 // خروجی مدل را اعتبارسنجی و پاک می‌کند؛ اگر دسته‌ی معتبر نبود، null برمی‌گرداند (چیزی منتشر نمی‌شود).
@@ -67,6 +68,7 @@ function normalizeDraft(raw, text, activeCategories = '*') {
       price: Math.round(price),
       currency: String(raw.currency || '').toUpperCase() === 'USD' ? 'USD' : 'AFN',
       province,
+      address: String(raw.address || '').replace(/(\+?93|0)?7\d{8}/g, '').replace(/\s+/g, ' ').trim().slice(0, 200),
       condition: String(raw.condition || '').trim().slice(0, 60),
       brand: String(raw.brand || '').trim().slice(0, 120),
       model: String(raw.model || '').trim().slice(0, 120),
@@ -157,7 +159,7 @@ function registerAssist(app, deps) {
         vendor_id: vendorId, title: d.title, description: d.description, price: d.price, currency: d.currency, stock: 1,
         category: d.category, subcategory: d.subcategory, image_url: JSON.stringify(urls), audio_url: '', video_url: '',
         share_to_channels: true, show_whatsapp: Boolean(d.phone), whatsapp_number: d.phone, allow_chat: false, show_phone: Boolean(d.phone),
-        contact_phone: d.phone, location_text: '', external_link: '', province: d.province || 'کابل', is_negotiable: d.negotiable,
+        contact_phone: d.phone, location_text: d.address || '', external_link: '', province: d.province || 'کابل', is_negotiable: d.negotiable,
         brand: d.brand, model: d.model, sizes: '', colors: '', material: '', condition: d.condition, specifications: '',
         product_code: `BZ-${crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`, discount_percent: 0, cost_price: 0,
         is_store_product: false, is_featured: false, is_pinned: false, featured_until: null, pinned_until: null, boost_level: 0, boost_until: null,
@@ -214,23 +216,67 @@ function registerAssist(app, deps) {
     handleUpdate(req.body).catch((e) => console.error('assist webhook error:', e?.message || e));
   });
 
-  // پیش‌نویس آگهی برای فرم ثبت آگهی (کمک به فروشنده‌ها): عکس‌ها (base64) + متن ← عنوان/دسته/توضیح/قیمت
-  app.post('/api/ai/draft-listing', requireUser, async (req, res) => {
+  const multer = require('multer');
+  const uploadAi = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 3 } });
+  const withUpload = (mw) => (req, res, next) => mw(req, res, (err) => (err ? res.status(400).json({ error: 'فایل عکس نامعتبر یا بزرگ‌تر از ۸ مگابایت است.' }) : next()));
+  const cleanDaily = new Map();
+  setInterval(() => cleanDaily.clear(), 24 * 3600 * 1000).unref?.();
+
+  // پیش‌نویس آگهی برای فرم ثبت آگهی (آگهی عادی و محصول فروشگاه): multipart با فیلد text و تا ۳ عکس (images)
+  app.post('/api/ai/draft-listing', requireUser, withUpload(uploadAi.array('images', 3)), async (req, res) => {
     try {
       const uid = req.user.id;
       const used = (aiDaily.get(uid) || 0) + 1;
       aiDaily.set(uid, used);
-      if (used > 15) return res.status(429).json({ error: 'سقف روزانه‌ی کمک هوش مصنوعی (۱۵ بار) پر شد.' });
+      if (used > 20) return res.status(429).json({ error: 'سقف روزانه‌ی کمک هوش مصنوعی (۲۰ بار) پر شد.' });
       const text = String(req.body?.text || '').slice(0, 2000);
-      const images = (Array.isArray(req.body?.images) ? req.body.images : []).slice(0, 3)
-        .map((i) => ({ mimeType: String(i?.mime || 'image/jpeg'), data: String(i?.data || '') })).filter((i) => i.data && i.data.length < 300_000); // کل بدنه‌ی درخواست باید زیر ۱ مگابایت بماند (سقف عمومی سرور)
-      if (!images.length && text.length < 5) return res.status(400).json({ error: 'عکس یا توضیح کالا را بفرستید.' });
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (!files.length && text.trim().length < 5) return res.status(400).json({ error: 'عکس یا چند کلمه توضیح بدهید.' });
+      const images = [];
+      for (const f of files.slice(0, 3)) {
+        const buf = await sharp(f.buffer).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer();
+        images.push({ mimeType: 'image/jpeg', data: buf.toString('base64') });
+      }
       const result = await extractListingDraft({ genAI, images, text, activeCategories });
       if (!result.ok) return res.status(422).json({ error: result.reason });
       res.json({ draft: result.draft });
     } catch (e) {
       console.error('draft-listing error:', e?.message || e);
-      res.status(500).json({ error: 'ساخت پیش‌نویس انجام نشد.' });
+      res.status(500).json({ error: 'ساخت پیش‌نویس انجام نشد؛ دوباره امتحان کنید.' });
+    }
+  });
+
+  // پاک‌سازی پس‌زمینه (آزمایشی): فقط وقتی GEMINI_IMAGE_MODEL در سرور تنظیم شده باشد فعال است.
+  app.post('/api/ai/clean-image', requireUser, withUpload(uploadAi.single('image')), async (req, res) => {
+    try {
+      const model = env.GEMINI_IMAGE_MODEL;
+      if (!model || !env.GEMINI_API_KEY) return res.status(501).json({ error: 'پاک‌سازی پس‌زمینه هنوز فعال نشده است.' });
+      if (!req.file) return res.status(400).json({ error: 'عکس ارسال نشده است.' });
+      const uid = req.user.id;
+      const used = (cleanDaily.get(uid) || 0) + 1;
+      cleanDaily.set(uid, used);
+      if (used > 20) return res.status(429).json({ error: 'سقف روزانه‌ی پاک‌سازی عکس پر شد.' });
+      const input = await sharp(req.file.buffer).rotate().resize(1280, 1280, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 86 }).toBuffer();
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: 'Remove the background of this product photo and place the product on a clean, pure white background with soft natural lighting. Keep the product exactly the same: shape, color, text, logos and details. Do not add, remove or redraw anything on the product.' },
+            { inline_data: { mime_type: 'image/jpeg', data: input.toString('base64') } },
+          ] }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      const part = (j?.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData?.data || p.inline_data?.data);
+      const b64 = part?.inlineData?.data || part?.inline_data?.data;
+      if (!r.ok || !b64) { console.warn('clean-image failed:', r.status, JSON.stringify(j).slice(0, 200)); return res.status(502).json({ error: 'پاک‌سازی پس‌زمینه انجام نشد.' }); }
+      const out = await sharp(Buffer.from(b64, 'base64')).jpeg({ quality: 88 }).toBuffer();
+      res.set('Content-Type', 'image/jpeg');
+      res.send(out);
+    } catch (e) {
+      console.error('clean-image error:', e?.message || e);
+      res.status(500).json({ error: 'پاک‌سازی پس‌زمینه انجام نشد.' });
     }
   });
 }
