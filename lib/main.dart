@@ -1,4 +1,4 @@
-// BUILD-MARKER: province-nav-and-instant-cache-v2
+// BUILD-MARKER: ai-autofill-v1
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
@@ -13,6 +13,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'ai_assist.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'web_seo.dart';
 import 'analytics.dart';
@@ -528,6 +529,9 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'به‌جای قیمت، «قیمت با تماس» نشان داده می‌شود': 'Instead of a price, “Contact for price” is shown',
+  'قیمت را نمایش نده (تماس بگیرید)': 'Hide the price (contact me)',
+  'قیمت با تماس': 'Contact for price',
   'ما را دنبال کنید 💙': 'Follow us 💙',
   'فیسبوک، تلگرام، واتساپ، یوتیوب، تیک‌تاک و اینستاگرام': 'Facebook, Telegram, WhatsApp, YouTube, TikTok and Instagram',
   'بازارک در شبکه‌های اجتماعی': 'Bazarek on social media',
@@ -742,6 +746,9 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'به‌جای قیمت، «قیمت با تماس» نشان داده می‌شود': 'د بیې پر ځای «د بیې لپاره اړیکه ونیسئ» ښودل کېږي',
+  'قیمت را نمایش نده (تماس بگیرید)': 'بیه ونه ښیه (اړیکه ونیسئ)',
+  'قیمت با تماس': 'د بیې لپاره اړیکه ونیسئ',
   'ما را دنبال کنید 💙': 'موږ تعقیب کړئ 💙',
   'فیسبوک، تلگرام، واتساپ، یوتیوب، تیک‌تاک و اینستاگرام': 'فېسبوک، تلیګرام، واټساپ، یوټیوب، ټیکټاک او انسټاګرام',
   'بازارک در شبکه‌های اجتماعی': 'بازارک په ټولنیزو رسنیو کې',
@@ -4470,6 +4477,45 @@ class ApiService {
     throw Exception('فروشگاه پیدا نشد.');
   }
 
+  /// تکمیل خودکار آگهی با هوش مصنوعی (multipart: text + تا ۳ عکس) ← پیش‌نویس
+  static Future<Map<String, dynamic>> aiDraftListing(String text, List<Uint8List> images) async {
+    Future<http.Response> send() async {
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/ai/draft-listing'));
+      if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      req.fields['text'] = text;
+      for (var i = 0; i < images.length && i < 3; i++) {
+        req.files.add(http.MultipartFile.fromBytes('images', images[i], filename: 'photo$i.jpg'));
+      }
+      final streamed = await req.send().timeout(const Duration(seconds: 90));
+      return http.Response.fromStream(streamed);
+    }
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    dynamic data;
+    try { data = jsonDecode(res.body); } catch (_) {}
+    if (res.statusCode != 200 || data is! Map || data['draft'] is! Map) {
+      throw Exception(data is Map ? (data['error'] ?? 'ساخت پیش‌نویس ناموفق بود.') : 'ساخت پیش‌نویس ناموفق بود.');
+    }
+    return Map<String, dynamic>.from(data['draft'] as Map);
+  }
+
+  /// پاک‌سازی پس‌زمینه‌ی عکس (آزمایشی؛ سرور باید فعالش کرده باشد)
+  static Future<Uint8List?> aiCleanImage(Uint8List image) async {
+    Future<http.Response> send() async {
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/ai/clean-image'));
+      if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
+      req.files.add(http.MultipartFile.fromBytes('image', image, filename: 'photo.jpg'));
+      final streamed = await req.send().timeout(const Duration(seconds: 120));
+      return http.Response.fromStream(streamed);
+    }
+    var res = await send();
+    if (res.statusCode == 401 && await refreshSession()) res = await send();
+    if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) return res.bodyBytes;
+    dynamic data;
+    try { data = jsonDecode(res.body); } catch (_) {}
+    throw Exception(data is Map ? (data['error'] ?? 'پاک‌سازی پس‌زمینه انجام نشد.') : 'پاک‌سازی پس‌زمینه انجام نشد.');
+  }
+
   static Future<Map<String, dynamic>> refreshListing(String id) => _rewardsCall('POST', '/products/$id/refresh');
 
   static Future<void> saveStoreProfile(Map<String, dynamic> body) async {
@@ -7368,7 +7414,7 @@ String _displayListingPrice(BuildContext context, dynamic item) {
   final sale = n > 0 && discount > 0 && discount < 100 ? n * (1 - discount / 100) : n;
   final negotiable = item['is_negotiable'] == true;
   final currency = (item['currency']?.toString().toUpperCase() == 'USD') ? 'USD' : 'AFN';
-  final amount = sale <= 0 ? tr(context, 'free') : (currency == 'USD' ? '\$${NumberFormatHelper.format(sale)}' : '${NumberFormatHelper.format(sale)} ${tr(context, 'afghani')}');
+  final amount = sale <= 0 ? uiText(context, 'قیمت با تماس') : (currency == 'USD' ? '\$${NumberFormatHelper.format(sale)}' : '${NumberFormatHelper.format(sale)} ${tr(context, 'afghani')}');
   final suffix = negotiable ? ' • ${tr(context, 'price_negotiable')}' : '';
   return discount > 0 && discount < 100 ? '٪${NumberFormatHelper.format(discount)} تخفیف • $amount$suffix' : '$amount$suffix';
 }
@@ -12204,6 +12250,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   final whatsappNumber = TextEditingController();
   bool showWhatsapp = false;
   bool shareToChannels = true;
+  bool hidePrice = false;
   final locationText = TextEditingController();
   final socialLink = TextEditingController();
   final brand = TextEditingController();
@@ -12432,6 +12479,42 @@ class _AddProductSheetState extends State<AddProductSheet> {
     );
   }
 
+  /// پر کردن خودکار فرم از پیش‌نویس هوش مصنوعی (کاربر بعدش می‌تواند هر چیزی را اصلاح کند)
+  void _applyAiDraft(Map<String, dynamic> d) {
+    String v(String k) => d[k]?.toString().trim() ?? '';
+    setState(() {
+      if (v('title').isNotEmpty) title.text = v('title');
+      if (v('description').isNotEmpty) desc.text = v('description');
+      final p = num.tryParse(v('price')) ?? 0;
+      if (p > 0 && !hidePrice) price.text = p.round().toString();
+      final cur = v('currency').toUpperCase();
+      if (cur == 'USD' || cur == 'AFN') currency = cur;
+      if (provinces.contains(v('province'))) province = v('province');
+      final cat = v('category');
+      final sub = v('subcategory');
+      if (storeMappedCategory.isEmpty && categories.any((c) => c['id'] == cat)) {
+        category = cat;
+        final subs = subcategories[cat] ?? const <Map<String, String>>[];
+        subcategory = subs.any((x) => x['id'] == sub) ? sub : '';
+      } else if (storeMappedCategory.isNotEmpty) {
+        final subs = subcategories[category] ?? const <Map<String, String>>[];
+        if (subs.any((x) => x['id'] == sub)) subcategory = sub;
+      }
+      final phone = v('phone');
+      if (phone.isNotEmpty) {
+        if (contactPhone.text.trim().isEmpty) contactPhone.text = phone;
+        whatsappNumber.text = phone;
+        showWhatsapp = true;
+        showPhone = true;
+      }
+      if (v('address').isNotEmpty) locationText.text = v('address');
+      if (v('brand').isNotEmpty) brand.text = v('brand');
+      if (v('model').isNotEmpty) model.text = v('model');
+      if (v('condition').isNotEmpty) condition.text = v('condition');
+      if (d['negotiable'] == true) isNegotiable = true;
+    });
+  }
+
   Future<void> _pickVideoFile() async {
     final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['mp4', 'webm', 'mov']);
     if (files.isEmpty) return;
@@ -12530,7 +12613,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
       }
       final payload = jsonEncode({
         'title': title.text.trim(), 'category': category, 'subcategory': subcategory,
-        'price': double.tryParse(price.text.replaceAll(',', '')) ?? 0,
+        'price': hidePrice ? 0 : (double.tryParse(price.text.replaceAll(',', '')) ?? 0),
         'cost_price': 0, 'stock': int.tryParse(stock.text) ?? 1,
         'description': desc.text.trim(), 'image_url': jsonEncode(imageUrls), 'audio_url': audioUrl ?? '', 'video_url': videoUrl ?? '',
         'allow_chat': allowChat, 'show_phone': showPhone, 'contact_phone': contactPhone.text.trim(), 'share_to_channels': shareToChannels, 'show_whatsapp': showWhatsapp, 'whatsapp_number': showWhatsapp ? (whatsappNumber.text.trim().isEmpty ? contactPhone.text.trim() : whatsappNumber.text.trim()) : '',
@@ -12650,6 +12733,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
     final priceSection = section('۳. قیمت و تخفیف', professional ? 'قیمت اصلی و درصد تخفیف را وارد کنید؛ قیمت نهایی خودکار محاسبه می‌شود.' : 'قیمت و واحد پول را مشخص کنید.', Icons.sell_rounded,
             Column(children: [
               Row(children: [Expanded(child: field(price, 'قیمت اصلی', hint: 'مثلاً 120000', keyboard: TextInputType.number)), const SizedBox(width: 10), Expanded(child: field(discountPercent, 'تخفیف (%)', hint: 'مثلاً 15', keyboard: const TextInputType.numberWithOptions(decimal: true), helper: '۰ تا ۹۹٪'))]),
+              SwitchListTile(contentPadding: EdgeInsets.zero, dense: true, title: const Text('قیمت را نمایش نده (تماس بگیرید)', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('به‌جای قیمت، «قیمت با تماس» نشان داده می‌شود', style: TextStyle(fontSize: 12)), value: hidePrice, onChanged: (val) => setState(() { hidePrice = val; if (val) price.clear(); })),
               if (salePrice > 0 && discount > 0 && discount < 100) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF7E6), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF3D48A))), child: Row(children: [const Icon(Icons.local_offer_rounded, color: Color(0xFFB45309)), const SizedBox(width: 8), Expanded(child: Text('قیمت بعد از تخفیف: ${NumberFormatHelper.format(salePrice)} ${currency == 'USD' ? 'دلار' : 'افغانی'}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8A4B00))))])),
               Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xFFF1F5FF), borderRadius: BorderRadius.circular(15)), child: Row(children: [Expanded(child: ChoiceChip(label: const Text('افغانی (AFN)'), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'AFN' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800))), Expanded(child: ChoiceChip(label: const Text('دلار (USD)'), selected: currency == 'USD', onSelected: (_) => setState(() => currency = 'USD'), selectedColor: const Color(0xFF1565C0), labelStyle: TextStyle(color: currency == 'USD' ? Colors.white : const Color(0xFF12345B), fontWeight: FontWeight.w800)))])),
               const SizedBox(height: 11), field(stock, professional ? 'موجودی' : 'تعداد', hint: 'مثلاً 10', keyboard: TextInputType.number),
@@ -12710,6 +12794,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
           const SizedBox(width: 10),
           Expanded(flex: 2, child: field(discountPercent, 'تخفیف ٪', hint: 'اختیاری', keyboard: const TextInputType.numberWithOptions(decimal: true))),
         ]),
+        SwitchListTile(contentPadding: EdgeInsets.zero, dense: true, title: const Text('قیمت را نمایش نده (تماس بگیرید)', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: const Text('به‌جای قیمت، «قیمت با تماس» نشان داده می‌شود', style: TextStyle(fontSize: 12)), value: hidePrice, onChanged: (val) => setState(() { hidePrice = val; if (val) price.clear(); })),
         Row(children: [
           Expanded(child: ChoiceChip(label: const Center(child: Text('افغانی')), selected: currency == 'AFN', onSelected: (_) => setState(() => currency = 'AFN'))),
           const SizedBox(width: 8),
@@ -12781,6 +12866,15 @@ class _AddProductSheetState extends State<AddProductSheet> {
                 if (imageBytes.length < 20) InkWell(onTap: _pickImage, borderRadius: BorderRadius.circular(12), child: Container(width: 82, height: 82, decoration: BoxDecoration(color: const Color(0xFFF8FAFB), border: Border.all(color: const Color(0xFFB8C4CC)), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.add_a_photo_rounded))),
               ]),
             ]),
+          ),
+          AiAssistCard(
+            getImages: () => imageBytes,
+            fetchDraft: ApiService.aiDraftListing,
+            cleanImage: ApiService.aiCleanImage,
+            onApply: _applyAiDraft,
+            onReplaceImage: (i, bytes) {
+              if (i >= 0 && i < imageBytes.length) setState(() => imageBytes[i] = bytes);
+            },
           ),
           if (!professional) ...[audioSection, videoSection, introSection, priceSection, contactSection],
           if (professional) ...[simpleMainCard, contactSection, moreOptions],
