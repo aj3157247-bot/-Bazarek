@@ -78,21 +78,70 @@ function normalizeDraft(raw, text, activeCategories = '*') {
   };
 }
 
+class AiError extends Error {
+  constructor(userMessage, httpStatus, modelMissing = false) {
+    super(userMessage);
+    this.userMessage = userMessage;
+    this.httpStatus = httpStatus || 500;
+    this.modelMissing = modelMissing;
+  }
+}
+function mapGeminiError(e) {
+  const status = Number(e?.status || e?.code || 0);
+  const msg = String(e?.message || '');
+  if (/API key not valid|API_KEY_INVALID/i.test(msg) || status === 401) return new AiError('کلید Gemini نامعتبر است؛ GEMINI_API_KEY را در Render بررسی کنید.', 503);
+  if (status === 403) return new AiError('دسترسی به Gemini رد شد (کلید یا منطقه). کلید را بررسی کنید.', 503);
+  if (status === 404 || /not found|not supported for generateContent/i.test(msg)) return new AiError('مدل هوش مصنوعی پیدا نشد؛ در Render متغیر GEMINI_MODEL را روی یک مدل فعال بگذارید.', 503, true);
+  if (status === 429) return new AiError('سهمیه‌ی رایگان Gemini موقتاً پر شده؛ چند دقیقه بعد دوباره امتحان کنید.', 429);
+  return new AiError('هوش مصنوعی پاسخ نداد؛ دوباره امتحان کنید.', 502);
+}
+
 async function askModel(genAI, images, text) {
-  if (!genAI) throw new Error('GEMINI_API_KEY تنظیم نشده است.');
-  const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-    generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-  });
+  if (!genAI) throw new AiError('هوش مصنوعی هنوز در سرور فعال نشده است: GEMINI_API_KEY را در Render بگذارید.', 503);
+  const names = [...new Set([process.env.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter(Boolean))];
   const parts = [{ text: buildPrompt(text) }, ...images.slice(0, 4).map((im) => ({ inlineData: { mimeType: im.mimeType || 'image/jpeg', data: im.data } }))];
-  const result = await model.generateContent(parts);
-  const out = String(result?.response?.text?.() || '').replace(/```json|```/g, '').trim();
-  return JSON.parse(out);
+  let last = null;
+  for (const name of names) {
+    try {
+      const model = genAI.getGenerativeModel({ model: name, generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } });
+      const result = await model.generateContent(parts);
+      const out = String(result?.response?.text?.() || '').replace(/```json|```/g, '').trim();
+      try { return JSON.parse(out); } catch (_) { throw new AiError('پاسخ هوش مصنوعی قابل فهم نبود؛ دوباره امتحان کنید.', 502); }
+    } catch (e) {
+      const mapped = e instanceof AiError ? e : mapGeminiError(e);
+      console.warn(`gemini (${name}) failed:`, String(e?.message || e).slice(0, 200));
+      last = mapped;
+      if (!mapped.modelMissing) break; // فقط وقتی مدل پیدا نشد، مدل بعدی را امتحان می‌کنیم
+    }
+  }
+  throw last || new AiError('هوش مصنوعی پاسخ نداد.', 502);
 }
 
 async function extractListingDraft({ genAI, images, text, activeCategories }) {
   const raw = await askModel(genAI, images, text);
   return normalizeDraft(raw, text, activeCategories);
+}
+
+// کارت عکس برای شبکه‌های اجتماعی: عکس کامل و بدون برش/زوم، وسط یک کادر ۴:۵ (۱۰۸۰×۱۳۵۰) با پس‌زمینه‌ی محو‌شده‌ی خودِ عکس.
+const cardCache = new Map();
+async function buildSocialCard(sharp, product) {
+  let urls = [];
+  try { urls = Array.isArray(product.image_url) ? product.image_url : JSON.parse(product.image_url || '[]'); } catch (_) { urls = []; }
+  const url = String(urls[0] || '');
+  if (!/^https?:\/\//i.test(url)) throw new Error('آگهی عکس ندارد.');
+  const key = `${product.id}:${url}`;
+  const hit = cardCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.buf;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`image ${r.status}`);
+  const src = Buffer.from(await r.arrayBuffer());
+  const W = 1080, H = 1350;
+  const bg = await sharp(src).rotate().resize(W, H, { fit: 'cover' }).blur(40).modulate({ brightness: 0.85 }).jpeg({ quality: 80 }).toBuffer();
+  const fg = await sharp(src).rotate().resize(W - 96, H - 96, { fit: 'inside' }).sharpen({ sigma: 0.6 }).toBuffer();
+  const out = await sharp(bg).composite([{ input: fg, gravity: 'center' }]).jpeg({ quality: 88 }).toBuffer();
+  if (cardCache.size >= 40) cardCache.delete(cardCache.keys().next().value);
+  cardCache.set(key, { at: Date.now(), buf: out });
+  return out;
 }
 
 function registerAssist(app, deps) {
@@ -172,7 +221,7 @@ function registerAssist(app, deps) {
       await say(chatId, `✅ منتشر شد\n\n📌 ${d.title}\n📂 ${d.categoryTitle}\n💰 ${priceText}\n📍 ${payload.province}${d.province ? '' : ' (ولایت در متن نبود؛ کابل گذاشته شد)'}\n📞 ${d.phone || 'شماره پیدا نشد'}\n\n🔗 https://bazarek.pages.dev/listing/${data.id}\n\nاشتباه بود؟ بنویسید: /undo`);
     } catch (e) {
       console.error('assist error:', e?.message || e);
-      await say(chatId, `⚠️ خطا: ${String(e?.message || e).slice(0, 180)}`);
+      await say(chatId, `⚠️ ${String(e?.userMessage || e?.message || e).slice(0, 220)}`);
     }
   }
 
@@ -216,6 +265,21 @@ function registerAssist(app, deps) {
     handleUpdate(req.body).catch((e) => console.error('assist webhook error:', e?.message || e));
   });
 
+  // عکس هم‌اندازه برای فیسبوک/اینستاگرام/تلگرام: GET /api/products/:id/social.jpg
+  app.get('/api/products/:id/social.jpg', async (req, res) => {
+    try {
+      const { data: p } = await getSupabaseAdmin().from('products').select('id,image_url,is_active').eq('id', String(req.params.id)).maybeSingle();
+      if (!p || p.is_active === false) return res.status(404).json({ error: 'آگهی پیدا نشد.' });
+      const buf = await buildSocialCard(sharp, p);
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=86400');
+      res.send(buf);
+    } catch (e) {
+      console.warn('social card error:', e?.message || e);
+      res.status(500).json({ error: 'ساخت عکس انجام نشد.' });
+    }
+  });
+
   const multer = require('multer');
   const uploadAi = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 3 } });
   const withUpload = (mw) => (req, res, next) => mw(req, res, (err) => (err ? res.status(400).json({ error: 'فایل عکس نامعتبر یا بزرگ‌تر از ۸ مگابایت است.' }) : next()));
@@ -242,7 +306,7 @@ function registerAssist(app, deps) {
       res.json({ draft: result.draft });
     } catch (e) {
       console.error('draft-listing error:', e?.message || e);
-      res.status(500).json({ error: 'ساخت پیش‌نویس انجام نشد؛ دوباره امتحان کنید.' });
+      res.status(e?.httpStatus || 500).json({ error: e?.userMessage || 'ساخت پیش‌نویس انجام نشد؛ دوباره امتحان کنید.' });
     }
   });
 
@@ -281,4 +345,4 @@ function registerAssist(app, deps) {
   });
 }
 
-module.exports = { registerAssist, extractListingDraft, normalizeDraft, findAfghanPhone };
+module.exports = { registerAssist, extractListingDraft, normalizeDraft, findAfghanPhone, buildSocialCard, AiError };
