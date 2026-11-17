@@ -20,6 +20,8 @@ class AiAssistCard extends StatefulWidget {
   final void Function(Map<String, dynamic> draft) onApply;
   final Future<Uint8List?> Function(Uint8List image)? cleanImage;
   final void Function(int index, Uint8List bytes)? onReplaceImage;
+  /// متنی که کاربر خودش در فرم نوشته (عنوان + توضیحات)؛ هوش مصنوعی از همین دسته، ولایت، قیمت و ... را درمی‌آورد.
+  final String Function()? getFormText;
 
   const AiAssistCard({
     super.key,
@@ -28,6 +30,7 @@ class AiAssistCard extends StatefulWidget {
     required this.onApply,
     this.cleanImage,
     this.onReplaceImage,
+    this.getFormText,
   });
 
   @override
@@ -53,7 +56,7 @@ class _AiAssistCardState extends State<AiAssistCard> {
   Future<void> _run() async {
     if (_busy) return;
     final images = widget.getImages();
-    final text = _text.text.trim();
+    final text = [widget.getFormText?.call() ?? '', _text.text].where((t) => t.trim().isNotEmpty).join('\n').trim();
     if (images.isEmpty && text.length < 5) {
       _snack(_t(context, 'اول عکس‌های کالا را اضافه کنید یا چند کلمه درباره‌ی آن بنویسید.', 'لومړی د توکي انځورونه اضافه کړئ یا څو کلمې ولیکئ.', 'Add photos or write a few words about the item first.'));
       return;
@@ -142,7 +145,7 @@ class _AiAssistCardState extends State<AiAssistCard> {
         ]),
         const SizedBox(height: 6),
         Text(
-          _t(context, 'عکس‌ها را بالا اضافه کنید و (اگر خواستید) چند کلمه بنویسید. عنوان، دسته، ولایت، توضیحات، قیمت، واتساپ و آدرس خودکار پر می‌شود. یا فرم را دستی پر کنید.',
+          _t(context, 'عکس‌ها را اضافه کنید و همه‌ی معلومات (قیمت، ولایت، آدرس، واتساپ و...) را در بخش «توضیحات» همین فرم بنویسید؛ بعد دکمه‌ی زیر را بزنید. دسته، زیردسته، ولایت، قیمت و آدرس خودکار پر می‌شود. اگر قیمت نبود، «پیام بدهید یا تماس بگیرید» می‌آید.',
               'انځورونه پورته اضافه کړئ او (که غواړئ) څو کلمې ولیکئ. سرلیک، کټګورۍ، ولایت، تشریحات، بیه، واټساپ او پته په اتوماتیک ډول ډکېږي. یا فورم په لاس ډک کړئ.',
               'Add photos above and (optionally) a few words. Title, category, province, description, price, WhatsApp and address are filled automatically. Or fill the form manually.'),
           style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.6, fontWeight: FontWeight.w600),

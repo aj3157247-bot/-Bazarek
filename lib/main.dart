@@ -1,4 +1,4 @@
-// BUILD-MARKER: ai-autofill-v1
+// BUILD-MARKER: ai-autofill-v2
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
@@ -529,6 +529,9 @@ String uiText(BuildContext context, String fa, [String? ps]) {
 }
 
 const Map<String, String> _extraUiEn = {
+  'ثبت دستی': 'Manual entry',
+  'تکمیل خودکار (هوش مصنوعی)': 'Auto-fill (AI)',
+  'قیمت با پیام یا تماس': 'Price by message or call',
   'به‌جای قیمت، «قیمت با تماس» نشان داده می‌شود': 'Instead of a price, “Contact for price” is shown',
   'قیمت را نمایش نده (تماس بگیرید)': 'Hide the price (contact me)',
   'قیمت با تماس': 'Contact for price',
@@ -746,6 +749,9 @@ const Map<String, String> _extraUiEn = {
   'عکس فروشگاه': 'Store photo',
 };
 const Map<String, String> _extraUiPs = {
+  'ثبت دستی': 'لاسي ثبت',
+  'تکمیل خودکار (هوش مصنوعی)': 'اتوماتیک بشپړول (مصنوعي هوښ)',
+  'قیمت با پیام یا تماس': 'بیه د پیغام یا اړیکې له لارې',
   'به‌جای قیمت، «قیمت با تماس» نشان داده می‌شود': 'د بیې پر ځای «د بیې لپاره اړیکه ونیسئ» ښودل کېږي',
   'قیمت را نمایش نده (تماس بگیرید)': 'بیه ونه ښیه (اړیکه ونیسئ)',
   'قیمت با تماس': 'د بیې لپاره اړیکه ونیسئ',
@@ -7414,7 +7420,7 @@ String _displayListingPrice(BuildContext context, dynamic item) {
   final sale = n > 0 && discount > 0 && discount < 100 ? n * (1 - discount / 100) : n;
   final negotiable = item['is_negotiable'] == true;
   final currency = (item['currency']?.toString().toUpperCase() == 'USD') ? 'USD' : 'AFN';
-  final amount = sale <= 0 ? uiText(context, 'قیمت با تماس') : (currency == 'USD' ? '\$${NumberFormatHelper.format(sale)}' : '${NumberFormatHelper.format(sale)} ${tr(context, 'afghani')}');
+  final amount = sale <= 0 ? uiText(context, 'قیمت با پیام یا تماس') : (currency == 'USD' ? '\$${NumberFormatHelper.format(sale)}' : '${NumberFormatHelper.format(sale)} ${tr(context, 'afghani')}');
   final suffix = negotiable ? ' • ${tr(context, 'price_negotiable')}' : '';
   return discount > 0 && discount < 100 ? '٪${NumberFormatHelper.format(discount)} تخفیف • $amount$suffix' : '$amount$suffix';
 }
@@ -12251,6 +12257,7 @@ class _AddProductSheetState extends State<AddProductSheet> {
   bool showWhatsapp = false;
   bool shareToChannels = true;
   bool hidePrice = false;
+  bool aiMode = true;
   final locationText = TextEditingController();
   final socialLink = TextEditingController();
   final brand = TextEditingController();
@@ -12479,14 +12486,24 @@ class _AddProductSheetState extends State<AddProductSheet> {
     );
   }
 
-  /// پر کردن خودکار فرم از پیش‌نویس هوش مصنوعی (کاربر بعدش می‌تواند هر چیزی را اصلاح کند)
+  /// پر کردن خودکار فرم از پیش‌نویس هوش مصنوعی (متنی که کاربر نوشته دست‌نخورده می‌ماند؛ کاربر بعدش می‌تواند هر چیزی را اصلاح کند)
   void _applyAiDraft(Map<String, dynamic> d) {
     String v(String k) => d[k]?.toString().trim() ?? '';
+    const priceNote = 'برای دریافت قیمت پیام دهید یا تماس بگیرید.';
     setState(() {
-      if (v('title').isNotEmpty) title.text = v('title');
-      if (v('description').isNotEmpty) desc.text = v('description');
+      if (title.text.trim().isEmpty && v('title').isNotEmpty) title.text = v('title');
+      if (desc.text.trim().isEmpty && v('description').isNotEmpty) desc.text = v('description');
       final p = num.tryParse(v('price')) ?? 0;
-      if (p > 0 && !hidePrice) price.text = p.round().toString();
+      if (p > 0) {
+        hidePrice = false;
+        price.text = p.round().toString();
+      } else {
+        hidePrice = true;
+        price.clear();
+        if (!desc.text.contains('پیام دهید')) {
+          desc.text = desc.text.trim().isEmpty ? priceNote : '${desc.text.trim()}\n\n$priceNote';
+        }
+      }
       final cur = v('currency').toUpperCase();
       if (cur == 'USD' || cur == 'AFN') currency = cur;
       if (provinces.contains(v('province'))) province = v('province');
@@ -12867,15 +12884,23 @@ class _AddProductSheetState extends State<AddProductSheet> {
               ]),
             ]),
           ),
-          AiAssistCard(
-            getImages: () => imageBytes,
-            fetchDraft: ApiService.aiDraftListing,
-            cleanImage: ApiService.aiCleanImage,
-            onApply: _applyAiDraft,
-            onReplaceImage: (i, bytes) {
-              if (i >= 0 && i < imageBytes.length) setState(() => imageBytes[i] = bytes);
-            },
-          ),
+          Row(children: [
+            Expanded(child: ChoiceChip(label: Center(child: Text('تکمیل خودکار (هوش مصنوعی)')), selected: aiMode, onSelected: (_) => setState(() => aiMode = true))),
+            const SizedBox(width: 8),
+            Expanded(child: ChoiceChip(label: Center(child: Text('ثبت دستی')), selected: !aiMode, onSelected: (_) => setState(() => aiMode = false))),
+          ]),
+          const SizedBox(height: 10),
+          if (aiMode)
+            AiAssistCard(
+              getImages: () => imageBytes,
+              getFormText: () => '${title.text}\n${desc.text}',
+              fetchDraft: ApiService.aiDraftListing,
+              cleanImage: ApiService.aiCleanImage,
+              onApply: _applyAiDraft,
+              onReplaceImage: (i, bytes) {
+                if (i >= 0 && i < imageBytes.length) setState(() => imageBytes[i] = bytes);
+              },
+            ),
           if (!professional) ...[audioSection, videoSection, introSection, priceSection, contactSection],
           if (professional) ...[simpleMainCard, contactSection, moreOptions],
           SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(onPressed: publishing ? null : _publish, icon: publishing ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(professional ? Icons.storefront_rounded : Icons.publish_rounded), label: Text(publishing ? 'در حال انتشار...' : (professional ? 'انتشار در فروشگاه' : 'ثبت و انتشار آگهی')), style: FilledButton.styleFrom(backgroundColor: professional ? const Color(0xFF007185) : const Color(0xFF4F659B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
