@@ -1600,7 +1600,12 @@ async function postAdToChannels(product) {
   try {
     if (!TELEGRAM_AUTOPOST || !product || product.is_active === false || product.share_to_channels === false) return;
     const { caption, link } = buildAdCaption(product);
-    const photo = firstAdImage(product);
+    let photo = firstAdImage(product);
+    // عکس هم‌اندازه (۴:۵، کامل و بدون برش) برای فیسبوک/اینستاگرام/تلگرام؛ اگر ساخته نشد، عکس اصلی
+    try {
+      await require('./assist/listingAssistant').buildSocialCard(sharp, product);
+      photo = `${process.env.PUBLIC_API_URL || 'https://bazarek.onrender.com'}/api/products/${product.id}/social.jpg`;
+    } catch (e) { console.warn('social card skipped:', e?.message || e); }
     await Promise.allSettled([
       postAdToTelegram(product, caption, photo),
       postAdToFacebook(product, caption, photo, link),
