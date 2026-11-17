@@ -45,7 +45,9 @@ export async function onRequestGet(context) {
     .slice(0, 30)
     .map((x) => {
       const link = origin + listingPath(x);
-      const img = firstImage(x.image_url);
+      // عکس هم‌اندازه‌ی ۴:۵ (کامل، بدون برش) برای فیسبوک/اینستاگرام؛ برای کار کردنش سرور Render باید بیدار باشد (Worker بیدارباش).
+      const hasImg = Boolean(firstImage(x.image_url));
+      const img = hasImg ? `${env.PUBLIC_API_URL || "https://bazarek.onrender.com"}/api/products/${x.id}/social.jpg` : "";
       const price = Number(x.price) > 0 ? `${Number(x.price).toLocaleString("en-US")} ${String(x.currency).toUpperCase() === "USD" ? "دالر" : "افغانی"}` : "توافقی";
       const text = `${x.title}\n💰 ${price}${x.province ? `\n📍 ${x.province}` : ""}\n\n🔗 مشاهده و تماس: ${link}\n\n#بازارک`;
       const html = `${img ? `<p><img src="${xml(img)}" /></p>` : ""}<p>💰 ${xml(price)}${x.province ? ` — 📍 ${xml(x.province)}` : ""}</p><p><a href="${xml(link)}">مشاهده و تماس با فروشنده</a></p>`;
