@@ -96,9 +96,31 @@ function mapGeminiError(e) {
   return new AiError('هوش مصنوعی پاسخ نداد؛ دوباره امتحان کنید.', 502);
 }
 
+// مدل‌هایی که واقعاً برای همین کلید فعالند را از خود Google می‌پرسد (دیگر حدس زدن نام مدل لازم نیست).
+let modelCache = { at: 0, names: [] };
+const PREFERRED_MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+async function discoverModels() {
+  if (Date.now() - modelCache.at < 3600 * 1000 && modelCache.names.length) return modelCache.names;
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return [];
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    const ok = (j.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => String(m.name || '').replace(/^models\//, ''))
+      .filter((n) => /^gemini-.*flash/.test(n) && !/(tts|image|embedding|transcribe|robotics|computer|omni|banana|lyria|live|audio)/.test(n));
+    const ordered = [...PREFERRED_MODELS.filter((n) => ok.includes(n)), ...ok.filter((n) => !PREFERRED_MODELS.includes(n))];
+    modelCache = { at: Date.now(), names: ordered };
+    return ordered;
+  } catch (_) { return []; }
+}
+
 async function askModel(genAI, images, text) {
   if (!genAI) throw new AiError('هوش مصنوعی هنوز در سرور فعال نشده است: GEMINI_API_KEY را در Render بگذارید.', 503);
-  const names = [...new Set([process.env.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter(Boolean))];
+  const discovered = await discoverModels();
+  const names = [...new Set([process.env.GEMINI_MODEL, ...discovered, ...PREFERRED_MODELS].filter(Boolean))].slice(0, 6);
   const parts = [{ text: buildPrompt(text) }, ...images.slice(0, 4).map((im) => ({ inlineData: { mimeType: im.mimeType || 'image/jpeg', data: im.data } }))];
   let last = null;
   for (const name of names) {
@@ -111,12 +133,12 @@ async function askModel(genAI, images, text) {
       const mapped = e instanceof AiError ? e : mapGeminiError(e);
       console.warn(`gemini (${name}) failed:`, String(e?.message || e).slice(0, 200));
       last = mapped;
-      if (!mapped.modelMissing) break; // فقط وقتی مدل پیدا نشد، مدل بعدی را امتحان می‌کنیم
+      if (!mapped.modelMissing) break; // فقط وقتی مدل در دسترس نبود، مدل بعدی را امتحان می‌کنیم
     }
   }
   if (last?.modelMissing) {
     const k = String(process.env.GEMINI_API_KEY || '');
-    throw new AiError(`${last.userMessage} (کلیدی که سرور الان دارد به «${k.slice(-4)}» ختم می‌شود؛ اگر این با کلید جدید شما فرق دارد، GEMINI_API_KEY در Render عوض نشده است. مدل تنظیم‌شده: ${process.env.GEMINI_MODEL || 'پیش‌فرض'})`, 503, true);
+    throw new AiError(`${last.userMessage} (کلید سرور به «${k.slice(-4)}» ختم می‌شود. مدل‌های امتحان‌شده: ${names.join('، ')})`, 503, true);
   }
   throw last || new AiError('هوش مصنوعی پاسخ نداد.', 502);
 }
