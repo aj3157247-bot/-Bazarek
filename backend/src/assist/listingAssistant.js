@@ -114,6 +114,10 @@ async function askModel(genAI, images, text) {
       if (!mapped.modelMissing) break; // فقط وقتی مدل پیدا نشد، مدل بعدی را امتحان می‌کنیم
     }
   }
+  if (last?.modelMissing) {
+    const k = String(process.env.GEMINI_API_KEY || '');
+    throw new AiError(`${last.userMessage} (کلیدی که سرور الان دارد به «${k.slice(-4)}» ختم می‌شود؛ اگر این با کلید جدید شما فرق دارد، GEMINI_API_KEY در Render عوض نشده است. مدل تنظیم‌شده: ${process.env.GEMINI_MODEL || 'پیش‌فرض'})`, 503, true);
+  }
   throw last || new AiError('هوش مصنوعی پاسخ نداد.', 502);
 }
 
