@@ -120,7 +120,7 @@ function requireConfig(res) {
 app.get('/', (_, res) => res.json({ message: 'Bazarek backend is running', version: '2.2.0' }));
 // build: شناسه‌ی نسخه‌ی بک‌اند؛ با باز کردن /api/health مطمئن می‌شوید Deploy آخرین نسخه انجام شده.
 const BACKEND_BUILD = 'all-categories-open-2026-10-24';
-app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0', build: BACKEND_BUILD, active_ad_categories: String(process.env.ACTIVE_AD_CATEGORIES || '*'), channels: { telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHANNEL_ID), facebook: Boolean(process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_TOKEN), instagram: Boolean(process.env.INSTAGRAM_USER_ID && (process.env.INSTAGRAM_TOKEN || process.env.FACEBOOK_PAGE_TOKEN)) } }));
+app.get('/api/health', (_, res) => res.json({ ok: true, version: '2.2.0', build: BACKEND_BUILD, active_ad_categories: String(process.env.ACTIVE_AD_CATEGORIES || '*'), ai: { key_last4: String(process.env.GEMINI_API_KEY || '').slice(-4) || null, model: process.env.GEMINI_MODEL || null }, channels: { telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHANNEL_ID), facebook: Boolean(process.env.FACEBOOK_PAGE_ID && process.env.FACEBOOK_PAGE_TOKEN), instagram: Boolean(process.env.INSTAGRAM_USER_ID && (process.env.INSTAGRAM_TOKEN || process.env.FACEBOOK_PAGE_TOKEN)) } }));
 app.get('/api/version', (_, res) => res.json({ version: '2.6.0', features: ['warnings','reports','image-upload','wallet','promotions','boost-ranking','boost-badges','subscriptions','favorites','listing-views','contact-phone','voice-audio','english-us'] }));
 
 // Phone numbers are stored as a private, deterministic Supabase email alias so
