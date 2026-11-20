@@ -93,7 +93,7 @@ function mapGeminiError(e) {
   if (status === 403) return new AiError('دسترسی به Gemini رد شد (کلید یا منطقه). کلید را بررسی کنید.', 503);
   if (status === 404 || /not found|not supported for generateContent/i.test(msg)) return new AiError('مدل هوش مصنوعی پیدا نشد؛ در Render متغیر GEMINI_MODEL را روی یک مدل فعال بگذارید.', 503, true);
   if (status === 429) return new AiError('سهمیه‌ی رایگان Gemini موقتاً پر شده؛ چند دقیقه بعد دوباره امتحان کنید.', 429);
-  return new AiError('هوش مصنوعی پاسخ نداد؛ دوباره امتحان کنید.', 502);
+  return new AiError(`هوش مصنوعی Gemini پاسخ نداد (${status || 'خطای شبکه'}: ${msg.replace(/\s+/g, ' ').slice(0, 110)})`, 502);
 }
 
 // مدل‌هایی که واقعاً برای همین کلید فعالند را از خود Google می‌پرسد (دیگر حدس زدن نام مدل لازم نیست).
@@ -117,8 +117,44 @@ async function discoverModels() {
   } catch (_) { return []; }
 }
 
-async function askModel(genAI, images, text) {
-  if (!genAI) throw new AiError('هوش مصنوعی هنوز در سرور فعال نشده است: GEMINI_API_KEY را در Render بگذارید.', 503);
+function parseJsonLoose(out) {
+  if (out && typeof out === 'object') return out;
+  const t = String(out || '').replace(/```json|```/g, '').trim();
+  const i = t.indexOf('{'), j = t.lastIndexOf('}');
+  if (i < 0 || j <= i) throw new AiError('پاسخ هوش مصنوعی قابل فهم نبود؛ دوباره امتحان کنید.', 502);
+  try { return JSON.parse(t.slice(i, j + 1)); } catch (_) { throw new AiError('پاسخ هوش مصنوعی قابل فهم نبود؛ دوباره امتحان کنید.', 502); }
+}
+
+// Cloudflare Workers AI (رایگان تا سقف روزانه): CF_ACCOUNT_ID + CF_API_TOKEN (+ اختیاری CF_AI_MODEL). فقط متن.
+async function askCloudflare(prompt) {
+  const acc = process.env.CF_ACCOUNT_ID, tok = process.env.CF_API_TOKEN;
+  if (!acc || !tok) return null;
+  const model = process.env.CF_AI_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(acc)}/ai/run/${model}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'system', content: 'فقط یک JSON معتبر برگردان، بدون هیچ توضیح اضافه.' }, { role: 'user', content: prompt }], max_tokens: 1000, temperature: 0.2 }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.success === false) throw new AiError(`Cloudflare AI رد کرد (${r.status}: ${String(j?.errors?.[0]?.message || '').slice(0, 100)})`, 502);
+  return parseJsonLoose(j?.result?.response ?? j?.result?.choices?.[0]?.message?.content ?? '');
+}
+
+// Groq (رایگان با سقف): GROQ_API_KEY (+ اختیاری GROQ_MODEL). فقط متن.
+async function askGroq(prompt) {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return null;
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', temperature: 0.2, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Return only valid JSON.' }, { role: 'user', content: prompt }] }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new AiError(`Groq رد کرد (${r.status}: ${String(j?.error?.message || '').slice(0, 100)})`, 502);
+  return parseJsonLoose(j?.choices?.[0]?.message?.content || '');
+}
+
+let geminiBlockedUntil = 0; // اگر Gemini خطای دائمی داد، چند دقیقه سراغش نمی‌رویم تا کار کند نشود
+
+async function askGemini(genAI, images, text) {
   const discovered = await discoverModels();
   const names = [...new Set([process.env.GEMINI_MODEL, ...discovered, ...PREFERRED_MODELS].filter(Boolean))].slice(0, 6);
   const parts = [{ text: buildPrompt(text) }, ...images.slice(0, 4).map((im) => ({ inlineData: { mimeType: im.mimeType || 'image/jpeg', data: im.data } }))];
@@ -127,13 +163,12 @@ async function askModel(genAI, images, text) {
     try {
       const model = genAI.getGenerativeModel({ model: name, generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } });
       const result = await model.generateContent(parts);
-      const out = String(result?.response?.text?.() || '').replace(/```json|```/g, '').trim();
-      try { return JSON.parse(out); } catch (_) { throw new AiError('پاسخ هوش مصنوعی قابل فهم نبود؛ دوباره امتحان کنید.', 502); }
+      return parseJsonLoose(result?.response?.text?.() || '');
     } catch (e) {
       const mapped = e instanceof AiError ? e : mapGeminiError(e);
-      console.warn(`gemini (${name}) failed:`, String(e?.message || e).slice(0, 200));
+      console.warn(`gemini (${name}) failed:`, String(e?.message || e).slice(0, 220));
       last = mapped;
-      if (!mapped.modelMissing) break; // فقط وقتی مدل در دسترس نبود، مدل بعدی را امتحان می‌کنیم
+      if (!mapped.modelMissing) break;
     }
   }
   if (last?.modelMissing) {
@@ -141,6 +176,28 @@ async function askModel(genAI, images, text) {
     throw new AiError(`${last.userMessage} (کلید سرور به «${k.slice(-4)}» ختم می‌شود. مدل‌های امتحان‌شده: ${names.join('، ')})`, 503, true);
   }
   throw last || new AiError('هوش مصنوعی پاسخ نداد.', 502);
+}
+
+async function askModel(genAI, images, text) {
+  const fallbacks = [['Cloudflare', askCloudflare], ['Groq', askGroq]].filter(([n]) => (n === 'Cloudflare' ? process.env.CF_ACCOUNT_ID && process.env.CF_API_TOKEN : process.env.GROQ_API_KEY));
+  let geminiError = null;
+  if (genAI && Date.now() >= geminiBlockedUntil) {
+    try { return await askGemini(genAI, images, text); }
+    catch (e) {
+      geminiError = e;
+      if (fallbacks.length && (e.httpStatus === 503 || e.modelMissing || e.httpStatus === 502)) geminiBlockedUntil = Date.now() + 5 * 60 * 1000;
+      if (!fallbacks.length || e.httpStatus === 429) { if (!fallbacks.length) throw e; }
+    }
+  } else if (!genAI && !fallbacks.length) {
+    throw new AiError('هوش مصنوعی هنوز در سرور فعال نشده است: GEMINI_API_KEY (یا CF_ACCOUNT_ID و CF_API_TOKEN) را در Render بگذارید.', 503);
+  }
+  if (String(text || '').trim().length < 5) throw geminiError || new AiError('برای این حالت (فقط عکس) هوش مصنوعی عکس‌خوان لازم است؛ چند کلمه توضیح هم بنویسید.', 422);
+  let lastErr = geminiError;
+  for (const [name, fn] of fallbacks) {
+    try { const out = await fn(buildPrompt(text)); if (out) return out; }
+    catch (e) { console.warn(`${name} AI failed:`, String(e?.message || e).slice(0, 220)); lastErr = e; }
+  }
+  throw lastErr || new AiError('هوش مصنوعی پاسخ نداد.', 502);
 }
 
 async function extractListingDraft({ genAI, images, text, activeCategories }) {
