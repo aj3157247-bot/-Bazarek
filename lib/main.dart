@@ -1,4 +1,4 @@
-// BUILD-MARKER: ai-autofill-v2
+// BUILD-MARKER: ai-autofill-v3
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'dart:typed_data';
@@ -4489,10 +4489,12 @@ class ApiService {
       final req = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/ai/draft-listing'));
       if (AuthService.token != null) req.headers['Authorization'] = 'Bearer ${AuthService.token}';
       req.fields['text'] = text;
-      for (var i = 0; i < images.length && i < 3; i++) {
-        req.files.add(http.MultipartFile.fromBytes('images', images[i], filename: 'photo$i.jpg'));
+      // کار اصلی از روی متن انجام می‌شود؛ عکس (حجیم و کند) فقط وقتی فرستاده می‌شود که متن کم باشد، و حداکثر یک عکس.
+      final useImages = text.trim().length < 25 ? images.take(1).toList() : <Uint8List>[];
+      for (var i = 0; i < useImages.length; i++) {
+        req.files.add(http.MultipartFile.fromBytes('images', useImages[i], filename: 'photo$i.jpg'));
       }
-      final streamed = await req.send().timeout(const Duration(seconds: 90));
+      final streamed = await req.send().timeout(const Duration(seconds: 120));
       return http.Response.fromStream(streamed);
     }
     var res = await send();

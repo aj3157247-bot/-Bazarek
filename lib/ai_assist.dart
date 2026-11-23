@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
@@ -49,6 +50,13 @@ class _AiAssistCardState extends State<AiAssistCard> {
     super.dispose();
   }
 
+  String _errorText(Object e) {
+    if (e is TimeoutException) {
+      return _t(context, 'سرور دیر جواب داد (شاید تازه از خواب بیدار می‌شود). چند ثانیه بعد یک بار دیگر امتحان کنید.', 'سرور ناوخته ځواب ورکړ. څو ثانیې وروسته بیا هڅه وکړئ.', 'The server was slow to respond. Please try again in a few seconds.');
+    }
+    return e.toString().replaceFirst('Exception: ', '');
+  }
+
   void _snack(String message, {SnackBarAction? action}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), action: action));
   }
@@ -84,7 +92,7 @@ class _AiAssistCardState extends State<AiAssistCard> {
               cleaned++;
             }
           } catch (e) {
-            _snack(e.toString().replaceFirst('Exception: ', ''));
+            _snack(_errorText(e));
             break;
           }
         }
@@ -112,7 +120,7 @@ class _AiAssistCardState extends State<AiAssistCard> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _status = '');
-      _snack(e.toString().replaceFirst('Exception: ', ''));
+      _snack(_errorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
