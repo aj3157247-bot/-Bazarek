@@ -104,7 +104,7 @@ async function discoverModels() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return [];
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`);
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return [];
     const j = await r.json();
     const ok = (j.models || [])
@@ -131,7 +131,7 @@ async function askCloudflare(prompt) {
   if (!acc || !tok) return null;
   const model = process.env.CF_AI_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
   const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(acc)}/ai/run/${model}`, {
-    method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(25000), method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages: [{ role: 'system', content: 'فقط یک JSON معتبر برگردان، بدون هیچ توضیح اضافه.' }, { role: 'user', content: prompt }], max_tokens: 1000, temperature: 0.2 }),
   });
   const j = await r.json().catch(() => ({}));
@@ -144,7 +144,7 @@ async function askGroq(prompt) {
   const key = process.env.GROQ_API_KEY;
   if (!key) return null;
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(25000), method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', temperature: 0.2, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Return only valid JSON.' }, { role: 'user', content: prompt }] }),
   });
   const j = await r.json().catch(() => ({}));
@@ -162,7 +162,10 @@ async function askGemini(genAI, images, text) {
   for (const name of names) {
     try {
       const model = genAI.getGenerativeModel({ model: name, generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } });
-      const result = await model.generateContent(parts);
+      const result = await Promise.race([
+        model.generateContent(parts),
+        new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('Gemini timeout'), { status: 504 })), 30000)),
+      ]);
       return parseJsonLoose(result?.response?.text?.() || '');
     } catch (e) {
       const mapped = e instanceof AiError ? e : mapGeminiError(e);
@@ -195,7 +198,10 @@ async function askModel(genAI, images, text) {
   let lastErr = geminiError;
   for (const [name, fn] of fallbacks) {
     try { const out = await fn(buildPrompt(text)); if (out) return out; }
-    catch (e) { console.warn(`${name} AI failed:`, String(e?.message || e).slice(0, 220)); lastErr = e; }
+    catch (e) {
+      console.warn(`${name} AI failed:`, String(e?.message || e).slice(0, 220));
+      lastErr = e instanceof AiError ? e : new AiError(`${name} AI پاسخ نداد (${e?.name === 'TimeoutError' ? 'زمان تمام شد' : String(e?.message || e).slice(0, 80)})`, 502);
+    }
   }
   throw lastErr || new AiError('هوش مصنوعی پاسخ نداد.', 502);
 }
